@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-SmartDesk AI: first-line IT/HR help desk agent (KB answers, ticket creation, ticket status). **`SPEC.md` is the source of truth.** Read the relevant section before building a feature, and cite FR ids (e.g. FR-G12) in commits and tests. If code and spec disagree, ask or update the spec. Don't silently diverge.
+SmartDesk AI: first-line IT/HR help desk agent (KB answers, ticket creation, ticket status). **`SPEC.md` is the source of truth.** Read the relevant section before building a feature, and cite FR ids (e.g. FR-G12) in commits and tests. If code and spec disagree, stop and propose the spec change. Edit SPEC.md only after I approve. Don't silently diverge.
 
 ## Stack
 Python 3.12 · LangGraph + LangChain · OpenAI (`gpt-5.4-mini` main, `gpt-4o-mini` light, via `get_llm(task)`) · ChromaDB + rank_bm25 + bge-reranker-base · GitHub Issues (REST first) · SQLite (checkpointer, email-to-ticket map, long-term memory) · Streamlit · Redis (optional) · Presidio · Ragas + pytest. Full decisions table: SPEC.md §2. Layout: SPEC.md §6.
@@ -8,6 +8,8 @@ Python 3.12 · LangGraph + LangChain · OpenAI (`gpt-5.4-mini` main, `gpt-4o-min
 ## Commands
 Nothing is built yet. These are the intended entry points; update this list as they appear.
 ```
+python3 -m venv .venv                    # create the environment (once)
+source .venv/bin/activate                # switch it on (each new terminal)
 pip install -r requirements.txt
 python -m smartdesk_ai.rag.ingest        # build/refresh indexes (idempotent)
 python -m smartdesk_ai.agent             # CLI chat (--debug shows chunks and scores)
@@ -29,9 +31,11 @@ python -m evals.run                      # Ragas + retrieval ablations
 
 ## Workflow rules
 - Core first: SPEC §3A to 3F, then bonus. Build the single-path agent before multi-agent fan-out (§3I).
+- Work one task from TASKS.md at a time: write its test first, implement, run pytest, then mark it done. Don’t start the next task unprompted.
 - Write evals (SPEC §7) before the code they test. Eval questions must be paraphrased, never copied from indexed KB text (FR-A18).
 - Tests use mock mode for GitHub and LLM; no test may create real issues or spend API budget.
 - Never create a ticket without explicit confirmation (FR-B2, G12). Never invent ticket details (FR-B13).
-- Real calls (OpenAI, GitHub, public tickets repo) cost money or are public: confirm with the user before running anything beyond mocks or seed scripts.
+- Real calls (OpenAI, GitHub, public tickets repo) cost money or are public: confirm with the user before running anything beyond mocks.
 - Keep PLAN.md and TASKS.md current as work progresses. Commit in small steps, only when asked.
-- Deadline: Oct 23, 2026; core target Oct 18. Default branch is `main` (current local branch is `master`).
+- Deadline: Oct 23, 2026; core target Oct 18. Default branch is `main`.
+

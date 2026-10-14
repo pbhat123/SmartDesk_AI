@@ -1,6 +1,6 @@
 # PLAN.md: SmartDesk AI architecture and build plan
 
-Source of truth: `SPEC.md` (draft v2). This plan designs against it and flags where it is unclear or contradictory (section 9). Nothing in SPEC.md has been changed. Items in section 9 marked **needs decision** assume my proposed resolution until you rule on them, and each is tagged with the phase it blocks.
+Source of truth: `SPEC.md` (draft v3, approved). This plan designs against it. Section 9 lists the spec issues found against draft v2; all are resolved in v3 and kept as a record of why. The core milestone (10-18) is SPEC sections 3A to 3G.
 Today is 2026-10-13. Core target 10-18, deadline 10-23. Library-specific API claims below (LangGraph, Langfuse, LangSmith, Ragas, OpenAI params) are from memory and must be verified in the Phase 0 spike, not assumed.
 
 ---
@@ -370,4 +370,4 @@ Anything that spends API money or creates public issues is confirmed with you fi
 
 ## 11. After approval
 
-Copy this file to `PLAN.md`, derive `TASKS.md` from section 7 (one task per row item, each with its test and FR ids), apply the spec edits you approve (section 9) to SPEC.md, and stop. No code and no commits until you say which task to start.
+Status: SPEC.md is draft v3 and approved. Section 9 is resolved: every item was either applied to SPEC.md or answered by the approved v3 text, and the core milestone is sections 3A to 3G (SPEC section 9, CLAUDE.md "Core first"). `TASKS.md` is derived from section 7 (one task per row item, each with FR ids, files, and its acceptance test). No code and no commits until you say which task to start.

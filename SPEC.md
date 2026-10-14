@@ -332,7 +332,7 @@ SPEC.md  CLAUDE.md  PLAN.md  TASKS.md  README.md  .env.example  config.yaml
 - Decided: public code repo, public tickets repo, 5-minute demo video. Known risks of a public tickets repo are accepted.
 - Decided: company name is SmartDesk AI. TBD: policy numbers.
 - Decided: framework is LangGraph, vector store is ChromaDB, UI is Streamlit.
-- Decided: deadline is 10/23 (October 23, 2026). Target: core (sections 3A to 3F) done by October 18. The safety and operations items that section 10 maps to Robustness (FR-H1, H2, H3, H8, H13) are due October 19; the core ships with no-op guard hooks in the chat pipeline so they plug in without graph changes.
+- Decided: deadline is 10/23 (October 23, 2026). Target: core (sections 3A to 3G) done by October 18. The safety and operations items that section 10 maps to Robustness (FR-H1, H2, H3, H8, H13) are due October 19; the core ships with no-op guard hooks in the chat pipeline so they plug in without graph changes.
 - Resolved: the document says code and docs must be entirely your own (FAQ Q8). The user states that full use of Claude Code or any other platform is allowed.
 - Decided: KB data source is Option C. KB format is Markdown per policy area (indexed) plus JSON Q&A (evals only). Chunking per FR-A3.
 - Decided: tickets live in GitHub Issues, accessed through the REST API first, with the GitHub MCP server added behind the same wrapper if time allows. Seed script plus search fallback for status lookups.

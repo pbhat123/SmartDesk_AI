@@ -30,7 +30,7 @@ python -m evals.run                      # Ragas + retrieval ablations
 - Typed code with Pydantic schemas; small modules with meaningful names. All code and docs must be the user's own work (no copied code).
 
 ## Workflow rules
-- Core first: SPEC §3A to 3F, then bonus. Build the single-path agent before multi-agent fan-out (§3I).
+- Core first: SPEC §3A to 3G, then bonus. Build the single-path agent before multi-agent fan-out (§3I).
 - Work one task from TASKS.md at a time: write its test first, implement, run pytest, then mark it done. Don’t start the next task unprompted.
 - Write evals (SPEC §7) before the code they test. Eval questions must be paraphrased, never copied from indexed KB text (FR-A18).
 - Tests use mock mode for GitHub and LLM; no test may create real issues or spend API budget.

@@ -317,7 +317,7 @@ Core `orchestrator_v1` always returns one part with `domain=None`; `kb_answer` r
 
 ---
 
-## 9. Spec issues flagged (nothing edited; each needs your ruling before the phase it blocks)
+## 9. Spec issues found against v2 (all resolved in SPEC v3)
 
 ### 9.1 Contradictions (need decision)
 

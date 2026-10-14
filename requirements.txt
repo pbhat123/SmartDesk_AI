@@ -1,0 +1,40 @@
+# Orchestration
+langgraph==1.2.15
+langgraph-checkpoint-sqlite==3.1.2
+langchain==1.4.6
+langchain-openai==1.7.2
+langchain-community==0.4.2
+# pinned for ragas 0.4.3 compatibility (instructor/jiter); verify in T0.9
+openai==3.3.0
+
+# RAG
+chromadb==1.5.9
+rank-bm25==0.2.2
+sentence-transformers==6.1.0
+tiktoken==0.14.0
+
+# Core
+pydantic==2.14.1
+pyyaml==6.0.3
+python-dotenv==1.2.4
+httpx==0.28.1
+tenacity==9.2.1
+
+# UI / cache
+streamlit==1.66.0
+redis==8.1.0
+
+# Guardrails
+presidio-analyzer==2.2.364
+presidio-anonymizer==2.2.364
+
+# Tracing
+langfuse==5.0.1
+langsmith==0.14.8
+
+# Evals (Ragas pinned per FR-H12)
+ragas==0.4.3
+datasets==5.1.0
+
+# Test
+pytest==9.1.1

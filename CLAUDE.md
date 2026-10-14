@@ -8,9 +8,11 @@ Python 3.12 · LangGraph + LangChain · OpenAI (`gpt-5.4-mini` main, `gpt-4o-min
 ## Commands
 Nothing is built yet. These are the intended entry points; update this list as they appear.
 ```
-python3 -m venv .venv                    # create the environment (once)
+uv python install 3.12                   # once, if 3.12 is missing
+uv venv --python 3.12 .venv              # create the environment (once)
 source .venv/bin/activate                # switch it on (each new terminal)
-pip install -r requirements.txt
+uv pip install -r requirements.txt
+python -m spacy download en_core_web_lg  # spaCy model for Presidio (pip does not install it)
 python -m smartdesk_ai.rag.ingest        # build/refresh indexes (idempotent)
 python -m smartdesk_ai.agent             # CLI chat (--debug shows chunks and scores)
 streamlit run smartdesk_ai/ui/app.py     # UI + Monitoring tab

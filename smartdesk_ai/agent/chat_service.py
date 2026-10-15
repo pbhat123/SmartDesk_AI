@@ -1,0 +1,101 @@
+"""Per-turn wrapper around the agent (PLAN section 5).
+
+Skeleton for T0.6: the guards are no-ops and the responder is a stub, so the app
+starts and answers with no keys, no Redis and no tracing (FR-F6, FR-F7). Later
+tasks plug in the real guards (T5.x) and the graph (T4.x) through the same hooks.
+Raw user text is never logged here.
+"""
+import logging
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
+from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
+from smartdesk_ai.ops.health import HealthRegistry, get_registry
+
+logger = logging.getLogger(__name__)
+
+STUB_REPLY = "SmartDesk AI is starting up. The help desk agent is not connected yet."
+
+
+class ChatReply(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    ticket: int | None = None
+    debug: dict[str, Any] = Field(default_factory=dict)
+
+
+class GuardDecision(BaseModel):
+    """Result of the input guard: the (possibly redacted) text, or a refusal."""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    blocked: bool = False
+    refusal: str | None = None
+    reason: str | None = None
+
+
+InputGuard = Callable[[str], GuardDecision]
+OutputGuard = Callable[[str], str]
+Responder = Callable[[str, str], str]  # (session_id, guarded text) -> reply text
+
+
+def no_input_guard(text: str) -> GuardDecision:
+    return GuardDecision(text=text)
+
+
+def no_output_guard(text: str) -> str:
+    return text
+
+
+def stub_responder(session_id: str, text: str) -> str:
+    return STUB_REPLY
+
+
+class ChatService:
+    def __init__(
+        self,
+        settings: Settings,
+        input_guard: InputGuard = no_input_guard,
+        responder: Responder = stub_responder,
+        output_guard: OutputGuard = no_output_guard,
+    ) -> None:
+        self.settings = settings
+        self._input_guard = input_guard
+        self._responder = responder
+        self._output_guard = output_guard
+
+    def handle(self, session_id: str, text: str) -> ChatReply:
+        if not session_id:
+            raise ValueError("session_id must not be empty")
+        decision = self._input_guard(text)
+        debug: dict[str, Any] = {}
+        if decision.blocked:
+            reply_text = decision.refusal or ""
+            debug["blocked_reason"] = decision.reason
+        else:
+            reply_text = self._responder(session_id, decision.text)
+            debug["responder"] = getattr(self._responder, "__name__", "custom")
+        reply_text = self._output_guard(reply_text)
+        logger.debug("turn done session=%s blocked=%s", session_id, decision.blocked)
+        return ChatReply(text=reply_text, debug=debug)
+
+
+def build_service(
+    environ: Mapping[str, str] | None = None,
+    dotenv_path: Path | None = DEFAULT_DOTENV,
+    registry: HealthRegistry | None = None,
+    config_path: Path = DEFAULT_CONFIG,
+) -> ChatService:
+    """Assemble the service. Missing keys or optional components never raise (FR-F7).
+
+    Only an invalid config.yaml is fatal, since nothing can run without it.
+    """
+    env = load_env(environ=environ, dotenv_path=dotenv_path)
+    (registry if registry is not None else get_registry()).register_env(env)
+    return ChatService(load_settings(config_path))

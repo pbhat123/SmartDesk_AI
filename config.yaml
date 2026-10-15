@@ -1,0 +1,90 @@
+# SmartDesk AI configuration (FR-H16). No secrets here; those live in .env.
+# Changing a model ID below is the only change needed to swap models.
+# Prices are USD per 1M tokens (SPEC section 2, checked 2026-10-12; re-check before final runs).
+
+models:
+  main:                      # Main-Model tier
+    id: gpt-5.4-mini
+    context_window: 400000
+    max_output: 128000
+    reasoning_effort: none   # unverified until the T0.9 spike
+    price: {input: 0.75, cached_input: 0.075, output: 4.50}
+  light:                     # Light-Model tier
+    id: gpt-4o-mini
+    context_window: 128000
+    max_output: 16384
+    price: {input: 0.15, cached_input: 0.075, output: 0.60}
+  embedding:
+    id: text-embedding-3-small
+    price: {input: 0.02}
+
+# Task-to-tier map (FR-H17). Budget cutoff 1 and outage fallback override it.
+tiers:
+  ORCHESTRATOR: main         # intent classification, decomposition, query rewriting
+  WORKER_ANSWER: main        # IT and HR worker answers (RAG)
+  SYNTHESIZER: main
+  GROUNDING_JUDGE: main      # FR-H2
+  TOOL_SELECT: light         # tool selection and argument filling
+  TICKET_DRAFT: light        # ticket summary drafting
+  INJECTION_CLASSIFIER: light
+  COMPACTION: light          # context compaction summary
+  CONFIRM_PARSE: light       # yes / no / edit at the ticket gate (FR-G12)
+  CHITCHAT: light            # small talk, deflection, clarifying questions
+
+# Daily spend (FR-H8). cutoff_1: everything moves to Light-Model.
+# cutoff_2: total daily spend at which service stops (a further $5 after cutoff_1).
+budget:
+  timezone: America/New_York
+  cutoff_1_usd: 5.0
+  cutoff_2_usd: 10.0
+  eval_bypass: false         # true lets Ragas runs ignore the daily cutoff
+
+# Rolling window per session (FR-H13). Three independent counters.
+rate_limits:
+  window_seconds: 3600
+  questions: 100
+  ticket_creations: 40
+  ticket_lookups: 40
+  bypass: false              # evals and tests only
+
+# Compaction triggers at this share of the active model's context window (FR-H5).
+compaction:
+  trigger_fraction: 0.75
+
+input:
+  max_chars: 4000            # FR-F4
+
+thresholds:
+  escalation: 0.50           # provisional, tuned in T2.12 (normalized reranker score, FR-A15)
+  fallback: 0.50             # provisional, tuned in T2.12 (top dense cosine, reranker down, FR-F7)
+  routing_confidence: 0.60   # provisional, tuned in T4.4 (FR-D8)
+  semantic_cache_cutoff: 0.95  # provisional, tuned in T6.10 (high cut-off, cache rules)
+  injection_heuristic: 0.30  # provisional, tuned in T5.4 (LLM classifier runs only above this, FR-H1)
+
+# Hybrid retrieval (SPEC section 2, FR-A6): top-k from each retriever, RRF constant,
+# entries kept after rerank and collapse by entry_id.
+retrieval:
+  k_each: 20
+  rrf_k: 60
+  top_n: 5
+
+# One chunk = one KB entry; split only above split_above_tokens, with overlap (FR-A3).
+chunking:
+  target_min_tokens: 200
+  target_max_tokens: 500
+  split_above_tokens: 600
+  overlap_pct: 15
+
+# Active version per prompt (FR-H14): file agent/prompts/<name>_v<N>.md.
+# Provisional, files arrive with their tasks (T0.4 loader, T4.x and T5.x prompts).
+prompts:
+  orchestrator: 1
+  answer: 1
+  synthesizer: 1
+  grounding_judge: 1
+  ticket_summary: 1
+  tool_select: 1
+  injection_classifier: 1
+  compaction: 1
+  confirm_parse: 1
+  chitchat: 1

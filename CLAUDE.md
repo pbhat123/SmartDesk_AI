@@ -28,6 +28,8 @@ python -m evals.run                      # Ragas + retrieval ablations
 - All tool calls go through the registry + executor (`tools/`), never called directly by agents. Ticket access goes only through the `tickets/` client wrapper.
 - Each retrieval stage (BM25, dense, fusion, rerank) is a separate swappable function.
 - Raw emails and unredacted PII must never reach logs or traces. Names are reduced to "John D." (FR-H1, FR-G11).
+- Only `thread_id` goes in LangGraph `config["configurable"]`; it is persisted to the checkpoint DB, so never put an email or other PII there (FR-G11, PLAN §12.1).
+- Every Pydantic type stored in graph state must be registered with the checkpoint serializer (PLAN §12.1).
 - Optional components (reranker, Presidio, Redis, tracing) must degrade gracefully, never crash startup (FR-F7).
 - Typed code with Pydantic schemas; small modules with meaningful names. All code and docs must be the user's own work (no copied code).
 

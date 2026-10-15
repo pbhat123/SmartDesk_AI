@@ -405,3 +405,38 @@ Spike: `spikes/langgraph_spike.py`, tests in `tests/test_spike_langgraph.py` (12
 5. **Checkpoints hold the full state.** Everything in `AgentState` (messages, drafts) is stored in SQLite, so only redacted text may enter state, as section 5 step 4 already requires.
 
 **Not covered here** (later tasks): real LLM nodes, `Send` to differently-named worker nodes by domain (I4 bonus), `interrupt` with several pending interrupts in one superstep, checkpoint cleanup and size, and concurrent writers on one SQLite file.
+
+### 12.2 T0.8 tracing masking spike findings (langfuse 5.0.1, langsmith 0.14.8)
+
+Spike: `spikes/tracing_masking_spike.py`, tests in `tests/test_spike_masking.py` (19 tests). No keys and no network: Langfuse exports to an in-memory span exporter (after Langfuse's own export-stage transform), LangSmith sends to a mock HTTP session, and a socket guard fails any real connection. The masking function is an email regex standing in for the real redaction (T5.x).
+
+**Verdict: masking cannot be guaranteed by the SDK hooks alone. FR-G11's fallback applies: send only locally redacted spans.** The hooks stay on as a second layer, but the app must redact every string before it reaches an SDK.
+
+**Langfuse**
+| Hook | Covers | Does not cover |
+|---|---|---|
+| `mask=` | observation `input`, `output`, `metadata` (also via the LangChain `CallbackHandler`) | everything below |
+| `mask_otel_spans=` | every span *attribute*, at export: `user.id`, `session.id`, trace `tags`/`name`/`metadata`, model name and parameters, `status_message`, `version` | span **name**, span **events** (the exception message is copied into an event), links |
+
+- A `mask` function that raises fails closed (a fixed fallback string replaces the data; the email never leaves). A `mask_otel_spans` function that raises drops the whole export batch, so nothing leaks, but the traces for that batch are lost.
+- Leaks with `mask=` alone: `user.id`, `session.id`, trace tags, trace name, trace metadata, model name, model parameters, status message, version. With both hooks, no attribute leaks.
+- Leaks with both hooks: the span name and the `exception.message` event (any exception raised inside an observation block is recorded automatically).
+- The LangChain `CallbackHandler` masks input, output and observation metadata, but LangChain `tags=` and `metadata=` in the run config also land in trace-level fields (`langfuse.trace.tags`, `langfuse.trace.metadata.*`), and `run_name` becomes the span name. All three leak under `mask=`.
+- `Langfuse(...)` instances are cached by public key: a second client with the same key silently reuses the first one's exporter and hooks. Use a unique key per test, or `shutdown()` first.
+
+**LangSmith**
+- `hide_inputs`, `hide_outputs`, `hide_metadata` mask run inputs, outputs and `extra.metadata` in the payloads. This holds for `@traceable` and for a `LangChainTracer(client=...)`.
+- Not covered: run **name**, **tags**, and the **error** text (`ValueError('failed for <email>')` goes into `error`).
+- A hide function that raises drops that run (logged as "Failed to post run") and the app keeps working. Fail-closed.
+- **Hazard:** with `LANGSMITH_TRACING=true` in the environment, LangChain builds its own default client with no hooks, and the raw email is sent (verified by capturing the POST body). Setting `LANGSMITH_HIDE_INPUTS=true` and `LANGSMITH_HIDE_OUTPUTS=true` suppresses inputs and outputs entirely (names, tags and errors were not checked under this setting; assume they are not covered, as with the hooks). Without the env flag nothing is sent.
+- Safe pattern: leave `LANGSMITH_TRACING` unset and enable tracing explicitly with `tracing_context(enabled=True, client=our_hooked_client)` only when `LANGSMITH_API_KEY` is present.
+
+**Design consequences (for T5.15 `trace_log` and the tracing integration)**
+1. The local trace log builds one **redacted record** per step. Every string in it (names, tags, user and session IDs, model labels, status and error text, metadata) goes through the redactor first. Only that record is handed to Langfuse or LangSmith. Exact fields like `session_id` and the masked user ID (FR-H9) are generated already-masked, never derived from the raw email.
+2. Keep the SDK hooks on anyway as defense in depth: Langfuse `mask=` plus `mask_otel_spans=`, LangSmith `hide_inputs/outputs/metadata`. Both fail closed.
+3. Do not let raw exceptions cross a span boundary. Wrap executor errors in an exception carrying only a redacted message before they propagate through a Langfuse observation or a `@traceable` function.
+4. Never put an email in a span or run name, in tags, or in LangChain config `tags`/`metadata`. Use fixed names (`search_kb`, `create_ticket`) and masked IDs.
+5. Never set `LANGSMITH_TRACING` in `.env` or `.env.example`. `ops/health.py` marks LangSmith degraded when the key is absent; when present, the integration turns tracing on through `tracing_context(client=...)`.
+6. No spec change needed: FR-G11 already says "if masking cannot be guaranteed, only locally redacted spans are sent". This spike establishes that it cannot, so that branch is the design.
+
+**Not covered here** (later): Presidio-quality redaction (names, phones), media/attachments, the OpenTelemetry auto-instrumentation path, and the real Langfuse and LangSmith servers (needs keys and your OK).

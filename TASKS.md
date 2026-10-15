@@ -21,7 +21,7 @@ Exit: `pip install` works, `pytest` runs, app starts with no keys.
 | [x] | T0.6 | App skeleton: `ChatService` with no-op input/output guard hooks, CLI entry `python -m smartdesk_ai.agent` | F6, F7 | `sd/agent/__main__.py`, `sd/agent/chat_service.py`, `tests/test_startup.py` | App starts and answers a stub reply with no keys, no Redis, no tracing keys |
 | [x] | T0.7 | Spike: LangGraph `interrupt` + `SqliteSaver` + Pydantic state + `Send`; findings written to PLAN.md | G12, H10, I4 | `spikes/langgraph_spike.py`, `tests/test_spike_langgraph.py` | Graph pauses at interrupt, resumes with a new process using the same thread ID, parallel `Send` branches join; result noted in PLAN.md |
 | [x] | T0.8 | Spike: Langfuse and LangSmith masking hooks (mock/no keys) | G11 | `spikes/tracing_masking_spike.py`, `tests/test_spike_masking.py` | A raw email passed through each SDK's masking hook arrives masked; if masking cannot be guaranteed, the finding says to send only locally redacted spans |
-| [ ] | T0.9 | **[CONFIRM]** Spike: one real `gpt-5.4-mini` call to verify params (`reasoning_effort="none"`), model IDs, prices | H16, H17 | `spikes/openai_param_check.py`, notes in PLAN.md | One call succeeds with the configured params; any param/price/ID discrepancy is recorded as a config change proposal. Skipped without your OK |
+| [x] | T0.9 | **[CONFIRM]** Spike: one real `gpt-5.4-mini` call to verify params (`reasoning_effort="none"`), model IDs, prices | H16, H17 | `spikes/openai_param_check.py`, notes in PLAN.md | One call succeeds with the configured params; any param/price/ID discrepancy is recorded as a config change proposal. Skipped without your OK |
 
 ---
 

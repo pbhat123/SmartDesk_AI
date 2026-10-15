@@ -440,3 +440,30 @@ Spike: `spikes/tracing_masking_spike.py`, tests in `tests/test_spike_masking.py`
 6. No spec change needed: FR-G11 already says "if masking cannot be guaranteed, only locally redacted spans are sent". This spike establishes that it cannot, so that branch is the design.
 
 **Not covered here** (later): Presidio-quality redaction (names, phones), media/attachments, the OpenTelemetry auto-instrumentation path, and the real Langfuse and LangSmith servers (needs keys and your OK).
+
+### 12.3 T0.9 OpenAI parameter check (run 2026-10-15, approved; `spikes/openai_param_check.py`, tests in `tests/test_spike_openai_params.py`, mocked)
+
+Three real calls, one each, no retries (`max_retries=0`), fixed throwaway prompt `Reply with the single word: ok`, `openai==3.3.0`. All succeeded. Total cost **$0.0000306**.
+
+| Call | Params sent | Model returned | Reply / finish | Usage | Cost | Latency |
+|---|---|---|---|---|---|---|
+| Main chat | `model=gpt-5.4-mini`, `reasoning_effort="none"`, `max_completion_tokens=16` | `gpt-5.4-mini-2026-03-17` | `ok` / `stop` | prompt 13, completion 4, reasoning 0, cached 0 | $0.00002775 | 2.62 s |
+| Light chat | `model=gpt-4o-mini`, `max_tokens=16` | `gpt-4o-mini-2024-07-18` | `ok` / `stop` | prompt 14, completion 1, reasoning 0, cached 0 | $0.0000027 | 0.95 s |
+| Embedding | `model=text-embedding-3-small`, same string | `text-embedding-3-small` | 1536 dimensions | prompt 7, total 7 | $0.00000014 | 0.72 s |
+
+Cost is computed from the `config.yaml` price table: uncached input at the input rate, `cached_tokens` at the cached rate, all completion tokens (reasoning included) at the output rate. The API returns no prices, so the table itself was not re-verified by this run (verified 2026-10-12, per your note).
+
+**Verified**
+- All three model IDs are accepted as written in `config.yaml`.
+- `reasoning_effort="none"` is accepted on `gpt-5.4-mini` by `openai==3.3.0`, and the call produced **0 reasoning tokens**. So the requirements-eval.txt fallback in section 12 (openai pin note) is **not needed**.
+- `max_completion_tokens=16` works on the main model and `max_tokens=16` on the light model. The 16-token cap was enough for a one-word reply; no empty reply occurred, so that case was not observed on the real API (only in the mocked test).
+- Embedding vectors have **1536** dimensions (needed for the Chroma collection).
+
+**Usage fields returned** (`response.usage`): `prompt_tokens`, `completion_tokens`, `total_tokens`, `prompt_tokens_details{audio_tokens, cached_tokens, cache_write_tokens, image_tokens, text_tokens}`, `completion_tokens_details{reasoning_tokens, accepted_prediction_tokens, rejected_prediction_tokens, audio_tokens, text_tokens}`. Several detail fields come back `null`. Cost tracking (FR-H7) needs only `prompt_tokens`, `prompt_tokens_details.cached_tokens` (may be null: treat as 0), and `completion_tokens` (already includes reasoning). Embeddings return only `prompt_tokens` and `total_tokens`.
+
+**Observations**
+- The returned `model` is a **dated snapshot** (`gpt-5.4-mini-2026-03-17`, `gpt-4o-mini-2024-07-18`), not the alias in config. FR-H9 asks for model name and version on every LLM record, so the trace log should store the configured ID and the returned snapshot.
+- The main model needs `max_completion_tokens`; the light model was called with `max_tokens` and accepted it. `get_llm` (T3.1) must pick the right parameter name per model, or confirm that the LangChain wrapper does. Not tested here: `max_tokens` on the main model, and `reasoning_effort` on the light model.
+- 4 completion tokens for the one-word reply on the main model with 0 reasoning tokens; I did not look into the extra tokens.
+
+**Config change proposals (none applied):** none are required. IDs, `reasoning_effort: none`, and the price-table fields all worked as configured. Optional, only if you want it: a `models.*.snapshot` field is not needed, since the trace log can record the returned snapshot at call time.

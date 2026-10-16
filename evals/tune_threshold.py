@@ -19,6 +19,8 @@ from smartdesk_ai.rag.index import KBIndex
 from smartdesk_ai.rag.pipeline import retrieve
 
 LOW, HIGH = 0.01, 0.99  # thresholds must stay inside the open unit interval the config requires
+CURVE_GRID = [round(0.35 + 0.02 * i, 2) for i in range(11)]  # 0.35 .. 0.55 for the dense-cosine curve
+MIN_KB_ANSWERED = 0.95
 
 
 @dataclass(frozen=True)
@@ -79,6 +81,16 @@ def choose_threshold(dev: list[Point]) -> float:
     return statistics.median_low(top)
 
 
+def curve(points: list[Point], thresholds: list[float]) -> list[Metrics]:
+    return [metrics(points, t) for t in thresholds]
+
+
+def highest_meeting(points: list[Point], thresholds: list[float], min_answered: float) -> float | None:
+    """The highest threshold on the grid that still answers at least `min_answered` of the KB questions."""
+    ok = [t for t in thresholds if metrics(points, t).answered_kb >= min_answered]
+    return max(ok) if ok else None
+
+
 def strict_threshold(dev: list[Point]) -> float:
     """The lowest sensible threshold that answers no gap question on `dev`. It costs KB recall."""
     gaps = [p.score for p in dev if p.label == "gap"]
@@ -122,10 +134,21 @@ def _points(res: Resources, index: KBIndex, reranker) -> list[Point]:
     return out
 
 
+def _with_curve(section: dict) -> dict:
+    pts = section["points"]
+    dev, test = [p for p in pts if p.split == "dev"], [p for p in pts if p.split == "test"]
+    section["curve"] = [{"threshold": t, "dev": metrics(dev, t), "test": metrics(test, t)} for t in CURVE_GRID]
+    best = highest_meeting(dev, CURVE_GRID, MIN_KB_ANSWERED)
+    section["at_95_percent"] = None if best is None else {
+        "threshold": best, "dev": metrics(dev, best), "test": metrics(test, best),
+    }
+    return section
+
+
 def run_tuning(res: Resources, index: KBIndex) -> dict:
     return {
         "reranker": tune(_points(res, index, res.reranker)),
-        "dense_cosine": tune(_points(res, index, None)),
+        "dense_cosine": _with_curve(tune(_points(res, index, None))),
     }
 
 
@@ -165,6 +188,23 @@ def format_report(out: dict) -> str:
                   _line(f"test @ {s['threshold']:.2f}", s["test"], s["test_auc"]),
                   _line(f"dev @ {s['strict_threshold']:.2f} (strict)", s["dev_strict"], s["dev_auc"]),
                   _line(f"test @ {s['strict_threshold']:.2f} (strict)", s["test_strict"], s["test_auc"])]
+    dense = out["dense_cosine"]
+    if "curve" in dense:
+        n_kb, n_gap = dense["dev"].n_kb, dense["dev"].n_gap
+        chosen = (dense.get("at_95_percent") or {}).get("threshold")
+        lines += ["", f"Dense-cosine curve on dev ({n_kb} KB, {n_gap} gap questions)",
+                  f"  {'threshold':<11}{'KB answered':<18}{'gap escalated':<18}"]
+        for row in dense["curve"]:
+            m = row["dev"]
+            mark = "  <- highest with >= 95% KB answered" if row["threshold"] == chosen else ""
+            lines.append(f"  {row['threshold']:<11.2f}{round(m.answered_kb * m.n_kb)}/{m.n_kb} ({m.answered_kb:.2f}){'':<5}"
+                         f"{round(m.escalated_gap * m.n_gap)}/{m.n_gap} ({m.escalated_gap:.2f}){mark}")
+        if chosen is not None:
+            tm = dense["at_95_percent"]["test"]
+            lines.append(f"  test half at {chosen:.2f}: KB answered {round(tm.answered_kb * tm.n_kb)}/{tm.n_kb} ({tm.answered_kb:.2f}), "
+                         f"gap escalated {round(tm.escalated_gap * tm.n_gap)}/{tm.n_gap} ({tm.escalated_gap:.2f}), AUC {dense['test_auc']:.2f}")
+        else:
+            lines.append("  no grid value answers 95% of the dev KB questions")
     lines += ["", "Proposed (not applied): "
               f"escalation = {out['reranker']['threshold']:.2f}, fallback = {out['dense_cosine']['threshold']:.2f}",
               "Strict alternative answers no dev gap question, at the cost of KB answers: "
@@ -172,11 +212,14 @@ def format_report(out: dict) -> str:
     return "\n".join(lines)
 
 
-def _jsonable(section: dict) -> dict:
-    return {
-        k: ([asdict(p) for p in v] if k == "points" else asdict(v) if isinstance(v, Metrics) else v)
-        for k, v in section.items()
-    }
+def _jsonable(value):
+    if isinstance(value, Metrics) or isinstance(value, Point):
+        return asdict(value)
+    if isinstance(value, dict):
+        return {k: _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    return value
 
 
 def run(res: Resources, index: KBIndex, out_dir: Path | None, config_path: Path | None = None) -> dict:
@@ -184,7 +227,7 @@ def run(res: Resources, index: KBIndex, out_dir: Path | None, config_path: Path 
     print(f"[{res.banner}]\n" + format_report(out) + "\n")
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
-        payload = {"mock": res.mock, "embedder": res.embeddings.name, **{k: _jsonable(v) for k, v in out.items()}}
+        payload = {"mock": res.mock, "embedder": res.embeddings.name, **_jsonable(out)}
         (out_dir / "threshold.json").write_text(json.dumps(payload, indent=2))
     if config_path:
         write_config(config_path, escalation=out["reranker"]["threshold"], fallback=out["dense_cosine"]["threshold"])

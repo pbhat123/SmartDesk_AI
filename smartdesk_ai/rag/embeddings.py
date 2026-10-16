@@ -10,12 +10,9 @@ import re
 from typing import Protocol
 
 from smartdesk_ai.config.settings import Settings
+from smartdesk_ai.rag.index import STOPWORDS
 
 _WORD = re.compile(r"[a-z0-9₹]+")
-_STOP = frozenset(
-    "a an and are as at be by can do does for from has have how i if in is it me my of on or so the to we what when "
-    "where which who will with you your".split()
-)
 
 
 class Embeddings(Protocol):
@@ -37,7 +34,7 @@ class HashingEmbeddings:
     def _vector(self, text: str) -> list[float]:
         vec = [0.0] * self.dim
         for word in _WORD.findall(text.lower()):
-            if word in _STOP:
+            if word in STOPWORDS:
                 continue
             if len(word) > 4 and word.endswith("s"):
                 word = word[:-1]

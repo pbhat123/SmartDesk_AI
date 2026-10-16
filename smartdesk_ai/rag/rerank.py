@@ -3,6 +3,8 @@ import math
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
+from smartdesk_ai.config.settings import Settings
+from smartdesk_ai.ops.health import Component, HealthRegistry, get_registry
 from smartdesk_ai.rag.models import ScoredChunk
 
 PairScorer = Callable[[list[tuple[str, str]]], Sequence[float]]
@@ -59,3 +61,10 @@ def collapse_to_entries(ranked: list[ScoredChunk], top_n: int) -> list[ScoredChu
         if current is None or item.score > current.score:
             best[item.chunk.entry_id] = item
     return sorted(best.values(), key=lambda s: (-s.score, s.chunk.chunk_id))[:top_n]
+
+
+def load_reranker(cfg: Settings, health: HealthRegistry | None = None) -> Reranker | None:
+    """Load the configured cross-encoder. On any failure the reranker is recorded as degraded and None
+    is returned, so startup never crashes and the pipeline falls back to RRF order (FR-F7)."""
+    health = health or get_registry()
+    return health.try_load(Component.RERANKER, lambda: CrossEncoderReranker.from_model(cfg.models.reranker.id))

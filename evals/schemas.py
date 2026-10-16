@@ -26,3 +26,21 @@ class GapQuestion(BaseModel):
     expected_category: Category
     grey_zone: bool  # workplace-related and close to existing KB wording
     split: Split
+
+
+Intent = Literal["kb_query", "create_ticket", "ticket_status", "smalltalk", "out_of_scope", "ambiguous"]
+Route = Literal["it_worker", "hr_worker", "misc", "ticket_agent", "none"]
+Tool = Literal["search_kb", "create_ticket", "get_tickets", "none"]
+Awaiting = Literal["none", "offer_reply", "email", "ticket_pick"]
+
+
+class IntentRow(BaseModel):
+    """One routing case (FR-D1, D2, D8, D9, G2). `route` and `tool` are the expected outcomes."""
+
+    id: str
+    utterance: str = Field(min_length=2)
+    awaiting: Awaiting = "none"
+    expected_intent: Intent
+    expected_route: Route
+    expected_tool: Tool
+    out_of_scope_kind: Literal["weather", "recipe", "trivia", "coding", "other"] | None = None

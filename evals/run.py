@@ -8,8 +8,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-from evals import chunking_ablation, retrieval_eval
-from evals.harness import DEFAULT_INDEX_DIR, Resources, make_resources
+from evals import chunking_ablation, retrieval_eval, tune_threshold
+from evals.harness import DEFAULT_INDEX_DIR, ROOT, Resources, make_resources
 from smartdesk_ai.rag.index import IndexNotBuilt, KBIndex, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ingest
 
@@ -41,8 +41,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mock", action="store_true", help="hashing embeddings and a mock reranker: free, offline")
     parser.add_argument("--index-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None, help="write results JSON here")
+    parser.add_argument("--write-config", action="store_true", help="threshold step: write the proposed values into --config")
+    parser.add_argument("--config", type=Path, default=ROOT / "config.yaml", help="file --write-config edits")
     args = parser.parse_args(argv)
     steps = [args.only] if args.only else list(STEPS)
+    if args.write_config and args.mock and args.config.resolve() == (ROOT / "config.yaml").resolve():
+        print("error: refusing to write mock values into the real config.yaml; pass --config <other file>", file=sys.stderr)
+        return 1
 
     try:
         res = make_resources(mock=args.mock, need_reranker=bool({"retrieval", "chunking", "threshold"} & set(steps)))
@@ -56,6 +61,8 @@ def main(argv: list[str] | None = None) -> int:
         if "chunking" in steps:
             fixed_dir = Path(tempfile.mkdtemp(prefix="eval_fixed_")) if args.mock else DEFAULT_INDEX_DIR.parent / "index_fixed"
             chunking_ablation.run(res, index, fixed_dir, args.out_dir)
+        if "threshold" in steps:
+            tune_threshold.run(res, index, args.out_dir, args.config if args.write_config else None)
         res.embeddings.save()
     except (IndexNotBuilt, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

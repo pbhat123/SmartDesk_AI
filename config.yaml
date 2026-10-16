@@ -33,6 +33,11 @@ tiers:
   CONFIRM_PARSE: light       # yes / no / edit at the ticket gate (FR-G12)
   CHITCHAT: light            # small talk, deflection, clarifying questions
 
+# LLM call retry (FR-F2): attempts per model before the outage fallback, doubling backoff.
+llm:
+  retry_attempts: 3
+  backoff_seconds: 0.5
+
 # Daily spend (FR-H8). cutoff_1: everything moves to Light-Model.
 # cutoff_2: total daily spend at which service stops (a further $5 after cutoff_1).
 budget:

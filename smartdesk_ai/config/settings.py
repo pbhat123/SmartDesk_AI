@@ -79,6 +79,11 @@ class Models(_Strict):
     reranker: RerankerModel
 
 
+class LLMRetry(_Strict):
+    retry_attempts: Annotated[int, Field(gt=0)]  # per model, before outage fallback (FR-F2)
+    backoff_seconds: NonNegative  # first wait; doubles each retry
+
+
 class Budget(_Strict):
     timezone: str
     cutoff_1_usd: NonNegative
@@ -170,6 +175,7 @@ class Chunking(_Strict):
 class Settings(_Strict):
     models: Models
     tiers: dict[str, Tier]
+    llm: LLMRetry
     budget: Budget
     rate_limits: RateLimits
     compaction: Compaction

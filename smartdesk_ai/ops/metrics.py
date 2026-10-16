@@ -7,8 +7,12 @@ the arguments, so no email or other PII reaches the local log (FR-G11). The per-
 import json
 import threading
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel
+
+
+AttemptOutcome = Literal["success", "transient_failure", "validation_error", "error"]
 
 
 class ToolCallRecord(BaseModel):
@@ -18,6 +22,7 @@ class ToolCallRecord(BaseModel):
     error_code: str | None = None
     attempts: int
     attempt_latencies_ms: list[float]
+    attempt_outcomes: list[AttemptOutcome]  # one per attempt, same order as the latencies
     total_latency_ms: float
 
 

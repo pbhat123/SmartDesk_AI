@@ -42,6 +42,52 @@ def test_failing_mock_run_records_outcome_attempts_and_latencies(settings):
     assert rec.total_latency_ms == pytest.approx(1500 + 1000 * (backoff + 2 * backoff))
 
 
+def test_attempt_outcomes_for_transient_then_success(settings):
+    clock, metrics = Clock(), MetricsRecorder()
+    calls = []
+
+    def flaky(args):
+        calls.append(1)
+        if len(calls) < 3:
+            raise TransientToolError("503")
+        return "x"
+
+    result = build(settings, flaky, metrics, clock).execute("search_kb", {"query": "vpn"}, agent="a")
+    (rec,) = metrics.records
+    assert result.outcome is Outcome.SUCCESS and rec.outcome == "success"  # call-level outcome unchanged
+    assert rec.attempt_outcomes == ["transient_failure", "transient_failure", "success"]
+    assert len(rec.attempt_latencies_ms) == 3
+
+
+def test_attempt_outcomes_for_all_transient_failures(settings):
+    metrics = MetricsRecorder()
+
+    def boom(args):
+        raise TransientToolError("503")
+
+    build(settings, boom, metrics, Clock()).execute("search_kb", {"query": "vpn"}, agent="a")
+    rec = metrics.records[0]
+    assert rec.outcome == "unavailable"
+    assert rec.attempt_outcomes == ["transient_failure"] * 3
+
+
+def test_attempt_outcome_for_a_permanent_error(settings):
+    metrics = MetricsRecorder()
+
+    def bad(args):
+        raise ValueError("nope")
+
+    build(settings, bad, metrics, Clock()).execute("search_kb", {"query": "vpn"}, agent="a")
+    rec = metrics.records[0]
+    assert (rec.outcome, rec.attempt_outcomes) == ("error", ["error"])
+
+
+def test_rejected_call_has_no_attempt_outcomes(settings):
+    metrics = MetricsRecorder()
+    build(settings, lambda a: 1, metrics, Clock()).execute("search_kb", {"query": ""}, agent="a")
+    assert metrics.records[0].attempt_outcomes == []
+
+
 def test_success_record(settings):
     clock, metrics = Clock(), MetricsRecorder()
 

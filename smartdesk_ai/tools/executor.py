@@ -83,19 +83,21 @@ class ToolExecutor:
         self, name: str, raw_args: dict[str, Any], *, agent: str, confirmed: bool = False
     ) -> ToolResult:
         started = self._clock()
-        attempt_ms: list[float] = []
+        attempt_ms: list[tuple[float, str]] = []
         result = self._execute(name, raw_args, confirmed, attempt_ms)
         if self._metrics is not None:
             self._metrics.record(ToolCallRecord(
                 tool=name, agent=agent, outcome=result.outcome.value,
                 error_code=result.code.value if result.code else None,
-                attempts=result.attempts, attempt_latencies_ms=attempt_ms,
+                attempts=result.attempts,
+                attempt_latencies_ms=[ms for ms, _ in attempt_ms],
+                attempt_outcomes=[o for _, o in attempt_ms],
                 total_latency_ms=(self._clock() - started) * 1000,
             ))
         return result
 
     def _execute(
-        self, name: str, raw_args: dict[str, Any], confirmed: bool, attempt_ms: list[float]
+        self, name: str, raw_args: dict[str, Any], confirmed: bool, attempt_ms: list[tuple[float, str]]
     ) -> ToolResult:
         try:
             tool = self._registry.get(name)
@@ -133,7 +135,7 @@ class ToolExecutor:
 
     def _run_with_retry(
         self, name: str, tool: RegisteredTool, args: BaseModel, request_id: str | None,
-        attempt_ms: list[float],
+        attempt_ms: list[tuple[float, str]],
     ) -> ToolResult:
         for attempt in range(1, self._cfg.max_attempts + 1):
             attempt_start = self._clock()
@@ -142,19 +144,19 @@ class ToolExecutor:
                     # An earlier attempt may have created the issue even though its response was lost.
                     existing = tool.recover(request_id)
                     if existing is not None:
-                        attempt_ms.append((self._clock() - attempt_start) * 1000)
+                        attempt_ms.append(((self._clock() - attempt_start) * 1000, "success"))
                         return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=attempt, data=existing)
                 data = tool.fn(args)
             except TRANSIENT:
-                attempt_ms.append((self._clock() - attempt_start) * 1000)
+                attempt_ms.append(((self._clock() - attempt_start) * 1000, "transient_failure"))
                 if attempt < self._cfg.max_attempts:
                     self._sleep(self._cfg.backoff_seconds * 2 ** (attempt - 1))
                 continue
             except Exception as exc:  # permanent: not retried; the message is not kept (FR-G11)
-                attempt_ms.append((self._clock() - attempt_start) * 1000)
+                attempt_ms.append(((self._clock() - attempt_start) * 1000, "error"))
                 return ToolResult(tool=name, outcome=Outcome.ERROR, attempts=attempt,
                                   error=type(exc).__name__)
-            attempt_ms.append((self._clock() - attempt_start) * 1000)
+            attempt_ms.append(((self._clock() - attempt_start) * 1000, "success"))
             return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=attempt, data=data)
         return ToolResult(
             tool=name, outcome=Outcome.UNAVAILABLE, attempts=self._cfg.max_attempts,

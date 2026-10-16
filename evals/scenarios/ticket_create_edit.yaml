@@ -1,0 +1,40 @@
+id: ticket_create_edit
+title: Employee edits the priority at the gate, then confirms
+kind: scenario
+fr:
+- FR-B7
+- FR-B8
+- FR-G12
+setup:
+  email_known: priya.k@smartdesk.example
+turns:
+- user: Please raise a ticket for my broken VPN
+  expect:
+    step: ticket_summary
+    intent: create_ticket
+    summary_fields:
+    - title
+    - description
+    - category
+    - email
+    - priority
+    ticket_created: false
+- user: Make the priority high
+  expect:
+    step: ticket_summary
+    reply_contains:
+    - High
+    summary_fields:
+    - title
+    - description
+    - category
+    - email
+    - priority
+    ticket_created: false
+- user: 'Yes'
+  expect:
+    step: ticket_created
+    tool: create_ticket
+    ticket_created: true
+    ticket_id_in_reply: true
+    ticket_link_in_reply: true

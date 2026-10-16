@@ -1,0 +1,18 @@
+id: kb_answer
+title: KB answer with a citation
+kind: scenario
+fr:
+- FR-A4
+- FR-A13
+setup: {}
+turns:
+- user: How many casual leave days do I get in a year?
+  expect:
+    step: kb_answer
+    intent: kb_query
+    tool: search_kb
+    cites:
+    - HR-LEAVE-01
+    reply_contains:
+    - '8'
+    ticket_created: false

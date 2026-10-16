@@ -1,0 +1,27 @@
+id: api_down
+title: GitHub unreachable at creation time
+kind: scenario
+fr:
+- FR-F1
+- FR-G4
+setup:
+  email_known: priya.k@smartdesk.example
+  github: down
+turns:
+- user: Please raise a ticket for my flickering monitor
+  expect:
+    step: ticket_summary
+    intent: create_ticket
+    summary_fields:
+    - title
+    - description
+    - category
+    - email
+    ticket_created: false
+- user: 'Yes'
+  expect:
+    step: ticket_unavailable
+    ticket_created: false
+    ticket_id_in_reply: false
+    reply_contains:
+    - try again later

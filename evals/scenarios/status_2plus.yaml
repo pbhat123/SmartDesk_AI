@@ -1,0 +1,23 @@
+id: status_2plus
+title: Status check with several tickets, employee picks one
+kind: scenario
+fr:
+- FR-C3
+- FR-D2
+setup:
+  email_known: two.tickets@smartdesk.example
+  tickets_for_email: 2
+turns:
+- user: Any updates on my tickets?
+  expect:
+    step: ticket_list
+    intent: ticket_status
+    tool: get_tickets
+    awaiting_after: ticket_pick
+- user: The second one
+  expect:
+    step: ticket_status_single
+    intent: ticket_status
+    ticket_id_in_reply: true
+    status_in_reply: true
+    team_update_in_reply: true

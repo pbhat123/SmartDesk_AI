@@ -1,0 +1,16 @@
+id: status_0
+title: Status check with no tickets on file
+kind: scenario
+fr:
+- FR-C4
+setup:
+  email_known: zero.tickets@smartdesk.example
+  tickets_for_email: 0
+turns:
+- user: What's the status of my ticket?
+  expect:
+    step: tickets_none
+    intent: ticket_status
+    tool: get_tickets
+    reply_contains:
+    - no tickets

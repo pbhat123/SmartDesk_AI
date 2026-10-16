@@ -1,0 +1,24 @@
+id: degraded_mode
+title: Reranker unavailable, the app keeps answering and escalating
+kind: scenario
+fr:
+- FR-F7
+- FR-A15
+setup:
+  degraded:
+  - reranker
+  - redis
+turns:
+- user: How do I reset my password?
+  expect:
+    step: kb_answer
+    intent: kb_query
+    tool: search_kb
+    cites:
+    - IT-PWD-01
+- user: Where can I park my car when I visit the office?
+  expect:
+    step: ticket_offer
+    intent: kb_query
+    awaiting_after: offer_reply
+    ticket_created: false

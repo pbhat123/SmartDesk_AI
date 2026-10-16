@@ -1,0 +1,23 @@
+id: ticket_create_no
+title: Summary shown, employee declines, nothing is created
+kind: scenario
+fr:
+- FR-B2
+- FR-G12
+setup:
+  email_known: priya.k@smartdesk.example
+turns:
+- user: Please raise a ticket for my broken VPN
+  expect:
+    step: ticket_summary
+    intent: create_ticket
+    summary_fields:
+    - title
+    - description
+    - category
+    - email
+    ticket_created: false
+- user: No, cancel that
+  expect:
+    step: ticket_cancelled
+    ticket_created: false

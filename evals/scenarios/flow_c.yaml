@@ -1,0 +1,22 @@
+id: flow_c
+title: 'Flow C: status check, email asked, one open ticket listed'
+kind: flow
+fr:
+- FR-C1
+- FR-C5
+- FR-C7
+setup:
+  tickets_for_email: 1
+turns:
+- user: What's the status of my ticket?
+  expect:
+    step: email_requested
+    intent: ticket_status
+    awaiting_after: email
+- user: one.ticket@smartdesk.example
+  expect:
+    step: ticket_status_single
+    tool: get_tickets
+    ticket_id_in_reply: true
+    status_in_reply: true
+    team_update_in_reply: true

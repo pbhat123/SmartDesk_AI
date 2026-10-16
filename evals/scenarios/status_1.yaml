@@ -1,0 +1,18 @@
+id: status_1
+title: Status check with one ticket
+kind: scenario
+fr:
+- FR-C6
+- FR-C7
+setup:
+  email_known: one.ticket@smartdesk.example
+  tickets_for_email: 1
+turns:
+- user: Any updates on my monitor ticket?
+  expect:
+    step: ticket_status_single
+    intent: ticket_status
+    tool: get_tickets
+    ticket_id_in_reply: true
+    status_in_reply: true
+    team_update_in_reply: true

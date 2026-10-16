@@ -1,0 +1,25 @@
+id: flow_a
+title: 'Flow A: password reset answered from the KB, then thanks and goodbye'
+kind: flow
+fr:
+- FR-A4
+- FR-A13
+- FR-D5
+setup: {}
+turns:
+- user: How do I reset my password?
+  expect:
+    step: kb_answer
+    intent: kb_query
+    tool: search_kb
+    cites:
+    - IT-PWD-01
+    ticket_created: false
+- user: Thanks, that worked!
+  expect:
+    step: thanks
+    intent: smalltalk
+- user: Bye
+  expect:
+    step: goodbye
+    intent: smalltalk

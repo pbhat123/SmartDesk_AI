@@ -1,0 +1,35 @@
+id: ticket_create_yes
+title: Gap question, offer accepted, summary confirmed with yes
+kind: scenario
+fr:
+- FR-A16
+- FR-B2
+- FR-B8
+- FR-G12
+setup:
+  email_known: priya.k@smartdesk.example
+turns:
+- user: Where can I park my car when I visit the Bengaluru office?
+  expect:
+    step: ticket_offer
+    intent: kb_query
+    tool: search_kb
+    awaiting_after: offer_reply
+    ticket_created: false
+- user: Yes please
+  expect:
+    step: ticket_summary
+    intent: create_ticket
+    summary_fields:
+    - title
+    - description
+    - category
+    - email
+    ticket_created: false
+- user: Yes, go ahead
+  expect:
+    step: ticket_created
+    tool: create_ticket
+    ticket_created: true
+    ticket_id_in_reply: true
+    ticket_link_in_reply: true

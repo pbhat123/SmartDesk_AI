@@ -1,6 +1,6 @@
 # SPEC.md: SmartDesk_AI
 
-Status: draft v3. Items marked `TBD` need a decision. Defaults are proposals.
+Status: draft v3.1. Items marked `TBD` need a decision. Defaults are proposals.
 
 Change log, v2 to v3 (rulings on PLAN.md section 9):
 | Id | Sections changed |
@@ -38,6 +38,11 @@ Change log, v2 to v3 (rulings on PLAN.md section 9):
 | F-31 | Section 2 model notes |
 | F-32 | FR-H12 |
 | F-33 | Section 3E, FR-A11, FR-H6, section 4 cache rules |
+
+Change log, v3 to v3.1 (after the first real retrieval run, October 2026):
+| Id | Sections changed |
+|---|---|
+| F-34 | FR-A5, FR-A15, FR-F7, FR-H16, section 9: one escalation threshold, applied to the top dense cosine similarity; the reranker only orders candidates; `retrieval.strategy` switch |
 
 ## 1. Goal
 First-line IT and HR help desk agent. It answers from a knowledge base (KB), escalates by creating a ticket when unsure, and reports ticket status. Optimize for the rubric first (100 marks), extras second.
@@ -103,7 +108,7 @@ Notes: these values go into the price table and context window sizes in `config.
 - FR-A2: Deliberate gaps (e.g. monitor flickering, office parking, cafeteria menu, desk booking). List them in `kb/GAPS.md`.
 - FR-A3: Chunking (decided): one chunk per entry. Target 200 to 500 tokens. A section above ~600 tokens is split with ~15% overlap and every piece keeps the parent `id`. Each chunk is embedded with a "Document > Section" header prepended. Justification for the README: policy sections are self-contained answers, so heading-based chunks keep each answer whole and make citations map one to one to entries. Backed by the ablation in FR-A17.
 - FR-A4: Answers use retrieved context only. If context is insufficient, say so.
-- FR-A5: Escalation rule: no chunks, or top score below threshold, or LLM reports insufficient context. Threshold tuned on the eval set (pick the value that best separates the KB set from the gap set). Tune on a dev half of the KB and gap sets and report final numbers on the held-out test half, so results are not inflated.
+- FR-A5: Escalation rule: no chunks, or top dense cosine similarity below the threshold, or LLM reports insufficient context. Threshold tuned on the eval set (pick the value that best separates the KB set from the gap set). Tune on a dev half of the KB and gap sets and report final numbers on the held-out test half, so results are not inflated.
 - FR-A6: Hybrid pipeline: run BM25 and dense retrieval (top-20 each), fuse with RRF (k=60), deduplicate by `chunk_id`, rerank with a cross-encoder, then collapse pieces of the same entry (the best-scoring piece wins) and pass the top-5 entries to the LLM with the full parent entry text. Each stage is a separate, swappable function so every strategy can be evaluated alone. Retrieval accepts an optional `domain` filter (`IT`, `HR`, or none for the whole KB).
 - FR-A7: Ablation: Recall@k (k=1,3,5) reported for BM25, dense, hybrid (RRF), and hybrid plus rerank on `evals/kb_questions.jsonl`. Results table goes in the README.
 - FR-A8: KB covers every domain and example topic in document section 2.1.1. IT Support: password reset, VPN configuration, software installation requests, MFA setup, guest Wi-Fi, email on mobile. HR Policies: leave (casual, sick, earned), WFH guidelines, reimbursement, code of conduct, anti-harassment, performance review cycle. Onboarding: day-one checklist, IT equipment allocation, benefits enrollment, buddy programme, probation. Payroll and Comp: pay-day schedule, tax declaration, salary structure, stock-option vesting. Domain tags: IT Support and IT equipment allocation are `IT`; everything else is `HR`.
@@ -113,7 +118,7 @@ Notes: these values go into the price table and context window sizes in `config.
 - FR-A12: Retrieval demonstration: for any query, the system can show the retrieved chunks with their scores and the answer generated from them (CLI debug flag and UI panel). Use it in the demo video.
 - FR-A13: Citations: every KB answer names the KB entry or entries it came from.
 - FR-A14: KB first: retrieval is always attempted before a ticket is offered. Escalate only when genuinely unsure.
-- FR-A15: Score and signals: the threshold is applied to the reranker score (or the fallback threshold in FR-F7 if the reranker is unavailable). Reranker scores are sigmoid-normalized to 0 to 1. The two thresholds are tied to their score kind: the escalation threshold to the normalized reranker score, the fallback threshold to the top dense cosine similarity (both in config). Decided: escalate if any one signal fires (zero chunks, score below threshold, LLM reports insufficient context), because a wrong answer loses marks (FAQ Q11).
+- FR-A15: Score and signals: signal 2 compares the top dense cosine similarity of the retrieved chunks with one escalation threshold (config). It is the same whether or not the reranker is available. The reranker only orders the candidates (FR-A6): its scores stay sigmoid-normalized to 0 to 1 and are shown in the retrieval demo (FR-A12), but they are never compared with a threshold. Decided after the first real run (October 2026): bge-reranker-base gives no gain over dense alone on this KB (Recall@1 0.74 against 0.92) and scores correct paraphrased policy questions very low in absolute terms (median 0.19 on the KB set), so it separates answerable from unanswerable questions worse than dense cosine (dev AUC 0.76 against 0.83; test 0.92 against 0.99). Decided: escalate if any one signal fires (zero chunks, top dense cosine below threshold, LLM reports insufficient context), because a wrong answer loses marks (FAQ Q11).
 - FR-A16: Escalation handoff: when the agent decides it cannot answer, it says so, offers to create a ticket, and starts the ticket flow (section B) only if the employee agrees. Decided: the offer and the email request are merged in one message (as in document flow B). Giving the email counts as agreeing; if the email is already known in the session, the offer is a plain yes or no question. A refusal ends the flow. The confirmation before creating the ticket (FR-B2) stays.
 - FR-A17: Chunking ablation: Recall@k for heading-based chunks versus fixed 512-token chunks with 50 overlap, on the KB set. Results in the README.
 - FR-A18: No eval leakage: questions in `evals/kb_questions.jsonl` are paraphrased, never copied from indexed text.
@@ -181,7 +186,7 @@ Notes: these values go into the price table and context window sizes in `config.
 - FR-F4: Edge cases: empty input, invalid email, very long input (over `input.max_chars` in config, default 4000, gets a polite request to shorten), duplicate ticket request (if the same email already has an open ticket with a near-identical title, tell the employee and ask whether to open another; this is separate from the request-ID protection in FR-G6).
 - FR-F5: `.env.example` lists `OPENAI_API_KEY`, `GITHUB_TOKEN`, and the tickets repo name. Optional keys: `LANGSMITH_API_KEY`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `REDIS_URL`. No real values are committed.
 - FR-F6: Tracing (LangSmith, Langfuse) and Redis are optional. The app runs after a plain clone with no tracing keys and no Redis, using an in-memory cache fallback.
-- FR-F7: Graceful degradation (decided): everything is installed and used by default. If a component fails to load, the app logs a warning, shows the degraded mode in the Monitoring tab, and keeps running with a substitute. Reranker unavailable: skip reranking, keep the RRF order, and apply a separate fallback threshold (config) to the top dense similarity. Presidio unavailable: regex-based PII checks for email, phone, card number, and government ID (name reduction is skipped and logged). Redis unavailable: in-memory cache. Tracing keys missing: local log only.
+- FR-F7: Graceful degradation (decided): everything is installed and used by default. If a component fails to load, the app logs a warning, shows the degraded mode in the Monitoring tab, and keeps running with a substitute. Reranker unavailable: skip reranking and keep the RRF order. The escalation threshold is unchanged, because it already applies to the top dense cosine similarity (FR-A15). Presidio unavailable: regex-based PII checks for email, phone, card number, and government ID (name reduction is skipped and logged). Redis unavailable: in-memory cache. Tracing keys missing: local log only.
 - AC (added): with the reranker and Presidio forced to fail, the app starts, answers a KB question, still redacts a phone number, and logs both degraded modes.
 
 ### G. Tool calling and execution (supports sections A to F and I)
@@ -224,7 +229,7 @@ Memory, metrics, limits
 AIOps
 - FR-H14: Prompt version tracking: prompts are files in `agent/prompts/`, one per agent and purpose, named with a version (for example `synthesizer_v2.md`). The active version per prompt is set in `config.yaml`. The version is logged on every LLM call (FR-H9), shown in traces, and stored with every eval run so results compare across versions.
 - FR-H15: Drift monitoring: an on-demand command and a Monitoring tab button re-run the golden eval set and store Faithfulness, Recall@k, escalation rate, and average rerank score with a timestamp, the prompt versions, and the model IDs. The tab charts them over time. The golden set is the KB set plus the gap set. The button shows an estimated cost and asks for confirmation before running, since the run calls the judge model.
-- FR-H16: Configuration: `config.yaml` (no secrets) holds the Main-Model ID (`gpt-5.4-mini`) and the Light-Model ID (`gpt-4o-mini`), the task-to-tier map (FR-H17), context window sizes, the price table, budget cutoffs, rate limits, the compaction trigger, the escalation threshold, the fallback threshold (FR-F7), the routing confidence threshold (FR-D8), the semantic cache cut-off, the active prompt versions, the maximum input length (`input.max_chars`), the injection-heuristic threshold, and the eval budget flag. Changing a model ID there is the only change needed to swap models.
+- FR-H16: Configuration: `config.yaml` (no secrets) holds the Main-Model ID (`gpt-5.4-mini`) and the Light-Model ID (`gpt-4o-mini`), the task-to-tier map (FR-H17), context window sizes, the price table, budget cutoffs, rate limits, the compaction trigger, the escalation threshold (on top dense cosine, FR-A15), the retrieval strategy `retrieval.strategy` (`hybrid_rerank` by default, as in FR-A6; `dense`, `hybrid` and `dense_rerank` are switches for ablations and fallback), the routing confidence threshold (FR-D8), the semantic cache cut-off, the active prompt versions, the maximum input length (`input.max_chars`), the injection-heuristic threshold, and the eval budget flag. Changing a model ID there is the only change needed to swap models.
 - FR-H17: Model right-sizing (decided): each LLM task has a fixed tier in the task-to-tier map, and `get_llm(task)` returns that tier's model. Default map:
 
   | Task | Tier |
@@ -337,7 +342,7 @@ SPEC.md  CLAUDE.md  PLAN.md  TASKS.md  README.md  .env.example  config.yaml
 - Decided: KB data source is Option C. KB format is Markdown per policy area (indexed) plus JSON Q&A (evals only). Chunking per FR-A3.
 - Decided: tickets live in GitHub Issues, accessed through the REST API first, with the GitHub MCP server added behind the same wrapper if time allows. Seed script plus search fallback for status lookups.
 - Decided: status mapping from GitHub issue state and labels to Open, In Progress, Resolved, Closed (FR-C6). Categories IT, HR, MISC.
-- Decided: escalation fires if any one signal fires, with one whole-KB retry first. TBD: the threshold value, the fallback threshold, and the routing confidence threshold (all tuned on the dev half of the eval sets once the KB exists, FR-A5).
+- Decided: escalation fires if any one signal fires, with one whole-KB retry first. TBD: the escalation threshold value and the routing confidence threshold (both tuned on the dev half of the eval sets once the KB exists, FR-A5).
 - Decided: multi-agent architecture (section 3I) and cross-session memory (FR-H10) are in scope.
 - Decided: routing is classifier first, model's tool pick as fallback (FR-D8). Scope boundary per FR-D9.
 - Decided: names reduced to first name plus last initial for everyone. Reranker and Presidio degrade gracefully (FR-F7). Rate limits 100, 40, 40 per hour.

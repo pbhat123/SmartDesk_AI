@@ -18,3 +18,27 @@ def bm25_search(index: KBIndex, query: str, k: int, domain: str | None = None) -
     ]
     hits.sort(key=lambda h: (-h.score, h.chunk.chunk_id))
     return hits[:k]
+
+
+def dense_search(index: KBIndex, query: str, k: int, domain: str | None = None) -> list[ScoredChunk]:
+    """Top-`k` chunks by cosine similarity of the query embedding, optionally restricted to one domain.
+    The score is the cosine similarity itself (1 - Chroma's cosine distance); it is also the score the
+    reranker-down fallback threshold applies to (FR-F7)."""
+    if not query.strip():
+        return []
+    vector = index.embeddings.embed_query(query)
+    if not any(vector):
+        return []
+    found = index.collection.query(
+        query_embeddings=[vector],
+        n_results=k,
+        where={"domain": domain} if domain else None,
+        include=["distances"],
+    )
+    by_id = index.by_id
+    hits = [
+        ScoredChunk(chunk=by_id[chunk_id], score=1.0 - float(distance), stage="dense")
+        for chunk_id, distance in zip(found["ids"][0], found["distances"][0])
+    ]
+    hits.sort(key=lambda h: (-h.score, h.chunk.chunk_id))
+    return hits

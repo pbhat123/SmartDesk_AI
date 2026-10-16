@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,7 @@ class KBIndex:
     collection: Collection
     embeddings: Embeddings
 
+    @cached_property
     def by_id(self) -> dict[str, Chunk]:
         return {c.chunk_id: c for c in self.chunks}
 

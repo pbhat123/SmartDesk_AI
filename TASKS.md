@@ -71,7 +71,7 @@ Exit: executor tests (retry x3, no retry on bad args, no create before confirmat
 
 | Done | ID | Task | FRs | Files | Acceptance test |
 |---|---|---|---|---|---|
-| [ ] | T3.1 | Task-to-tier map and `get_llm(task)` factory (mock LLM in tests) | H17, H16 | `sd/llm/factory.py`, `sd/llm/tiers.py`, `tests/test_get_llm.py` | Each task returns its configured tier's model; changing one task's tier in config changes only that task; tasks include CONFIRM_PARSE and CHITCHAT on Light |
+| [x] | T3.1 | Task-to-tier map and `get_llm(task)` factory (mock LLM in tests) | H17, H16 | `sd/llm/factory.py`, `sd/llm/tiers.py`, `tests/test_get_llm.py` | Each task returns its configured tier's model; changing one task's tier in config changes only that task; tasks include CONFIRM_PARSE and CHITCHAT on Light |
 | [ ] | T3.2 | LLM retry with backoff and Main/Light outage fallback; no fallback to Main at budget level >= 1; prompt-size check against Light window | F2 | `sd/llm/retry.py`, `sd/llm/fallback.py`, `tests/test_llm_fallback.py` | Main failure falls back to Light and vice versa; both failing gives a graceful message; level>=1 never falls back to Main; oversize prompt is not sent to Light |
 | [ ] | T3.3 | Tool definitions with typed args: `search_kb(query, domain)`, `create_ticket`, `get_tickets` | G1 | `sd/tools/definitions.py`, `tests/test_tool_definitions.py` | Each tool has name, description, Pydantic args; `domain` accepts IT/HR/None only |
 | [ ] | T3.4 | Tool registry (name to function) | G3 | `sd/tools/registry.py`, `tests/test_registry.py` | Lookup returns the function; unknown name errors; registry is not exposed to the LLM as a tool |

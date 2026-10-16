@@ -3,6 +3,7 @@
 Every tool call goes through `ToolExecutor.execute`: lookup in the registry, argument validation,
 then at most `tools.max_attempts` attempts with backoff, retrying transient failures only.
 """
+import re
 import time
 from collections.abc import Callable
 from enum import StrEnum
@@ -23,6 +24,20 @@ class Outcome(StrEnum):
     ERROR = "error"  # a permanent failure: unknown tool or a non-transient error in the function
 
 
+class ErrorCode(StrEnum):
+    SCHEMA = "schema"
+    CONFIRMATION_REQUIRED = "confirmation_required"
+    EMAIL_REQUIRED = "email_required"
+    EMAIL_INVALID = "email_invalid"
+
+
+# Tools that need the employee's email, and tools that need the employee's confirmation (FR-G5).
+EMAIL_TOOLS = frozenset({"create_ticket", "get_tickets"})
+CONFIRMED_TOOLS = frozenset({"create_ticket"})
+ASK_FOR_EMAIL = "Ask the employee for their work email address before trying again."
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
 class ToolResult(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
@@ -30,7 +45,12 @@ class ToolResult(BaseModel):
     outcome: Outcome
     attempts: int
     data: Any = None
+    code: ErrorCode | None = None
     error: str | None = None  # safe for the model to read; never holds user input
+
+
+def _rejected(name: str, code: ErrorCode, message: str) -> ToolResult:
+    return ToolResult(tool=name, outcome=Outcome.VALIDATION_ERROR, attempts=0, code=code, error=message)
 
 
 class ToolExecutor:
@@ -45,7 +65,9 @@ class ToolExecutor:
         self._cfg = settings.tools
         self._sleep = sleep
 
-    def execute(self, name: str, raw_args: dict[str, Any], *, agent: str) -> ToolResult:
+    def execute(
+        self, name: str, raw_args: dict[str, Any], *, agent: str, confirmed: bool = False
+    ) -> ToolResult:
         try:
             tool = self._registry.get(name)
             definition = get_definition(name)
@@ -55,9 +77,17 @@ class ToolExecutor:
             args = definition.args_model.model_validate(raw_args)
         except ValidationError as exc:
             fields = sorted({".".join(map(str, e["loc"])) for e in exc.errors()})
-            return ToolResult(
-                tool=name, outcome=Outcome.VALIDATION_ERROR, attempts=0,
-                error=f"invalid arguments: {', '.join(fields)}",
+            return _rejected(name, ErrorCode.SCHEMA, f"invalid arguments: {', '.join(fields)}")
+        if name in EMAIL_TOOLS:
+            email = getattr(args, "email", None)
+            if not email:
+                return _rejected(name, ErrorCode.EMAIL_REQUIRED, ASK_FOR_EMAIL)
+            if not _EMAIL.match(email):
+                return _rejected(name, ErrorCode.EMAIL_INVALID, f"The email address is not valid. {ASK_FOR_EMAIL}")
+        if name in CONFIRMED_TOOLS and not confirmed:
+            return _rejected(
+                name, ErrorCode.CONFIRMATION_REQUIRED,
+                "The employee has not confirmed the summary yet; show it and ask for a yes.",
             )
         return self._run_with_retry(name, tool.fn, args)
 

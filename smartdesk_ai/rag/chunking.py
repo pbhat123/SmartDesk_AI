@@ -72,3 +72,52 @@ def chunk_entry(entry: Entry, cfg: Chunking, count: TokenCounter = count_tokens)
         )
         for i, text in enumerate(texts)
     ]
+
+
+MIN_SHARE = 0.2  # a naive window counts for an entry that makes up at least this share of its characters
+
+
+def chunk_fixed(
+    entries: list[Entry], *, window: int = 512, overlap: int = 50
+) -> tuple[list[Chunk], dict[str, set[str]]]:
+    """Naive baseline for the chunking ablation (FR-A17): fixed `window`-token windows with `overlap`
+    tokens of overlap over each file's text, ignoring entry boundaries.
+
+    Returns the chunks and, for each chunk id, the entry ids it counts for: every entry covering at
+    least MIN_SHARE of the window, plus the entry covering most of it (the chunk's `entry_id`).
+    """
+    enc = _encoding()
+    by_file: dict[str, list[Entry]] = {}
+    for e in entries:
+        by_file.setdefault(e.source, []).append(e)
+
+    chunks: list[Chunk] = []
+    attribution: dict[str, set[str]] = {}
+    for source, group in by_file.items():
+        segments = [f"{e.heading}\n{e.body}" for e in group]
+        text = "\n\n".join(segments)
+        spans, pos = [], 0
+        for e, seg in zip(group, segments):
+            spans.append((e, pos, pos + len(seg)))
+            pos += len(seg) + 2
+        tokens = enc.encode(text)
+        decoded, offsets = enc.decode_with_offsets(tokens)
+        if decoded != text:
+            raise ValueError(f"tokenizer round trip changed the text of {source}")
+        windows, start = [], 0
+        while True:
+            end = min(start + window, len(tokens))
+            windows.append((offsets[start], offsets[end] if end < len(tokens) else len(text)))
+            if end == len(tokens):
+                break
+            start += window - overlap
+        for i, (lo, hi) in enumerate(windows):
+            share = {e.id: max(0, min(hi, b) - max(lo, a)) / (hi - lo) for e, a, b in spans}
+            primary = max(spans, key=lambda s: share[s[0].id])[0]
+            chunk_id = f"fixed:{source}#{i}"
+            chunks.append(Chunk(
+                chunk_id=chunk_id, entry_id=primary.id, domain=primary.domain, title=primary.title, header="",
+                text=text[lo:hi], source_file=source, piece=i, pieces=len(windows),
+            ))
+            attribution[chunk_id] = {eid for eid, s in share.items() if s >= MIN_SHARE} | {primary.id}
+    return chunks, attribution

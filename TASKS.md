@@ -61,7 +61,7 @@ Exit: ingest twice gives same chunk count; Recall@k table for 4 strategies; chun
 | [x] | T2.8 | Answerable signals 1-2 (no chunks, score below threshold) tied to `score_kind` | A15, A5 | `sd/rag/answerable.py`, `tests/test_answerable.py` | Zero chunks gives `answerable=False`; score below threshold gives False; threshold chosen by score kind (reranker vs fallback) |
 | [x] | T2.9 | Staleness: hash per KB file; only changed file's chunks flagged; re-ingest re-embeds flagged, clears flags | H6 | `sd/rag/staleness.py`, `sd/rag/ingest.py`, `tests/test_staleness.py` | Editing one file flags only its chunks; re-ingest clears flags and removes deleted-entry chunks; cache-clear event fires |
 | [x] | T2.10 | Retrieval ablation harness: Recall@1/3/5 for BM25, dense, hybrid, hybrid+rerank | A7 | `evals/retrieval_eval.py`, `tests/test_retrieval_eval.py` | `python -m evals.run --only retrieval` prints the 4-strategy table (mock embeddings in test; real run after KB exists) |
-| [ ] | T2.11 | Chunking ablation: heading-based vs fixed 512/50 | A17 | `evals/chunking_ablation.py`, `tests/test_chunking_ablation.py` | Both chunkers run on the KB set and a Recall@k comparison table is produced |
+| [x] | T2.11 | Chunking ablation: heading-based vs fixed 512/50 | A17 | `evals/chunking_ablation.py`, `tests/test_chunking_ablation.py` | Both chunkers run on the KB set and a Recall@k comparison table is produced |
 | [ ] | T2.12 | Threshold tuning on the dev half; report on held-out test half | A5 | `evals/tune_threshold.py`, `config.yaml`, `tests/test_tune_threshold.py` | Script picks the value that best separates KB from gap on dev, reports test-half separation; value written to config (needs real embeddings/reranker, **[CONFIRM]** if API embeddings) |
 
 ---

@@ -81,6 +81,30 @@ def _write_bm25(index_dir: Path, chunks: list[Chunk], entries: list[Entry]) -> N
     os.replace(tmp, index_dir / BM25_FILE)  # readers never see a half-written file
 
 
+def build_index(index_dir: Path, chunks: list[Chunk], entries: list[Entry], embeddings: Embeddings) -> None:
+    """Write both indexes for an arbitrary chunk list, replacing whatever was there. Used by the
+    chunking ablation; `ingest` is the incremental path for the real KB."""
+    index_dir = Path(index_dir)
+    index_dir.mkdir(parents=True, exist_ok=True)
+    client = chromadb.PersistentClient(
+        path=str(index_dir / CHROMA_DIR), settings=ChromaSettings(anonymized_telemetry=False)
+    )
+    if COLLECTION in {c.name for c in client.list_collections()}:
+        client.delete_collection(COLLECTION)
+    collection = client.create_collection(COLLECTION, metadata={"hnsw:space": "cosine"})
+    collection.upsert(
+        ids=[c.chunk_id for c in chunks],
+        embeddings=embeddings.embed_documents([c.embed_text for c in chunks]),
+        documents=[c.text for c in chunks],
+        metadatas=[
+            {"entry_id": c.entry_id, "domain": c.domain, "title": c.title, "header": c.header,
+             "source_file": c.source_file, "piece": c.piece, "pieces": c.pieces}
+            for c in chunks
+        ],
+    )
+    _write_bm25(index_dir, chunks, entries)
+
+
 def ingest(
     kb_dir: Path,
     index_dir: Path,

@@ -8,7 +8,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from evals import retrieval_eval
+from evals import chunking_ablation, retrieval_eval
 from evals.harness import DEFAULT_INDEX_DIR, Resources, make_resources
 from smartdesk_ai.rag.index import IndexNotBuilt, KBIndex, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ingest
@@ -45,13 +45,17 @@ def main(argv: list[str] | None = None) -> int:
     steps = [args.only] if args.only else list(STEPS)
 
     try:
-        res = make_resources(mock=args.mock, need_reranker="retrieval" in steps or "threshold" in steps)
+        res = make_resources(mock=args.mock, need_reranker=bool({"retrieval", "chunking", "threshold"} & set(steps)))
         if "ingest" in steps and not args.mock:
             build_index(res, args.index_dir or DEFAULT_INDEX_DIR)
         index = None
-        if "retrieval" in steps:
+        if "retrieval" in steps or "chunking" in steps or "threshold" in steps:
             index = get_index(res, args.index_dir)
+        if "retrieval" in steps:
             retrieval_eval.run(res, index, args.out_dir)
+        if "chunking" in steps:
+            fixed_dir = Path(tempfile.mkdtemp(prefix="eval_fixed_")) if args.mock else DEFAULT_INDEX_DIR.parent / "index_fixed"
+            chunking_ablation.run(res, index, fixed_dir, args.out_dir)
         res.embeddings.save()
     except (IndexNotBuilt, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

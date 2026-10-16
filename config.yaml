@@ -65,6 +65,7 @@ thresholds:
 # Hybrid retrieval (SPEC section 2, FR-A6): top-k from each retriever, RRF constant,
 # entries kept after rerank and collapse by entry_id.
 retrieval:
+  strategy: hybrid_rerank   # hybrid_rerank (FR-A6 default) | dense | hybrid | dense_rerank, same names as the ablation (FR-A7)
   k_each: 20
   rrf_k: 60
   top_n: 5

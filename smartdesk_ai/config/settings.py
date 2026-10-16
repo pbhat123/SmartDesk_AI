@@ -126,7 +126,11 @@ class Thresholds(_Strict):
     injection_heuristic: Unit  # classifier runs only above this (FR-H1)
 
 
+RetrievalStrategy = Literal["hybrid_rerank", "dense", "hybrid", "dense_rerank"]
+
+
 class Retrieval(_Strict):
+    strategy: RetrievalStrategy  # hybrid_rerank is the FR-A6 pipeline; the others are switches (FR-H16)
     k_each: Annotated[int, Field(gt=0)]  # candidates from each retriever (FR-A6)
     rrf_k: Annotated[int, Field(gt=0)]
     top_n: Annotated[int, Field(gt=0)]  # entries kept after rerank and collapse

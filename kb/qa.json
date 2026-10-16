@@ -1,0 +1,415 @@
+[
+  {
+    "question": "What are the IT help desk's opening hours and how do I reach it?",
+    "answer": "The IT help desk is open Monday to Friday, 08:00 to 20:00 IST. Call extension 4100, raise a request at https://helpdesk.smartdesk.example, or email helpdesk@smartdesk.example.",
+    "category": "IT Support",
+    "type": "simple",
+    "entry_id": "IT-HELP-01"
+  },
+  {
+    "question": "How quickly does IT respond to a request?",
+    "answer": "A security incident or an outage affecting many people is acknowledged within 30 minutes. Every other request is acknowledged within 4 working hours and resolved, or given a status update, within 1 working day.",
+    "category": "IT Support",
+    "type": "simple",
+    "entry_id": "IT-HELP-01"
+  },
+  {
+    "question": "How do I reset my forgotten password?",
+    "answer": "Go to https://id.smartdesk.example/reset, enter your work email, choose Forgot password, approve the prompt in SmartDesk Authenticator and set a new password. Wait about 2 minutes before signing in again.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-PWD-01"
+  },
+  {
+    "question": "My account keeps locking after I reset my password. What is going on?",
+    "answer": "An old password saved in Outlook on your phone, the VPN client or a browser is the usual cause. Update it everywhere. A locked account unlocks by itself after 15 minutes.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-PWD-01"
+  },
+  {
+    "question": "How long must my password be, and when does it expire?",
+    "answer": "It must be at least 14 characters and it expires every 180 days. You get reminder emails 14 days and 3 days before expiry.",
+    "category": "IT Support",
+    "type": "simple",
+    "entry_id": "IT-PWD-02"
+  },
+  {
+    "question": "How do I set up multi-factor authentication?",
+    "answer": "Install SmartDesk Authenticator, sign in at https://id.smartdesk.example/mfa, choose Add device, scan the QR code and type the 6-digit code. Save the 10 backup codes somewhere safe.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-MFA-01"
+  },
+  {
+    "question": "I got a new phone. How do I move my authenticator to it?",
+    "answer": "While the old phone still works, sign in at https://id.smartdesk.example/mfa, choose Move to a new device, scan the QR code with the new phone and remove the old device.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-MFA-02"
+  },
+  {
+    "question": "I lost my phone and have no backup codes. What now?",
+    "answer": "Call the help desk on extension 4100. IT contacts your manager to confirm who you are and clears your MFA enrolment, and you register again, which takes about 15 minutes. If the phone was stolen, also tell Security on extension 4999.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-MFA-02"
+  },
+  {
+    "question": "How do I connect to the VPN?",
+    "answer": "Open SmartDesk Connect, use the SmartDesk-Corp profile (server vpn.smartdesk.example), sign in with your work email and password and approve the MFA prompt. When the status shows Connected, internal sites work.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-VPN-01"
+  },
+  {
+    "question": "What does VPN error 691 mean and how do I fix it?",
+    "answer": "It is the Windows \"Authentication failed\" error. Your password may have expired or changed, so reset it at https://id.smartdesk.example/reset and update the password saved in the client.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-VPN-02"
+  },
+  {
+    "question": "Do I need the VPN just to read my email from home?",
+    "answer": "No. Email, chat and video calls are reachable directly after MFA. The VPN is needed for internal systems such as the code repositories, the finance and HR portals, file shares and customer data.",
+    "category": "IT Support",
+    "type": "policy interpretation",
+    "entry_id": "IT-VPN-03"
+  },
+  {
+    "question": "If I am on the VPN, can I open customer data on my personal laptop?",
+    "answer": "No. Company data may only be opened on company-managed laptops, whatever the connection.",
+    "category": "IT Support",
+    "type": "policy interpretation",
+    "entry_id": "IT-VPN-03"
+  },
+  {
+    "question": "How do I request software that is not installed on my laptop?",
+    "answer": "Check the Software Centre first. If it is not there, raise a Software request at https://helpdesk.smartdesk.example. Your manager approves it, IT Security reviews it within 5 working days and IT installs it, usually within 2 working days of approval.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-SW-01"
+  },
+  {
+    "question": "Which software is not allowed on company laptops?",
+    "answer": "Peer-to-peer file-sharing software, cracked or unlicensed software, personal cloud-sync clients, remote-control tools other than the one IT provides, and cryptocurrency miners.",
+    "category": "IT Support",
+    "type": "simple",
+    "entry_id": "IT-SW-02"
+  },
+  {
+    "question": "Can I use a free open-source tool that is not on the approved list?",
+    "answer": "Often yes, but request it through the help desk first. IT Security checks the licence terms and where your data goes, because free does not mean approved.",
+    "category": "IT Support",
+    "type": "policy interpretation",
+    "entry_id": "IT-SW-03"
+  },
+  {
+    "question": "Can I paste customer data into an online AI chat tool?",
+    "answer": "No. Do not paste customer data, source code or internal documents into any online service that is not approved. If you already did, report it to security@smartdesk.example straight away.",
+    "category": "IT Support",
+    "type": "policy interpretation",
+    "entry_id": "IT-SW-03"
+  },
+  {
+    "question": "How do I get a visitor onto the Wi-Fi?",
+    "answer": "The visitor joins SmartDesk-Guest, opens any website and enters their name and your work email as sponsor. You approve from the email you receive. Access lasts 24 hours and can be extended up to 7 days through a help desk request.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-WIFI-01"
+  },
+  {
+    "question": "Can I connect my personal phone to the corporate Wi-Fi?",
+    "answer": "No. Personal phones use SmartDesk-Guest after you self-register with your work email at https://helpdesk.smartdesk.example/wifi; registration lasts 90 days. SmartDesk-Secure is for company laptops.",
+    "category": "IT Support",
+    "type": "simple",
+    "entry_id": "IT-WIFI-02"
+  },
+  {
+    "question": "How do I get work email on my phone?",
+    "answer": "Install the Outlook app, add your work email address, sign in and approve the MFA prompt, then accept the device security policy. Outlook is the only supported mail app.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-MAIL-01"
+  },
+  {
+    "question": "What are the mailbox size and attachment limits?",
+    "answer": "A mailbox is 50 GB, with a warning at 45 GB. Attachments are limited to 25 MB per message, so share larger files as OneDrive links.",
+    "category": "IT Support",
+    "type": "simple",
+    "entry_id": "IT-MAIL-02"
+  },
+  {
+    "question": "How do I report a suspicious email?",
+    "answer": "Do not click anything. In Outlook choose Report, then Phishing, or forward it as an attachment to phishing@smartdesk.example. If you already clicked or typed your password, call Security on extension 4999 and reset your password.",
+    "category": "IT Support",
+    "type": "how-to",
+    "entry_id": "IT-SEC-01"
+  },
+  {
+    "question": "What equipment do I get when I join?",
+    "answer": "A company laptop (14-inch standard, or 16-inch high-performance for engineering and data roles), a power adapter and carry sleeve, a USB-C docking station, a wireless keyboard and mouse, and a managed user account.",
+    "category": "Onboarding",
+    "type": "simple",
+    "entry_id": "IT-EQUIP-01"
+  },
+  {
+    "question": "How do I ask for a headset or an extra keyboard?",
+    "answer": "Raise a New request, then Equipment, at https://helpdesk.smartdesk.example, pick the item and give a business reason. Your manager approves and delivery takes up to 5 working days. Headsets are limited to one every 3 years.",
+    "category": "Onboarding",
+    "type": "how-to",
+    "entry_id": "IT-EQUIP-02"
+  },
+  {
+    "question": "My laptop was stolen. What should I do, and will I have to pay?",
+    "answer": "Call Security on extension 4999 straight away, report the theft to the police and raise a request within 24 hours. If you report promptly and were not careless you are not charged. For negligence you may be asked to pay up to 50% of the depreciated value.",
+    "category": "Onboarding",
+    "type": "policy interpretation",
+    "entry_id": "IT-EQUIP-03"
+  },
+  {
+    "question": "What do I need to return when I leave, and by when?",
+    "answer": "Return the laptop, charger, dock, keyboard, mouse, headset and any security key to the IT counter or IT store by 17:00 on your last day. Remote employees get a prepaid courier label. Your final settlement is released only after IT confirms the return.",
+    "category": "Onboarding",
+    "type": "how-to",
+    "entry_id": "IT-EQUIP-04"
+  },
+  {
+    "question": "What should I do on my first day?",
+    "answer": "Arrive at reception at 09:30 (remote joiners attend the video orientation at 10:00 IST). Sign your documents with the People Team, add bank and tax details in the people portal, collect your laptop, set up MFA, meet your manager and buddy, and start the two mandatory courses, which must be finished within 14 days.",
+    "category": "Onboarding",
+    "type": "how-to",
+    "entry_id": "HR-ONB-01"
+  },
+  {
+    "question": "How do I enrol in the company benefits?",
+    "answer": "Sign in to the people portal, open Benefits, choose Enrol now, add the family members you want covered and submit. You must do this within 30 days of joining.",
+    "category": "Onboarding",
+    "type": "how-to",
+    "entry_id": "HR-ONB-02"
+  },
+  {
+    "question": "What health insurance cover do I get?",
+    "answer": "A family floater of ₹5,00,000 covering you, your spouse and up to two children. Parents can be added at your own cost.",
+    "category": "Onboarding",
+    "type": "simple",
+    "entry_id": "HR-ONB-02"
+  },
+  {
+    "question": "What does my onboarding buddy do?",
+    "answer": "Your buddy holds a 30-minute check-in every week for the first six weeks, then every two weeks until day 90, explains how things really work and introduces you to people outside your team. They do not assess your performance.",
+    "category": "Onboarding",
+    "type": "simple",
+    "entry_id": "HR-ONB-03"
+  },
+  {
+    "question": "How long is probation and what is the notice period?",
+    "answer": "Probation is 6 months and can be extended once by up to 3 months. Notice is 15 days during probation and 60 days after confirmation.",
+    "category": "Onboarding",
+    "type": "simple",
+    "entry_id": "HR-PROB-01"
+  },
+  {
+    "question": "Can I use earned leave while I am on probation?",
+    "answer": "Earned leave accrues from your first month but can only be used after you are confirmed, unless your manager and the People Team approve it in a genuine emergency. Casual and sick leave are available from day one.",
+    "category": "Onboarding",
+    "type": "policy interpretation",
+    "entry_id": "HR-PROB-02"
+  },
+  {
+    "question": "How many casual leave days do I get?",
+    "answer": "8 days per leave year (1 April to 31 March), taken at most 3 consecutive working days at a time. Unused casual leave lapses and is not carried over.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-LEAVE-01"
+  },
+  {
+    "question": "When do I need a medical certificate for sick leave?",
+    "answer": "From the 3rd consecutive working day. Up to 2 consecutive days need none. You get 10 days of sick leave a year and must tell your manager by 10:00 on the first day.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-LEAVE-02"
+  },
+  {
+    "question": "How does earned leave accrue and how much can I carry over?",
+    "answer": "You earn 1.5 days a month, which is 18 days per leave year, and can carry forward up to 30 days. Anything above 30 days lapses on 31 March.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-LEAVE-03"
+  },
+  {
+    "question": "How do I apply for leave?",
+    "answer": "In the people portal open Leave, then Apply, choose the leave type and dates, add a note, attach any document and submit. Your manager approves within 2 working days, and leave is final only when the status shows Approved.",
+    "category": "HR Policies",
+    "type": "how-to",
+    "entry_id": "HR-LEAVE-04"
+  },
+  {
+    "question": "If I fall sick during earned leave, can I convert those days to sick leave?",
+    "answer": "Yes, if you tell your manager by 10:00 on the first sick day, are sick for 3 or more consecutive days and upload a medical certificate within 2 working days of returning. The People Team then restores the earned leave, limited to the sick leave you have left.",
+    "category": "HR Policies",
+    "type": "policy interpretation",
+    "entry_id": "HR-LEAVE-05"
+  },
+  {
+    "question": "How much maternity leave is there?",
+    "answer": "26 weeks for the first and second child (up to 8 weeks before the due date) and 12 weeks from the third child. A miscarriage or medical termination gives 6 weeks. You need at least 80 days worked in the 12 months before the due date.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-LEAVE-06"
+  },
+  {
+    "question": "How much paternity leave do I get?",
+    "answer": "2 weeks on full pay, taken in one block or two within 6 months of the child's birth. This is company policy, not a statutory right.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-LEAVE-07"
+  },
+  {
+    "question": "How long is adoption leave?",
+    "answer": "12 weeks on full pay for the primary caregiver of a child under 3 months old and 2 weeks for the second parent. Leave for adoptive fathers and second parents is company policy.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-LEAVE-07"
+  },
+  {
+    "question": "I worked on a Saturday. How do I get a comp-off?",
+    "answer": "Your manager must approve the work, then you record the credit in the people portal under Leave, then Comp-off credit. A full day earns 1 comp-off day, and it must be used within 45 days or it lapses.",
+    "category": "HR Policies",
+    "type": "policy interpretation",
+    "entry_id": "HR-LEAVE-08"
+  },
+  {
+    "question": "Which days do I have to be in the office?",
+    "answer": "Tuesday, Wednesday and Thursday. You can work from home up to 2 days a week without approval, and must be reachable between 10:00 and 17:00 IST.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-WFH-01"
+  },
+  {
+    "question": "How do I request to work from another city?",
+    "answer": "At least 5 working days ahead, submit a Work location request in the people portal with the city, dates and reason. Your manager approves it. You get up to 20 working days a year, within India.",
+    "category": "HR Policies",
+    "type": "how-to",
+    "entry_id": "HR-WFH-02"
+  },
+  {
+    "question": "Can I work from abroad for a week during a trip?",
+    "answer": "Only with prior written approval from the People Team and Legal, requested at least 15 working days ahead. The limit is 15 working days a year in one country, and approval can be declined for data or customer-contract reasons.",
+    "category": "HR Policies",
+    "type": "policy interpretation",
+    "entry_id": "HR-WFH-03"
+  },
+  {
+    "question": "How do I claim an expense?",
+    "answer": "Sign in to https://expenses.smartdesk.example, create a New claim, add each expense with its receipt (mandatory over ₹500) and submit within 30 days. Claims approved by the 20th are paid with that month's salary.",
+    "category": "HR Policies",
+    "type": "how-to",
+    "entry_id": "HR-REIMB-01"
+  },
+  {
+    "question": "What is the hotel limit for business travel?",
+    "answer": "₹7,500 per night in Delhi, Mumbai, Bengaluru, Chennai and Hyderabad, and ₹5,000 per night elsewhere, excluding taxes. The daily allowance while travelling is a flat ₹1,200.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-REIMB-02"
+  },
+  {
+    "question": "Can I claim my home internet bill?",
+    "answer": "Yes. Hybrid employees get ₹1,000 a month, claimed monthly in the expenses portal under Home internet with that month's bill. Coworking space fees are not reimbursable.",
+    "category": "HR Policies",
+    "type": "policy interpretation",
+    "entry_id": "HR-REIMB-03"
+  },
+  {
+    "question": "Do I have to acknowledge the code of conduct?",
+    "answer": "Yes. The code is reviewed every year, and when it is updated you must read it and acknowledge it in the people portal within 14 days of being asked.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-COND-01"
+  },
+  {
+    "question": "A supplier sent me a gift worth ₹5,000. What do I do?",
+    "answer": "Gifts above ₹3,000 must be reported in the people portal under Compliance, then Gift register, within 5 working days. Compliance decides whether you keep, share, return or donate it. Cash can never be accepted.",
+    "category": "HR Policies",
+    "type": "policy interpretation",
+    "entry_id": "HR-COND-02"
+  },
+  {
+    "question": "What counts as harassment at SmartDesk AI?",
+    "answer": "Unwelcome contact, comments or messages of a sexual nature, conduct based on gender, caste, religion, disability, age, marital status, sexual orientation or background, repeated humiliation or exclusion, and offensive material, whether in person or online. Retaliation against someone who complains is itself serious misconduct.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-HARASS-01"
+  },
+  {
+    "question": "How do I report harassment and what happens afterwards?",
+    "answer": "Email people@smartdesk.example or icc@smartdesk.example, call extension 4200, or use the confidential form under Raise a concern in the people portal. You get an acknowledgement within 2 working days, a preliminary review follows, then a formal investigation if warranted, with a decision within 90 days.",
+    "category": "HR Policies",
+    "type": "how-to",
+    "entry_id": "HR-HARASS-02"
+  },
+  {
+    "question": "When are goals set and when are performance reviews?",
+    "answer": "The cycle runs 1 April to 31 March. Goals are agreed by 30 April, there is a mid-year check-in in October, self-assessment opens in February, and you receive your final rating in April.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-PERF-01"
+  },
+  {
+    "question": "What do the performance ratings mean and how do promotions work?",
+    "answer": "It is a 5-point scale: 1 Needs improvement, 2 Partially meets, 3 Meets expectations, 4 Exceeds expectations, 5 Outstanding. Promotions are considered from 1 April and 1 October and need 12 months in role, a rating of 4 or above and your manager's nomination.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-PERF-02"
+  },
+  {
+    "question": "I joined in November. Will I get a rating this cycle?",
+    "answer": "No. Joining on or after 1 October means no rating for that cycle, but you still have a check-in and goals for the rest of the year, and your first rating comes in the next cycle.",
+    "category": "HR Policies",
+    "type": "policy interpretation",
+    "entry_id": "HR-PERF-03"
+  },
+  {
+    "question": "When is salary paid?",
+    "answer": "On the last working day of the month, or the previous working day if that falls on a weekend or public holiday. The payslip is published in the people portal by the 2nd.",
+    "category": "Payroll and Comp",
+    "type": "simple",
+    "entry_id": "HR-PAY-01"
+  },
+  {
+    "question": "How do I download my payslip?",
+    "answer": "Sign in to the people portal, open Pay, then Payslips, select the month and choose Download PDF. The PDF password is your employee ID in capital letters.",
+    "category": "Payroll and Comp",
+    "type": "how-to",
+    "entry_id": "HR-PAY-02"
+  },
+  {
+    "question": "How do I submit my tax declaration?",
+    "answer": "In the people portal open Pay, then Tax declaration, and choose your regime by 30 April (the new regime applies if you do not choose). You can edit declarations until 31 January and upload proofs between 1 February and 15 March.",
+    "category": "Payroll and Comp",
+    "type": "how-to",
+    "entry_id": "HR-TAX-01"
+  },
+  {
+    "question": "How is my CTC split into components?",
+    "answer": "Basic pay is 40% of CTC and HRA is 20%. Special allowance is the balance of fixed pay, the company pays 12% of basic into provident fund, and there is an annual performance bonus paid with the June salary.",
+    "category": "Payroll and Comp",
+    "type": "simple",
+    "entry_id": "HR-SAL-01"
+  },
+  {
+    "question": "How do my stock options vest?",
+    "answer": "Over 4 years with a 1-year cliff: 25% vests at the first anniversary, then the remaining 75% vests in 36 equal monthly instalments.",
+    "category": "Payroll and Comp",
+    "type": "simple",
+    "entry_id": "HR-STOCK-01"
+  },
+  {
+    "question": "I am resigning. What happens to my stock options?",
+    "answer": "Vested options can be exercised within 90 days of your last working day. Unvested options lapse on your last day. Vesting continues through your notice period, and if you leave before the 1-year cliff nothing has vested.",
+    "category": "Payroll and Comp",
+    "type": "policy interpretation",
+    "entry_id": "HR-STOCK-02"
+  }
+]

@@ -91,21 +91,22 @@ def get_embeddings() -> Embeddings
 
 ### 3.3 `rag/`
 ```python
-class Chunk(BaseModel): chunk_id; entry_id; domain; title; header; text; source_file
+class Chunk(BaseModel): chunk_id; entry_id; domain; title; header; text; source_file; piece; pieces   # .embed_text = header + text
 class ScoredChunk(BaseModel): chunk: Chunk; score: float; stage: str
-def parse_kb_file(path) -> list[Entry]
-def chunk_entry(e: Entry, strategy="heading") -> list[Chunk]      # also "fixed512" for FR-A17
-def ingest(kb_dir, *, strategy="heading") -> IngestReport          # idempotent; hash per file; flags stale; prunes orphans
-def bm25_search(q, k, domain=None) -> list[ScoredChunk]
-def dense_search(q, k, domain=None) -> list[ScoredChunk]
-def rrf(lists: list[list[ScoredChunk]], k=60) -> list[ScoredChunk]
-def weighted_fusion(lists, weights) -> list[ScoredChunk]           # ablation only
-class Reranker(Protocol): def rerank(q, cands, top_n) -> list[ScoredChunk]
+class KBIndex: chunks; bm25; collection; embeddings                # both indexes plus the query embedder
+def parse_entries(text, source) -> list[Entry]                     # kb_schema.py; validate_entries() checks unique ids
+def chunk_entry(e: Entry, cfg: Chunking, count=count_tokens) -> list[Chunk]   # fixed512 variant added for FR-A17 (T2.11)
+def ingest(kb_dir, index_dir, embeddings, cfg) -> IngestReport     # idempotent; reads the 5 policy files only; prunes orphans
+def open_index(index_dir, embeddings) -> KBIndex                   # raises IndexNotBuilt
+def bm25_search(index, query, k, domain=None) -> list[ScoredChunk]
+def dense_search(index, query, k, domain=None) -> list[ScoredChunk]
+def rrf(rankings: list[list[ScoredChunk]], *, k) -> list[ScoredChunk]      # k comes from config.retrieval.rrf_k
+class Reranker(Protocol): def rerank(query, candidates, top_n) -> list[ScoredChunk]
 class CrossEncoderReranker; class NoopReranker                     # Noop = RRF order (FR-F7)
-def retrieve(q, domain=None, cfg=...) -> RetrievalResult            # {chunks, top_score, score_kind, answerable, signals}
+def retrieve(index, query, domain=None, *, cfg, reranker) -> RetrievalResult   # {chunks, top_score, score_kind, answerable, signals}
 ```
-Each stage is a plain function so `evals/` can call any subset (FR-A6, A7).
-Files: `sd/rag/kb_schema.py` (`Entry`, validator), `chunking.py` (`chunk_entry`), `ingest.py`, `staleness.py` (file hashes, stale flags), `retrievers.py` (`bm25_search`, `dense_search`), `fusion.py` (`rrf`, `weighted_fusion`), `rerank.py` (`Reranker`, `CrossEncoderReranker`, `NoopReranker`, entry collapse), `answerable.py` (signals 1-2), `pipeline.py` (`retrieve`).
+Every stage takes the opened `KBIndex` as its first argument instead of reading module state, so tests and `evals/` can point a stage at any index and call any subset (FR-A6, A7). `weighted_fusion` is not built: FR-A7 compares BM25, dense, RRF and RRF + rerank only, so it returns only if an ablation needs it.
+Files: `sd/rag/kb_schema.py` (`Entry`, validator), `models.py` (`Chunk`, `ScoredChunk`), `chunking.py` (`chunk_entry`), `embeddings.py` (`HashingEmbeddings` mock, `get_embeddings`), `index.py` (layout, `KBIndex`, `open_index`, `bm25_tokens`), `ingest.py`, `staleness.py` (file hashes, stale flags), `retrievers.py` (`bm25_search`, `dense_search`), `fusion.py` (`rrf`), `rerank.py` (`Reranker`, `CrossEncoderReranker`, `NoopReranker`, entry collapse), `answerable.py` (signals 1-2), `pipeline.py` (`retrieve`).
 
 ### 3.4 `tickets/`
 ```python

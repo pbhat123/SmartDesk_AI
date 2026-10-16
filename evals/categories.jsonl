@@ -1,0 +1,38 @@
+{"id": "cat-001", "utterance": "I forgot my password and I'm locked out", "expected_category": "IT"}
+{"id": "cat-002", "utterance": "The VPN keeps dropping every ten minutes", "expected_category": "IT"}
+{"id": "cat-003", "utterance": "I need a new laptop for the new joiner on my team", "expected_category": "IT"}
+{"id": "cat-004", "utterance": "How do I set up MFA on my new phone?", "expected_category": "IT"}
+{"id": "cat-005", "utterance": "Can I get Tableau installed on my machine?", "expected_category": "IT"}
+{"id": "cat-006", "utterance": "My screen flickers whenever I unplug the charger", "expected_category": "IT"}
+{"id": "cat-007", "utterance": "Outlook isn't syncing on my phone", "expected_category": "IT"}
+{"id": "cat-008", "utterance": "A visitor needs guest Wi-Fi access this afternoon", "expected_category": "IT"}
+{"id": "cat-009", "utterance": "I think I clicked a phishing link", "expected_category": "IT"}
+{"id": "cat-010", "utterance": "Please send me a spare dock and headset", "expected_category": "IT"}
+{"id": "cat-011", "utterance": "My work laptop was stolen last night", "expected_category": "IT"}
+{"id": "cat-012", "utterance": "Which software am I allowed to install myself?", "expected_category": "IT"}
+{"id": "cat-013", "utterance": "How many casual leave days are left for this year?", "expected_category": "HR"}
+{"id": "cat-014", "utterance": "When will I receive my payslip for this month?", "expected_category": "HR"}
+{"id": "cat-015", "utterance": "What is the policy on working from another city?", "expected_category": "HR"}
+{"id": "cat-016", "utterance": "How do I submit my income tax proofs?", "expected_category": "HR"}
+{"id": "cat-017", "utterance": "What should I expect on my first day?", "expected_category": "HR"}
+{"id": "cat-018", "utterance": "Who will be my buddy during onboarding?", "expected_category": "HR"}
+{"id": "cat-019", "utterance": "How do I add my spouse to the health insurance?", "expected_category": "HR"}
+{"id": "cat-020", "utterance": "When does my probation end?", "expected_category": "HR"}
+{"id": "cat-021", "utterance": "I want to report a colleague who keeps making rude jokes", "expected_category": "HR"}
+{"id": "cat-022", "utterance": "How are stock options vested?", "expected_category": "HR"}
+{"id": "cat-023", "utterance": "What are the performance review dates this year?", "expected_category": "HR"}
+{"id": "cat-024", "utterance": "Can I claim my broadband bill?", "expected_category": "HR"}
+{"id": "cat-025", "utterance": "How long is paternity leave?", "expected_category": "HR"}
+{"id": "cat-026", "utterance": "What counts as a conflict of interest?", "expected_category": "HR"}
+{"id": "cat-027", "utterance": "Where should I park my car when I visit the office?", "expected_category": "MISC"}
+{"id": "cat-028", "utterance": "What is on the cafeteria menu this week?", "expected_category": "MISC"}
+{"id": "cat-029", "utterance": "Can I reserve a desk for Wednesday?", "expected_category": "MISC"}
+{"id": "cat-030", "utterance": "The air conditioning on the third floor is freezing", "expected_category": "MISC"}
+{"id": "cat-031", "utterance": "The lift near reception has been out of order since Monday", "expected_category": "MISC"}
+{"id": "cat-032", "utterance": "My chair is broken and needs replacing", "expected_category": "MISC"}
+{"id": "cat-033", "utterance": "The water dispenser by the pantry is empty", "expected_category": "MISC"}
+{"id": "cat-034", "utterance": "The restroom on floor two needs cleaning", "expected_category": "MISC"}
+{"id": "cat-035", "utterance": "When is the next fire drill in the building?", "expected_category": "MISC"}
+{"id": "cat-036", "utterance": "The lights in the meeting area keep switching off", "expected_category": "MISC"}
+{"id": "cat-037", "utterance": "Is there parking space for visitors?", "expected_category": "MISC"}
+{"id": "cat-038", "utterance": "Can the canteen offer more vegetarian options?", "expected_category": "MISC"}

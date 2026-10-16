@@ -44,3 +44,11 @@ class IntentRow(BaseModel):
     expected_route: Route
     expected_tool: Tool
     out_of_scope_kind: Literal["weather", "recipe", "trivia", "coding", "other"] | None = None
+
+
+class CategoryRow(BaseModel):
+    """Expected ticket/domain category for an utterance (FR-B7, FR-D7)."""
+
+    id: str
+    utterance: str = Field(min_length=5)
+    expected_category: Category

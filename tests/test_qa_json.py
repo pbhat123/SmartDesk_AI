@@ -10,6 +10,7 @@ QA_PATH = KB_DIR / "qa.json"
 FIELDS = {"question", "answer", "category", "type", "entry_id"}
 TYPES = {"simple", "how-to", "policy interpretation"}
 CATEGORY_BY_FILE = {
+    "company.md": "HR Policies",
     "it_support.md": "IT Support",
     "onboarding.md": "Onboarding",
     "hr_policies.md": "HR Policies",

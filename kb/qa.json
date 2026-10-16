@@ -411,5 +411,19 @@
     "category": "Payroll and Comp",
     "type": "policy interpretation",
     "entry_id": "HR-STOCK-02"
+  },
+  {
+    "question": "What does SmartDesk AI do and where are its offices?",
+    "answer": "SmartDesk AI is a business-to-business software company, founded in 2016, that builds supply-chain analytics tools for manufacturers and retailers. It has about 450 employees, with its head office in Bengaluru and a smaller office in Pune.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-ABOUT-01"
+  },
+  {
+    "question": "Who do I contact for IT, HR and payroll questions?",
+    "answer": "The IT help desk is on extension 4100, the People Team on extension 4200, and Payroll on extension 4250. For lost devices or a suspected account compromise, call Security on extension 4999 at any hour.",
+    "category": "HR Policies",
+    "type": "simple",
+    "entry_id": "HR-ABOUT-01"
   }
 ]

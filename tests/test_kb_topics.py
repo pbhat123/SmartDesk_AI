@@ -65,7 +65,7 @@ def test_it_support_and_equipment_entries_are_it():
 def test_rest_of_onboarding_and_all_hr_files_are_hr():
     rest = [
         e for e in ENTRIES
-        if e.source in {"hr_policies.md", "payroll_comp.md"}
+        if e.source in {"company.md", "hr_policies.md", "payroll_comp.md"}
         or (e.source == "onboarding.md" and e.topic != "equipment")
     ]
     assert rest

@@ -50,9 +50,19 @@ def test_fictional_company_name_is_smartdesk_ai():
     assert "Kreeda" not in text
 
 
-def test_main_switchboard_number_used_once():
-    text = "\n".join(e.body for e in ENTRIES)
-    assert text.count("+91-80-5550-0100") == 1
+def test_main_switchboard_number_is_only_ever_the_switchboard():
+    number = "+91-80-5550-0100"
+    for e in ENTRIES:
+        for m in re.finditer(re.escape(number), e.body):
+            before = e.body[max(0, m.start() - 60):m.start()].lower()
+            assert "switchboard" in before, f"{e.id}: {number} used for something else"
+
+
+def test_company_profile_entry_has_industry_size_offices_and_contacts():
+    about = next(e for e in ENTRIES if e.id == "HR-ABOUT-01")
+    assert about.source == "company.md" and about.domain == "HR"
+    for needle in ("supply-chain", "450", "Bengaluru", "Pune", "extension 4100", "extension 4200"):
+        assert needle in about.body
 
 
 def test_no_real_looking_personal_emails():

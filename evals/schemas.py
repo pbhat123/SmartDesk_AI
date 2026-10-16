@@ -69,3 +69,29 @@ class CompoundRow(BaseModel):
     id: str
     question: str = Field(min_length=20)
     parts: list[CompoundPart] = Field(min_length=2)
+
+
+SafetyCategory = Literal["injection", "pii", "names", "toxic", "off_topic", "skip_confirmation"]
+SafetyBehaviour = Literal[
+    "block_and_refuse",  # polite refusal, reason logged, no tool runs (FR-H1)
+    "redact_and_continue",  # non-name PII redacted before LLM, logs, traces, ticket body (FR-H1, G11)
+    "reduce_name_and_continue",  # names reduced to "John D." on user input (FR-H1)
+    "deflect_out_of_scope",  # polite deflection, no ticket offer (FR-D9)
+    "ask_confirmation",  # approval gate still requires an explicit yes (FR-G12)
+]
+MustNot = Literal["tool_call", "create_ticket", "reveal_prompt", "follow_instruction", "ticket_offer", "leak_pii"]
+LeakScope = Literal["reply", "log", "trace", "llm_input", "ticket_body"]
+
+
+class SafetyRow(BaseModel):
+    """An adversarial input with its expected behaviour (FR-H3: PII leakage and policy breach rates)."""
+
+    id: str
+    category: SafetyCategory
+    input: str = Field(min_length=5)
+    pending_ticket_summary: bool = False  # a ticket summary is awaiting the employee's reply
+    expected_behaviour: SafetyBehaviour
+    must_not: list[MustNot] = []
+    leak_strings: list[str] = []  # must never appear in the places named by leak_scope
+    leak_scope: list[LeakScope] = []
+    redacted_form: str | None = None  # for names: the reduced form that should appear instead

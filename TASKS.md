@@ -42,7 +42,7 @@ Exit: 30+ entries (aim 50), 40+ KB Qs, 15+ gaps, 30+ intents, `GAPS.md`, `SOURCE
 | [x] | T1.10 | Category set: utterances with expected IT/HR/MISC | B7, D7 | `evals/categories.jsonl`, `tests/test_eval_categories_set.py` | Schema valid; all three categories present; MISC rows are facilities-style |
 | [x] | T1.11 | Compound set: 10+ multi-part questions (some with a gap part, some misroutable) | I4 to I7 (data only) | `evals/compound_questions.jsonl`, `tests/test_eval_compound_set.py` | 10+ rows; at least 2 with a gap part, 2 misroutable; each part tagged with expected domain and answerable flag |
 | [x] | T1.12 | Scenario scripts: KB answer, ticket create (yes/no/edit), status (0/1/2+), API down, degraded mode; flow scripts A/B/C | SPEC section 7 | `evals/scenarios/*.yaml`, `tests/test_eval_scenarios_set.py` | Scripts parse against a schema; flows A, B, C match document section 8 steps |
-| [ ] | T1.13 | Safety set: 20+ adversarial inputs with expected behaviour | H3 (data only) | `evals/safety_set.jsonl`, `tests/test_eval_safety_set.py` | 20+ rows covering injection, PII, names, toxic, off-topic, skip-confirmation; each has an expected behaviour |
+| [x] | T1.13 | Safety set: 20+ adversarial inputs with expected behaviour | H3 (data only) | `evals/safety_set.jsonl`, `tests/test_eval_safety_set.py` | 20+ rows covering injection, PII, names, toxic, off-topic, skip-confirmation; each has an expected behaviour |
 
 ---
 

@@ -93,3 +93,32 @@ def test_works_on_real_retriever_output(built_index_dir, settings):
     assert "IT-PWD-01" in [f.chunk.entry_id for f in fused[:3]]
     scores = [f.score for f in fused]
     assert scores == sorted(scores, reverse=True)
+
+
+# --- weighted RRF (ablation: trust one retriever more) ---------------------------------
+
+def test_weighted_rrf_scales_each_lists_votes():
+    bm25 = ranking("A#0", "B#0")
+    dense = ranking("B#0", "C#0", stage="dense")
+    fused = rrf([bm25, dense], k=60, weights=[1.0, 3.0])
+    # B: 1/62 + 3/61   A: 1/61   C: 3/62
+    assert order(fused) == ["B#0", "C#0", "A#0"]
+    assert [f.score for f in fused] == pytest.approx([1 / 62 + 3 / 61, 3 / 62, 1 / 61])
+
+
+def test_equal_weights_are_the_same_as_plain_rrf():
+    lists = [ranking("A#0", "B#0"), ranking("B#0", "C#0", stage="dense")]
+    assert rrf(lists, k=60, weights=[1.0, 1.0]) == rrf(lists, k=60)
+
+
+def test_a_heavier_dense_list_can_overrule_bm25_at_the_top():
+    bm25, dense = ranking("A#0", "B#0"), ranking("B#0", "A#0", stage="dense")
+    assert order(rrf([bm25, dense], k=60))[0] == "A#0"  # tie on score, A has the better best-rank
+    assert order(rrf([bm25, dense], k=60, weights=[1.0, 2.0]))[0] == "B#0"
+
+
+def test_weights_must_match_the_lists_and_be_positive():
+    with pytest.raises(ValueError, match="weights"):
+        rrf([ranking("A#0")], k=60, weights=[1.0, 2.0])
+    with pytest.raises(ValueError, match="positive"):
+        rrf([ranking("A#0")], k=60, weights=[0.0])

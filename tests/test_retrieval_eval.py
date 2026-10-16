@@ -19,6 +19,7 @@ def re_cfg():
 
 
 STRATEGIES = ["bm25", "dense", "hybrid", "hybrid+rerank"]
+EXTRA = ["dense+rerank", "hybrid 2:1", "hybrid 3:1"]
 
 
 def row(i, expected, split="dev"):
@@ -130,7 +131,7 @@ def test_cli_prints_the_four_strategy_table_in_mock_mode(capsys):
     assert main(["--only", "retrieval", "--mock"]) == 0
     out = capsys.readouterr().out
     assert "MOCK" in out
-    for s in STRATEGIES:
+    for s in STRATEGIES + EXTRA:
         assert s in out
     assert "dev" in out and "test" in out
 
@@ -139,7 +140,7 @@ def test_cli_writes_a_results_file_only_when_asked(tmp_path, capsys):
     main(["--only", "retrieval", "--mock"])
     main(["--only", "retrieval", "--mock", "--out-dir", str(tmp_path)])
     data = json.loads((tmp_path / "retrieval.json").read_text())
-    assert data["mock"] is True and set(data["overall"]) == set(STRATEGIES)
+    assert data["mock"] is True and set(data["overall"]) == set(STRATEGIES + EXTRA)
     assert data["n"] == len(re_.load_rows())
 
 
@@ -147,3 +148,43 @@ def test_real_mode_without_a_built_index_explains_what_to_run(tmp_path, capsys, 
     monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")
     assert main(["--only", "retrieval", "--index-dir", str(tmp_path / "none")]) == 1
     assert "--only ingest" in capsys.readouterr().err
+
+
+# --- extra variants: rerank dense only, weighted RRF ------------------------------------
+
+def test_dense_rerank_sends_only_the_dense_top_k_to_the_reranker(index, resources, settings):
+    from smartdesk_ai.rag.retrievers import dense_search
+
+    q = "reset my forgotten password"
+    seen = []
+
+    class Spy:
+        def rerank(self, query, candidates):
+            seen.append([c.chunk.chunk_id for c in candidates])
+            return resources.reranker.rerank(query, candidates)
+
+    re_.rank_results("dense+rerank", index, q, settings, Spy())
+    assert seen == [[s.chunk.chunk_id for s in dense_search(index, q, settings.retrieval.k_each)]]
+
+
+def test_dense_rerank_needs_a_reranker(index, settings):
+    with pytest.raises(ValueError, match="reranker"):
+        re_.rank_results("dense+rerank", index, "password", settings, None)
+
+
+def test_weighted_hybrids_use_the_documented_dense_to_bm25_weights(index, settings):
+    from smartdesk_ai.rag.fusion import rrf
+    from smartdesk_ai.rag.retrievers import bm25_search, dense_search
+
+    q, k = "laptop request approval", settings.retrieval.k_each
+    for name, weight in (("hybrid 2:1", 2.0), ("hybrid 3:1", 3.0)):
+        expected = rrf([bm25_search(index, q, k), dense_search(index, q, k)], k=settings.retrieval.rrf_k, weights=[1.0, weight])
+        got = re_.rank_results(name, index, q, settings, None, collapse=False)
+        assert [c.chunk_id for c in got] == [s.chunk.chunk_id for s in expected]
+
+
+def test_all_seven_strategies_give_monotonic_recall(index, resources, settings):
+    out = re_.recall_at_k(index, re_.load_rows(), settings, resources.reranker, STRATEGIES + EXTRA)
+    assert list(out) == STRATEGIES + EXTRA
+    for by_k in out.values():
+        assert 0.0 <= by_k[1] <= by_k[3] <= by_k[5] <= 1.0

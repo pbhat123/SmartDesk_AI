@@ -12,7 +12,11 @@ from smartdesk_ai.rag.models import Chunk
 from smartdesk_ai.rag.rerank import Reranker
 from smartdesk_ai.rag.retrievers import bm25_search, dense_search
 
-STRATEGIES = ["bm25", "dense", "hybrid", "hybrid+rerank"]
+STRATEGIES = ["bm25", "dense", "hybrid", "hybrid+rerank"]  # the four FR-A7 strategies
+# Variants tried after the first real run: rerank only the dense top-k; weight dense 2x / 3x in RRF.
+EXTRA_STRATEGIES = ["dense+rerank", "hybrid 2:1", "hybrid 3:1"]
+ALL_STRATEGIES = STRATEGIES + EXTRA_STRATEGIES
+DENSE_WEIGHTS = {"hybrid 2:1": 2.0, "hybrid 3:1": 3.0}  # dense weight; BM25 weight is 1
 KS = (1, 3, 5)
 
 
@@ -29,6 +33,15 @@ def rank_results(
         ranked = bm25_search(index, query, k)
     elif strategy == "dense":
         ranked = dense_search(index, query, k)
+    elif strategy == "dense+rerank":
+        if reranker is None:
+            raise ValueError("dense+rerank needs a reranker")
+        ranked = reranker.rerank(query, dense_search(index, query, k))
+    elif strategy in DENSE_WEIGHTS:
+        ranked = rrf(
+            [bm25_search(index, query, k), dense_search(index, query, k)],
+            k=cfg.retrieval.rrf_k, weights=[1.0, DENSE_WEIGHTS[strategy]],
+        )
     elif strategy in ("hybrid", "hybrid+rerank"):
         fused = rrf([bm25_search(index, query, k), dense_search(index, query, k)], k=cfg.retrieval.rrf_k)
         if strategy == "hybrid":
@@ -86,9 +99,10 @@ def run(res: Resources, index: KBIndex, out_dir: Path | None) -> None:
     print(f"[{res.banner}]")
     for label, split in (("overall", None), ("dev", "dev"), ("test", "test")):
         subset = [r for r in rows if split is None or r.split == split]
-        table = recall_at_k(index, rows, cfg, res.reranker, split=split)
+        table = recall_at_k(index, rows, cfg, res.reranker, ALL_STRATEGIES, split=split)
         payload[label] = {s: {str(k): v for k, v in by_k.items()} for s, by_k in table.items()}
         print(format_table(table, title=f"Recall@k, {label}", n=len(subset)) + "\n")
+    print("hybrid 2:1 and 3:1 = RRF with the dense list weighted 2x and 3x; dense+rerank reranks only the dense top-k.\n")
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "retrieval.json").write_text(json.dumps(payload, indent=2))

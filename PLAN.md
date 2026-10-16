@@ -78,7 +78,7 @@ Signatures only. Pydantic models for every boundary (CLAUDE.md).
 class Settings(BaseModel): ...      # models, tier map, prices, windows, thresholds, prompt versions, modes
 def load_settings(path: Path = ...) -> Settings   # config.yaml + env overrides; cached
 ```
-`config.yaml` keys (FR-H16): `models.{main,light}`, `reasoning_effort`, `task_tiers{}`, `context_windows`, `prices`, `budget.{cutoff1,cutoff2,timezone}`, `rate_limits.{questions,creates,lookups,window_s,bypass}`, `compaction.trigger_pct`, `retrieval.{k_each=20,rrf_k=60,top_n=5,escalation_threshold,fallback_threshold}`, `routing.confidence_threshold`, `cache.{semantic_cutoff,enabled}`, `input.max_chars`, `prompts{name: version}`, `modes.{llm,tickets}`.
+`config.yaml` keys (FR-H16): `models.{main,light}`, `reasoning_effort`, `task_tiers{}`, `context_windows`, `prices`, `budget.{cutoff1,cutoff2,timezone}`, `rate_limits.{questions,creates,lookups,window_s,bypass}`, `compaction.trigger_pct`, `retrieval.{strategy=hybrid_rerank,k_each=20,rrf_k=60,top_n=5}`, `thresholds.{escalation (top dense cosine),routing_confidence,semantic_cache_cutoff,injection_heuristic}`, `routing.confidence_threshold`, `cache.{semantic_cutoff,enabled}`, `input.max_chars`, `prompts{name: version}`, `modes.{llm,tickets}`.
 
 ### 3.2 `llm/`
 ```python
@@ -105,7 +105,8 @@ def rrf(rankings: list[list[ScoredChunk]], *, k) -> list[ScoredChunk]      # k c
 class Reranker(Protocol): def rerank(query, candidates) -> list[ScoredChunk]   # all candidates, best first, sigmoid scores 0..1
 def collapse_to_entries(ranked, top_n) -> list[ScoredChunk]       # best piece per entry
 class CrossEncoderReranker; class NoopReranker                     # Noop = RRF order (FR-F7)
-def retrieve(index, query, *, domain=None, cfg, reranker: Reranker | None, health=None) -> RetrievalResult   # {entries (full parent text), top_score, score_kind, answerable, signals}
+def retrieve(index, query, *, domain=None, cfg, reranker: Reranker | None, health=None) -> RetrievalResult   # {entries (full parent text), ordered_by, top_cosine, answerable, signals, threshold}; follows config retrieval.strategy (hybrid_rerank | dense | hybrid | dense_rerank)
+def assess(n_chunks, top_cosine, thresholds) -> Answerability     # signals 1-2 on the top dense cosine and the one thresholds.escalation (SPEC v3.1)
 def load_reranker(cfg, health=None) -> Reranker | None            # None + degraded mode on any load failure (FR-F7)
 ```
 Every stage takes the opened `KBIndex` as its first argument instead of reading module state, so tests and `evals/` can point a stage at any index and call any subset (FR-A6, A7). `weighted_fusion` is not built: FR-A7 compares BM25, dense, RRF and RRF + rerank only, so it returns only if an ablation needs it.
@@ -272,7 +273,7 @@ Interrupt rules: `t_confirm` contains only the interrupt and the parse (LangGrap
 5. `output_guard` inside the graph; `ChatService` returns `ChatReply{text, ticket?, debug}`.
 6. Trace log: request, steps, tool calls, LLM calls, cost, all masked.
 
-**KB answer.** orchestrate -> cache_lookup -> `search_kb` (BM25 top-20 + dense top-20 -> RRF k=60 -> dedupe -> rerank -> top-5; threshold on reranker score, fallback threshold on dense similarity if the reranker is down) -> answer from chunks with citations -> grounding judge -> `retry_gate` (one whole-KB retry) -> compose -> cache_store -> output_guard.
+**KB answer.** orchestrate -> cache_lookup -> `search_kb` (BM25 top-20 + dense top-20 -> RRF k=60 -> dedupe -> rerank -> top-5; escalation threshold on the top dense cosine, whether or not the reranker is up; the reranker only orders) -> answer from chunks with citations -> grounding judge -> `retry_gate` (one whole-KB retry) -> compose -> cache_store -> output_guard.
 
 **Escalation.** Any of: zero chunks, score below threshold, `llm_insufficient`, ungrounded -> one whole-KB retry -> still failing -> "I don't know" plus one merged message offering a ticket and asking for the email (FR-A16), `awaiting=offer_reply`. Giving the email or saying yes enters `t_collect`; a refusal clears `pending_offer`.
 
@@ -345,7 +346,7 @@ Core `orchestrator_v1` always returns one part with `domain=None`; `kb_answer` r
 * **F-15. Priority: optional or asked? (FR-B1 vs B7).** *Proposal:* infer, show it in the summary, do not ask a separate question (fewer turns); the employee can edit at the gate.
 * **F-16. Offer wording with a known email (FR-A16).** "Giving the email counts as agreeing" does not cover the case where the email is already known. *Proposal:* then the offer is a plain yes/no question.
 * **F-17. Threshold tuning leakage (FR-A5, section 9).** Tuning the escalation threshold on the same KB and gap sets used for the final pass-rate numbers overstates results. *Proposal:* dev/test split of both sets.
-* **F-18. Reranker score scale (FR-A15).** bge-reranker outputs raw logits, not 0 to 1, and the fallback threshold is on cosine similarity: two different scales. *Proposal:* sigmoid-normalize reranker scores; keep two config thresholds, each tied to its `score_kind`.
+* **F-18. Reranker score scale (FR-A15).** bge-reranker outputs raw logits, not 0 to 1, and the fallback threshold is on cosine similarity: two different scales. *Proposal:* sigmoid-normalize reranker scores; keep two config thresholds, each tied to its `score_kind`. **Resolved by SPEC v3.1:** the first real run showed the reranker is a weak answerability signal (dev AUC 0.76 against 0.83 for dense cosine), so there is one threshold, `thresholds.escalation`, on the top dense cosine; the reranker only orders results.
 * **F-19. Entry metadata location (FR-A1, A8).** "Front matter" with `id`, `domain` per `##` entry, yet IT equipment allocation sits inside an otherwise HR onboarding file, so domain is per entry, not per file. *Proposal:* a YAML block directly under each `##` heading; file-level front matter only for the policy area.
 * **F-20. Core vs ops placement (CLAUDE.md vs SPEC 3H).** CLAUDE.md defines core as 3A to 3F, but SPEC section 10 maps H1, H2, H3, H8, H13 into Robustness (core marks) while most of H is bonus-ish. They cannot all land by 10-18. *Proposal:* Phase 4 ships no-op guard hooks in `ChatService` so Phase 5 plugs in without graph changes; the 10-18 "core" milestone is 3A to 3G, with H1/H2/H3/H8/H13 due 10-19.
 * **F-21. Public-dataset sourcing vs "own work".** FR-A10 adapts public HR datasets while CLAUDE.md requires own work and plagiarism checks run. *Proposal:* record each source and its license in `kb/SOURCES.md` and rewrite rather than copy. Your call on whether that is enough.

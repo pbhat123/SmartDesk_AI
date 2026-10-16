@@ -41,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mock", action="store_true", help="hashing embeddings and a mock reranker: free, offline")
     parser.add_argument("--index-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None, help="write results JSON here")
-    parser.add_argument("--write-config", action="store_true", help="threshold step: write the proposed values into --config")
+    parser.add_argument("--chosen", type=float, default=None, help="threshold step: record this escalation value's dev and test numbers")
+    parser.add_argument("--write-config", action="store_true", help="threshold step: write --chosen (or the proposal) into --config")
     parser.add_argument("--config", type=Path, default=ROOT / "config.yaml", help="file --write-config edits")
     args = parser.parse_args(argv)
     steps = [args.only] if args.only else list(STEPS)
@@ -62,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             fixed_dir = Path(tempfile.mkdtemp(prefix="eval_fixed_")) if args.mock else DEFAULT_INDEX_DIR.parent / "index_fixed"
             chunking_ablation.run(res, index, fixed_dir, args.out_dir)
         if "threshold" in steps:
-            tune_threshold.run(res, index, args.out_dir, args.config if args.write_config else None)
+            tune_threshold.run(res, index, args.out_dir, args.config if args.write_config else None, args.chosen)
         res.embeddings.save()
     except (IndexNotBuilt, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)

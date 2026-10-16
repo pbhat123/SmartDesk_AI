@@ -1,4 +1,4 @@
-"""T2.12: tune the escalation thresholds on the dev half, report the held-out test half (FR-A5, FR-A15).
+"""T2.12: tune the escalation threshold on the dev half, report the held-out test half (FR-A5, FR-A15, SPEC v3.1).
 Mocked embeddings and reranker; the real run happens after approval."""
 import hashlib
 import itertools
@@ -122,11 +122,12 @@ def test_scores_come_from_the_production_retrieval_path(tuned):
     from smartdesk_ai.ops.health import HealthRegistry
     from smartdesk_ai.rag.pipeline import retrieve
 
-    expected = {
-        "reranker": retrieve(open_index_for(res), first.question, cfg=res.settings, reranker=res.reranker, health=HealthRegistry()),
-    }
-    pt = next(p for p in out["reranker"]["points"] if p.id == first.id)
-    assert pt.score == pytest.approx(expected["reranker"].top_score)
+    ix = open_index_for(res)
+    result = retrieve(ix, first.question, cfg=res.settings, reranker=res.reranker, health=HealthRegistry())
+    dense_pt = next(p for p in out["dense_cosine"]["points"] if p.id == first.id)
+    rerank_pt = next(p for p in out["reranker"]["points"] if p.id == first.id)
+    assert dense_pt.score == pytest.approx(result.top_cosine)  # the decision signal
+    assert rerank_pt.score == pytest.approx(result.entries[0].score)  # reference only
 
 
 def open_index_for(res, _cache={}):
@@ -141,18 +142,18 @@ def open_index_for(res, _cache={}):
 
 # --- config ----------------------------------------------------------------------------
 
-def test_write_config_changes_only_the_two_threshold_lines(tmp_path):
+def test_write_config_changes_only_the_escalation_number(tmp_path):
     cfg = tmp_path / "config.yaml"
     shutil.copy(ROOT / "config.yaml", cfg)
     before = cfg.read_text().splitlines()
-    tt.write_config(cfg, escalation=0.37, fallback=0.21)
+    tt.write_config(cfg, escalation=0.37)
     after = cfg.read_text().splitlines()
     changed = [(a, b) for a, b in zip(before, after) if a != b]
-    assert len(before) == len(after) and len(changed) == 2
-    settings = load_settings(cfg)
-    assert (settings.thresholds.escalation, settings.thresholds.fallback) == (0.37, 0.21)
-    assert settings.thresholds.routing_confidence == load_settings().thresholds.routing_confidence
-    assert all("provisional" not in b for _, b in changed)
+    assert len(before) == len(after) and len(changed) == 1
+    assert load_settings(cfg).thresholds.escalation == 0.37
+    assert load_settings(cfg).thresholds.routing_confidence == load_settings().thresholds.routing_confidence
+    old, new = changed[0]
+    assert old.split("#", 1)[1] == new.split("#", 1)[1]  # the comment on the line is kept as written
 
 
 def test_write_config_refuses_values_outside_the_open_unit_interval(tmp_path):
@@ -160,8 +161,15 @@ def test_write_config_refuses_values_outside_the_open_unit_interval(tmp_path):
     shutil.copy(ROOT / "config.yaml", cfg)
     for bad in (0.0, 1.0, -0.2, 1.5):
         with pytest.raises(ValueError):
-            tt.write_config(cfg, escalation=bad, fallback=0.2)
+            tt.write_config(cfg, escalation=bad)
     assert cfg.read_text() == (ROOT / "config.yaml").read_text()
+
+
+def test_write_config_needs_exactly_one_escalation_line(tmp_path):
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("thresholds:\n  routing_confidence: 0.6\n")
+    with pytest.raises(ValueError, match="escalation"):
+        tt.write_config(cfg, escalation=0.4)
 
 
 # --- CLI -------------------------------------------------------------------------------
@@ -174,17 +182,39 @@ def test_cli_proposes_values_and_leaves_config_untouched(capsys):
     before = sha(ROOT / "config.yaml")
     assert main(["--only", "threshold", "--mock"]) == 0
     out = capsys.readouterr().out
-    assert "MOCK" in out and "proposed" in out.lower() and "escalation" in out and "fallback" in out
-    assert "dev" in out and "test" in out
+    assert "MOCK" in out and "proposed" in out.lower() and "escalation" in out and "fallback" not in out.lower()
+    assert "dev" in out and "test" in out and "Reference, not used for the decision" in out
     assert sha(ROOT / "config.yaml") == before
 
 
-def test_cli_write_config_applies_the_proposal_to_the_given_file(tmp_path, capsys):
+def test_cli_write_config_applies_the_chosen_value_to_the_given_file(tmp_path, capsys):
     cfg = tmp_path / "config.yaml"
     shutil.copy(ROOT / "config.yaml", cfg)
-    assert main(["--only", "threshold", "--mock", "--write-config", "--config", str(cfg)]) == 0
-    assert load_settings(cfg).thresholds.escalation != 0.50 or load_settings(cfg).thresholds.fallback != 0.50
-    assert "provisional" not in "\n".join(l for l in cfg.read_text().splitlines() if l.strip().startswith(("escalation", "fallback")))
+    assert main(["--only", "threshold", "--mock", "--chosen", "0.33", "--write-config", "--config", str(cfg)]) == 0
+    assert load_settings(cfg).thresholds.escalation == 0.33
+
+
+def test_cli_write_config_without_chosen_applies_the_proposal(tmp_path):
+    cfg = tmp_path / "config.yaml"
+    shutil.copy(ROOT / "config.yaml", cfg)
+    out_dir = tmp_path / "out"
+    main(["--only", "threshold", "--mock", "--write-config", "--config", str(cfg), "--out-dir", str(out_dir)])
+    proposed = json.loads((out_dir / "threshold.json").read_text())["dense_cosine"]["threshold"]
+    assert load_settings(cfg).thresholds.escalation == proposed
+
+
+def test_cli_chosen_records_the_dev_and_test_numbers_for_that_value(tmp_path):
+    main(["--only", "threshold", "--mock", "--chosen", "0.45", "--out-dir", str(tmp_path)])
+    dense = json.loads((tmp_path / "threshold.json").read_text())["dense_cosine"]
+    chosen = dense["chosen"]
+    assert chosen["threshold"] == 0.45
+    points = dense["points"]
+    for split in ("dev", "test"):
+        kb = [p["score"] for p in points if p["split"] == split and p["label"] == "kb"]
+        gap = [p["score"] for p in points if p["split"] == split and p["label"] == "gap"]
+        assert chosen[split]["n_kb"] == len(kb) and chosen[split]["n_gap"] == len(gap)
+        assert chosen[split]["answered_kb"] == pytest.approx(sum(s >= 0.45 for s in kb) / len(kb))
+        assert chosen[split]["escalated_gap"] == pytest.approx(sum(s < 0.45 for s in gap) / len(gap))
 
 
 def test_cli_writes_a_results_file_when_asked(tmp_path):
@@ -193,6 +223,7 @@ def test_cli_writes_a_results_file_when_asked(tmp_path):
     assert data["mock"] is True
     for kind in ("reranker", "dense_cosine"):
         assert {"threshold", "strict_threshold", "dev", "test", "dev_auc", "test_auc"} <= set(data[kind])
+    assert "fallback" not in json.dumps(data)
 
 
 def test_cli_refuses_to_write_mock_values_into_the_real_config(capsys):

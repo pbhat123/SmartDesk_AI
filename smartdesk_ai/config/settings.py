@@ -120,8 +120,7 @@ class InputLimits(_Strict):
 
 
 class Thresholds(_Strict):
-    escalation: Unit  # normalized reranker score (FR-A15)
-    fallback: Unit  # top dense cosine similarity, reranker unavailable (FR-F7)
+    escalation: Unit  # top dense cosine similarity; the one escalation threshold (FR-A15)
     routing_confidence: Unit  # FR-D8
     semantic_cache_cutoff: Unit
     injection_heuristic: Unit  # classifier runs only above this (FR-H1)

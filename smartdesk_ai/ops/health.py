@@ -38,7 +38,7 @@ class Status(StrEnum):
 
 # What runs instead when a component is unavailable (FR-F7).
 SUBSTITUTES: dict[Component, str] = {
-    Component.RERANKER: "RRF order, fallback threshold on top dense similarity",
+    Component.RERANKER: "RRF order (the escalation threshold is unaffected)",
     Component.PRESIDIO: "regex PII checks; name reduction skipped",
     Component.REDIS: "in-memory cache",
     Component.LANGSMITH: "local log only",

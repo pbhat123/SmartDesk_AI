@@ -1,4 +1,4 @@
-"""T2.7: with the reranker unavailable the pipeline keeps the RRF order and reports dense cosine (FR-F7, FR-A15)."""
+"""T2.7: with the reranker unavailable the pipeline keeps the RRF order; the escalation threshold is unaffected (FR-F7, FR-A15)."""
 import pytest
 
 from smartdesk_ai.ops.health import Component, HealthRegistry, Status, get_registry, reset_registry
@@ -37,7 +37,7 @@ def health():
 def test_a_failing_reranker_still_returns_results_and_records_the_degraded_mode(index, settings, health):
     result = retrieve(index, QUERY, cfg=settings, reranker=Broken(), health=health)
     assert result.entries
-    assert result.score_kind == "dense_cosine"
+    assert result.ordered_by == "rrf"
     state = health.get(Component.RERANKER)
     assert state.status is Status.DEGRADED
     assert "RuntimeError" in state.reason and "model crashed" in state.reason
@@ -46,7 +46,7 @@ def test_a_failing_reranker_still_returns_results_and_records_the_degraded_mode(
 
 def test_an_unloaded_reranker_is_the_same_fallback(index, settings, health):
     result = retrieve(index, QUERY, cfg=settings, reranker=None, health=health)
-    assert result.entries and result.score_kind == "dense_cosine"
+    assert result.entries and result.ordered_by == "rrf"
     assert health.get(Component.RERANKER).status is Status.DEGRADED
 
 
@@ -59,14 +59,22 @@ def test_fallback_keeps_the_rrf_order_collapsed_to_entries(index, settings, heal
     assert len(set(expected)) == len(expected) <= r.top_n
 
 
-def test_top_score_is_the_top_dense_cosine_similarity(index, settings, health):
-    dense = dense_search(index, QUERY, settings.retrieval.k_each)
+def test_fallback_entries_carry_their_rrf_scores(index, settings, health):
+    r = settings.retrieval
+    fused = rrf([bm25_search(index, QUERY, r.k_each), dense_search(index, QUERY, r.k_each)], k=r.rrf_k)
+    by_chunk = {s.chunk.chunk_id: s.score for s in fused}
     result = retrieve(index, QUERY, cfg=settings, reranker=Broken(), health=health)
-    assert result.top_score == pytest.approx(dense[0].score)
-    assert -1.0 <= result.top_score <= 1.0
-    by_chunk = {d.chunk.chunk_id: d.score for d in dense}
     for e in result.entries:
-        assert e.score == pytest.approx(by_chunk.get(e.chunk_id, 0.0))
+        assert e.score == pytest.approx(by_chunk[e.chunk_id])
+
+
+def test_the_top_cosine_and_threshold_do_not_change_when_the_reranker_fails(index, settings, health):
+    dense = dense_search(index, QUERY, settings.retrieval.k_each)
+    ok = retrieve(index, QUERY, cfg=settings, reranker=CrossEncoderReranker(lambda p: [0.0] * len(p)), health=health)
+    down = retrieve(index, QUERY, cfg=settings, reranker=Broken(), health=HealthRegistry())
+    assert down.top_cosine == ok.top_cosine == pytest.approx(dense[0].score)
+    assert (down.answerable, down.threshold) == (ok.answerable, ok.threshold)
+    assert down.threshold == settings.thresholds.escalation
 
 
 def test_fallback_results_still_carry_the_full_parent_text(index, settings, health):
@@ -81,7 +89,7 @@ def test_fallback_respects_the_domain_filter(index, settings, health):
 
 def test_nothing_matching_in_fallback_gives_no_entries_and_zero_score(index, settings, health):
     result = retrieve(index, "", cfg=settings, reranker=None, health=health)
-    assert result.entries == [] and result.top_score == 0.0 and result.score_kind == "dense_cosine"
+    assert result.entries == [] and result.top_cosine == 0.0 and result.signals.no_chunks
 
 
 def test_a_working_reranker_clears_the_degraded_mode(index, settings, health):
@@ -89,7 +97,7 @@ def test_a_working_reranker_clears_the_degraded_mode(index, settings, health):
     assert health.get(Component.RERANKER).status is Status.DEGRADED
     ok = CrossEncoderReranker(lambda pairs: [0.0] * len(pairs))
     result = retrieve(index, QUERY, cfg=settings, reranker=ok, health=health)
-    assert result.score_kind == "reranker"
+    assert result.ordered_by == "rerank"
     assert health.get(Component.RERANKER).status is Status.OK
 
 

@@ -75,7 +75,7 @@ def test_budget_rate_limit_compaction_and_input(settings):
 
 def test_thresholds_present_and_in_unit_range(settings):
     t = settings.thresholds
-    for value in (t.escalation, t.fallback, t.routing_confidence,
+    for value in (t.escalation, t.routing_confidence,
                   t.semantic_cache_cutoff, t.injection_heuristic):
         assert 0.0 < value < 1.0
     assert t.semantic_cache_cutoff >= 0.9  # "high similarity cut-off"
@@ -94,8 +94,11 @@ def test_prompt_versions_are_positive_ints(settings):
 
 
 def test_provisional_thresholds_are_marked_in_the_file():
-    text = CONFIG.read_text()
-    assert len(re.findall(r"provisional, tuned in T\d+\.\d+", text)) >= 5
+    lines = CONFIG.read_text().splitlines()
+    for key in ("escalation", "routing_confidence", "semantic_cache_cutoff", "injection_heuristic"):
+        (line,) = [l for l in lines if re.match(rf"\s+{key}:", l)]
+        assert "provisional" in line, f"{key} should be marked provisional until its task tunes it"
+    assert not any(re.match(r"\s+fallback:", l) for l in lines)  # SPEC v3.1: one escalation threshold
 
 
 # --- failure modes ----------------------------------------------------------

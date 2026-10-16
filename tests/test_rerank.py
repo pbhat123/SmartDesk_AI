@@ -106,7 +106,8 @@ def test_pipeline_returns_at_most_five_unique_entries_with_normalised_scores(ind
     assert len(ids) == len(set(ids))
     assert all(0.0 <= e.score <= 1.0 for e in result.entries)
     assert [e.score for e in result.entries] == sorted((e.score for e in result.entries), reverse=True)
-    assert result.score_kind == "reranker" and result.top_score == result.entries[0].score
+    assert result.ordered_by == "rerank"
+    assert 0.0 < result.top_cosine <= 1.0  # the escalation signal is the top dense cosine, not the reranker score
 
 
 def test_pipeline_finds_the_right_entry_with_a_sensible_mock_reranker(index, settings):
@@ -136,7 +137,7 @@ def test_domain_filter_reaches_both_retrievers(index, settings):
 
 def test_nothing_matching_gives_no_entries_and_skips_the_model(index, settings):
     result = retrieve(index, "", cfg=settings, reranker=CrossEncoderReranker(lambda p: pytest.fail("no candidates")))
-    assert result.entries == [] and result.top_score == 0.0
+    assert result.entries == [] and result.top_cosine == 0.0
 
 
 def test_split_entries_return_the_whole_entry_not_one_piece(tmp_path, settings):

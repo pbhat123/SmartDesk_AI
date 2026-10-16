@@ -22,8 +22,8 @@ def bm25_search(index: KBIndex, query: str, k: int, domain: str | None = None) -
 
 def dense_search(index: KBIndex, query: str, k: int, domain: str | None = None) -> list[ScoredChunk]:
     """Top-`k` chunks by cosine similarity of the query embedding, optionally restricted to one domain.
-    The score is the cosine similarity itself (1 - Chroma's cosine distance); it is also the score the
-    reranker-down fallback threshold applies to (FR-F7)."""
+    The score is the cosine similarity itself (1 - Chroma's cosine distance). The best one is the
+    escalation signal the single threshold applies to (FR-A15)."""
     if not query.strip():
         return []
     vector = index.embeddings.embed_query(query)

@@ -1,10 +1,10 @@
-"""Tune the escalation thresholds on the dev half and report the held-out test half (FR-A5, FR-A15).
+"""Tune the escalation threshold on the dev half and report the held-out test half (FR-A5, FR-A15).
 
 Each KB question should be answered and each gap question escalated. A question is answered when its
-top retrieval score is at or above the threshold. Scores come from the production path (`retrieve`):
-normalised reranker scores for `thresholds.escalation`, top dense cosine similarity (reranker off) for
-`thresholds.fallback`. The threshold is chosen on the dev half only, by balanced accuracy; the test
-half is only ever scored at that value.
+top dense cosine similarity is at or above `thresholds.escalation` (SPEC v3.1). Scores come from the
+production path (`retrieve`). The threshold is chosen on the dev half only, by balanced accuracy; the
+test half is only ever scored at that value. The reranker's top score is measured too, as a reference
+that shows why it is not used for the decision.
 """
 import json
 import logging
@@ -119,17 +119,20 @@ def tune(points: list[Point]) -> dict:
     }
 
 
-def _points(res: Resources, index: KBIndex, reranker) -> list[Point]:
+def _points(res: Resources, index: KBIndex, kind: str) -> list[Point]:
+    """Top score per question: the dense cosine (the decision signal) or the top reranker score (reference)."""
     health = HealthRegistry()  # keep eval runs out of the app's shared degraded-mode registry
     health_log = logging.getLogger("smartdesk_ai.ops.health")
     previous = health_log.level
-    if reranker is None:  # the dense-only pass is deliberate, so its "reranker degraded" warning is noise
+    reranker = res.reranker if kind == "reranker" else None
+    if reranker is None:  # the dense pass runs without the reranker on purpose; its warning is noise
         health_log.setLevel(logging.ERROR)
     out = []
     for label, rows in (("kb", kb_rows()), ("gap", gap_rows())):
         for r in rows:
             result = retrieve(index, r.question, cfg=res.settings, reranker=reranker, health=health)
-            out.append(Point(r.id, label, r.split, result.top_score))
+            score = result.top_cosine if kind == "dense_cosine" else (result.entries[0].score if result.entries else 0.0)
+            out.append(Point(r.id, label, r.split, score))
     health_log.setLevel(previous)
     return out
 
@@ -147,26 +150,20 @@ def _with_curve(section: dict) -> dict:
 
 def run_tuning(res: Resources, index: KBIndex) -> dict:
     return {
-        "reranker": tune(_points(res, index, res.reranker)),
-        "dense_cosine": _with_curve(tune(_points(res, index, None))),
+        "dense_cosine": _with_curve(tune(_points(res, index, "dense_cosine"))),
+        "reranker": tune(_points(res, index, "reranker")),  # reference only (SPEC v3.1)
     }
 
 
-def write_config(path: Path, *, escalation: float, fallback: float) -> None:
-    """Replace the two threshold values in config.yaml, keeping every other line as it is."""
-    for name, value in (("escalation", escalation), ("fallback", fallback)):
-        if not 0.0 < value < 1.0:
-            raise ValueError(f"{name} threshold {value} is outside (0, 1)")
+def write_config(path: Path, *, escalation: float) -> None:
+    """Set `thresholds.escalation` in config.yaml, keeping the rest of its line and every other line."""
+    if not 0.0 < escalation < 1.0:
+        raise ValueError(f"escalation threshold {escalation} is outside (0, 1)")
     text = Path(path).read_text()
-    for name, value in (("escalation", escalation), ("fallback", fallback)):
-        pattern = re.compile(
-            rf"^(?P<head>\s*{name}:\s*)[0-9.]+(?P<pad>\s*)# (?:provisional, )?tuned in T2\.12(?: on the dev half)? (?P<rest>.*)$",
-            re.MULTILINE,
-        )
-        if len(pattern.findall(text)) != 1:
-            raise ValueError(f"expected exactly one '{name}' threshold line in {path}")
-        text = pattern.sub(lambda m: f"{m['head']}{value:.2f}{m['pad']}# tuned in T2.12 on the dev half {m['rest']}", text)
-    Path(path).write_text(text)
+    pattern = re.compile(r"^(?P<head>\s*escalation:\s*)[0-9.]+", re.MULTILINE)
+    if len(pattern.findall(text)) != 1:
+        raise ValueError(f"expected exactly one 'escalation' threshold line in {path}")
+    Path(path).write_text(pattern.sub(lambda m: f"{m['head']}{escalation:.2f}", text))
 
 
 def _line(label: str, m: Metrics, auc_value: float) -> str:
@@ -174,41 +171,47 @@ def _line(label: str, m: Metrics, auc_value: float) -> str:
             f"{m.escalation_precision:<17.2f}{auc_value:.2f}")
 
 
+def _frac(rate: float, n: int) -> str:
+    return f"{round(rate * n)}/{n} ({rate:.2f})"
+
+
 def format_report(out: dict) -> str:
-    first = out["reranker"]
-    d, t = first["dev"], first["test"]
+    dense, ref = out["dense_cosine"], out["reranker"]
+    d, t = dense["dev"], dense["test"]
     lines = [f"Threshold tuning: dev = {d.n_kb} KB + {d.n_gap} gap questions, test = {t.n_kb} KB + {t.n_gap} gap questions",
-             "A question is answered when its top score is at or above the threshold."]
-    for kind, key, scale in (("reranker", "escalation", "normalised reranker score"),
-                             ("dense_cosine", "fallback", "top dense cosine, reranker unavailable")):
-        s = out[kind]
-        lines += ["", f"thresholds.{key} ({scale})",
-                  f"  {'':<22}{'KB answered':<14}{'gap escalated':<15}{'balanced acc':<14}{'esc. precision':<17}AUC",
-                  _line(f"dev @ {s['threshold']:.2f}", s["dev"], s["dev_auc"]),
-                  _line(f"test @ {s['threshold']:.2f}", s["test"], s["test_auc"]),
-                  _line(f"dev @ {s['strict_threshold']:.2f} (strict)", s["dev_strict"], s["dev_auc"]),
-                  _line(f"test @ {s['strict_threshold']:.2f} (strict)", s["test_strict"], s["test_auc"])]
-    dense = out["dense_cosine"]
+             "A question is answered when its top dense cosine is at or above the threshold (thresholds.escalation).", "",
+             f"  {'':<24}{'KB answered':<16}{'gap escalated':<17}{'balanced acc':<14}{'esc. precision':<16}AUC"]
+
+    def line(label, m, auc_value):
+        return (f"  {label:<24}{_frac(m.answered_kb, m.n_kb):<16}{_frac(m.escalated_gap, m.n_gap):<17}"
+                f"{m.balanced_accuracy:<14.2f}{m.escalation_precision:<16.2f}{auc_value:.2f}")
+
+    lines += [line(f"dev @ {dense['threshold']:.2f}", d, dense["dev_auc"]),
+              line(f"test @ {dense['threshold']:.2f}", t, dense["test_auc"]),
+              line(f"dev @ {dense['strict_threshold']:.2f} (strict)", dense["dev_strict"], dense["dev_auc"]),
+              line(f"test @ {dense['strict_threshold']:.2f} (strict)", dense["test_strict"], dense["test_auc"])]
     if "curve" in dense:
-        n_kb, n_gap = dense["dev"].n_kb, dense["dev"].n_gap
         chosen = (dense.get("at_95_percent") or {}).get("threshold")
-        lines += ["", f"Dense-cosine curve on dev ({n_kb} KB, {n_gap} gap questions)",
+        lines += ["", f"Dense-cosine curve on dev ({d.n_kb} KB, {d.n_gap} gap questions)",
                   f"  {'threshold':<11}{'KB answered':<18}{'gap escalated':<18}"]
         for row in dense["curve"]:
             m = row["dev"]
             mark = "  <- highest with >= 95% KB answered" if row["threshold"] == chosen else ""
-            lines.append(f"  {row['threshold']:<11.2f}{round(m.answered_kb * m.n_kb)}/{m.n_kb} ({m.answered_kb:.2f}){'':<5}"
-                         f"{round(m.escalated_gap * m.n_gap)}/{m.n_gap} ({m.escalated_gap:.2f}){mark}")
+            lines.append(f"  {row['threshold']:<11.2f}{_frac(m.answered_kb, m.n_kb):<18}{_frac(m.escalated_gap, m.n_gap):<18}{mark}")
         if chosen is not None:
             tm = dense["at_95_percent"]["test"]
-            lines.append(f"  test half at {chosen:.2f}: KB answered {round(tm.answered_kb * tm.n_kb)}/{tm.n_kb} ({tm.answered_kb:.2f}), "
-                         f"gap escalated {round(tm.escalated_gap * tm.n_gap)}/{tm.n_gap} ({tm.escalated_gap:.2f}), AUC {dense['test_auc']:.2f}")
+            lines.append(f"  test half at {chosen:.2f}: KB answered {_frac(tm.answered_kb, tm.n_kb)}, "
+                         f"gap escalated {_frac(tm.escalated_gap, tm.n_gap)}, AUC {dense['test_auc']:.2f}")
         else:
             lines.append("  no grid value answers 95% of the dev KB questions")
-    lines += ["", "Proposed (not applied): "
-              f"escalation = {out['reranker']['threshold']:.2f}, fallback = {out['dense_cosine']['threshold']:.2f}",
-              "Strict alternative answers no dev gap question, at the cost of KB answers: "
-              f"escalation = {out['reranker']['strict_threshold']:.2f}, fallback = {out['dense_cosine']['strict_threshold']:.2f}"]
+    if "chosen" in dense:
+        c = dense["chosen"]
+        lines += ["", f"Chosen threshold {c['threshold']:.2f} (recorded):",
+                  line("dev", c["dev"], dense["dev_auc"]), line("test", c["test"], dense["test_auc"])]
+    lines += ["", f"Reference, not used for the decision: top reranker score, dev AUC {ref['dev_auc']:.2f}, test AUC {ref['test_auc']:.2f} "
+              f"(dense cosine: {dense['dev_auc']:.2f}, {dense['test_auc']:.2f}).",
+              "", f"Proposed (not applied): escalation = {dense['threshold']:.2f} (balanced), "
+              f"{dense['strict_threshold']:.2f} (strict: answers no dev gap question)"]
     return "\n".join(lines)
 
 
@@ -222,14 +225,21 @@ def _jsonable(value):
     return value
 
 
-def run(res: Resources, index: KBIndex, out_dir: Path | None, config_path: Path | None = None) -> dict:
+def run(res: Resources, index: KBIndex, out_dir: Path | None, config_path: Path | None = None,
+        chosen: float | None = None) -> dict:
     out = run_tuning(res, index)
+    dense = out["dense_cosine"]
+    pts = dense["points"]
+    dev, test = [p for p in pts if p.split == "dev"], [p for p in pts if p.split == "test"]
+    if chosen is not None:  # an explicit pick: record its dev and test numbers next to the proposal
+        dense["chosen"] = {"threshold": chosen, "dev": metrics(dev, chosen), "test": metrics(test, chosen)}
     print(f"[{res.banner}]\n" + format_report(out) + "\n")
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
         payload = {"mock": res.mock, "embedder": res.embeddings.name, **_jsonable(out)}
         (out_dir / "threshold.json").write_text(json.dumps(payload, indent=2))
     if config_path:
-        write_config(config_path, escalation=out["reranker"]["threshold"], fallback=out["dense_cosine"]["threshold"])
-        print(f"wrote thresholds.escalation and thresholds.fallback to {config_path}")
+        value = chosen if chosen is not None else dense["threshold"]
+        write_config(config_path, escalation=value)
+        print(f"wrote thresholds.escalation = {value:.2f} to {config_path}")
     return out

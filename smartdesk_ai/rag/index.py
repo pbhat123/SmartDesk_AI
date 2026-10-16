@@ -20,6 +20,7 @@ if TYPE_CHECKING:  # embeddings imports STOPWORDS from here
 
 CHROMA_DIR = "chroma"  # dense index: a Chroma persistent store
 COLLECTION = "kb_chunks"
+POLICY_FILES = ("company.md", "it_support.md", "onboarding.md", "hr_policies.md", "payroll_comp.md")  # the only files ever indexed
 BM25_FILE = "bm25.json"  # sparse index: chunks plus their tokens, rebuilt into BM25Okapi on load
 
 _TOKEN = re.compile(r"[a-z0-9₹]+")

@@ -31,6 +31,10 @@ class HashingEmbeddings:
     def __init__(self, dim: int = 256) -> None:
         self.dim = dim
 
+    @property
+    def name(self) -> str:
+        return f"hashing-{self.dim}"
+
     def _vector(self, text: str) -> list[float]:
         vec = [0.0] * self.dim
         for word in _WORD.findall(text.lower()):
@@ -56,3 +60,13 @@ def get_embeddings(settings: Settings) -> Embeddings:
     from langchain_openai import OpenAIEmbeddings
 
     return OpenAIEmbeddings(model=settings.models.embedding.id)
+
+
+def embedder_id(embeddings: Embeddings) -> str:
+    """A stable label for which embedding model produced the stored vectors, so switching models
+    (or the mock and the real one) forces a full re-embed instead of mixing vector spaces."""
+    for attr in ("name", "model", "model_name"):
+        value = getattr(embeddings, attr, None)
+        if isinstance(value, str) and value:
+            return value
+    return type(embeddings).__name__

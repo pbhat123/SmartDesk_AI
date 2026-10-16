@@ -17,3 +17,18 @@ def built_index_dir(tmp_path_factory, settings):
     index_dir = tmp_path_factory.mktemp("kb_index")
     ingest(KB_DIR, index_dir, HashingEmbeddings(), settings.chunking)
     return index_dir
+
+
+@pytest.fixture
+def kb_copy(tmp_path):
+    """A private copy of the real kb/ directory that a test may edit."""
+    import shutil
+
+    target = tmp_path / "kb"
+    shutil.copytree(KB_DIR, target)
+    return target
+
+
+@pytest.fixture
+def fresh_index_dir(tmp_path):
+    return tmp_path / "index"

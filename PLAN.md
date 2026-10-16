@@ -96,7 +96,8 @@ class ScoredChunk(BaseModel): chunk: Chunk; score: float; stage: str
 class KBIndex: chunks; bm25; collection; embeddings                # both indexes plus the query embedder
 def parse_entries(text, source) -> list[Entry]                     # kb_schema.py; validate_entries() checks unique ids
 def chunk_entry(e: Entry, cfg: Chunking, count=count_tokens) -> list[Chunk]   # fixed512 variant added for FR-A17 (T2.11)
-def ingest(kb_dir, index_dir, embeddings, cfg) -> IngestReport     # idempotent; reads the 5 policy files only; prunes orphans
+def ingest(kb_dir, index_dir, embeddings, cfg, on_kb_changed=None) -> IngestReport   # idempotent; 5 policy files only; prunes orphans; embeds only new/changed files; callback = answer-cache clear (FR-H6)
+def check_staleness(kb_dir, index_dir, cfg, embedder_id) -> StaleReport    # read-only: stale files and chunk ids from per-file hashes
 def open_index(index_dir, embeddings) -> KBIndex                   # raises IndexNotBuilt
 def bm25_search(index, query, k, domain=None) -> list[ScoredChunk]
 def dense_search(index, query, k, domain=None) -> list[ScoredChunk]

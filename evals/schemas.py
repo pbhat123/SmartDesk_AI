@@ -52,3 +52,20 @@ class CategoryRow(BaseModel):
     id: str
     utterance: str = Field(min_length=5)
     expected_category: Category
+
+
+class CompoundPart(BaseModel):
+    sub_question: str = Field(min_length=8)
+    expected_domain: Category
+    answerable: bool
+    expected_entry_id: str | None = None  # set when answerable
+    gap_topic: str | None = None  # set when not answerable (title in kb/GAPS.md)
+    likely_wrong_domain: Category | None = None  # set when the wording invites a misroute
+
+
+class CompoundRow(BaseModel):
+    """A multi-part question for the fan-out and synthesis flow (FR-I4 to FR-I7)."""
+
+    id: str
+    question: str = Field(min_length=20)
+    parts: list[CompoundPart] = Field(min_length=2)

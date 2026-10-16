@@ -13,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from smartdesk_ai.config.settings import Settings
+from smartdesk_ai.ops.metrics import MetricsRecorder, ToolCallRecord
 from smartdesk_ai.tickets.sqlite_map import TicketStore
 from smartdesk_ai.tools.definitions import get_definition
 from smartdesk_ai.tools.errors import TRANSIENT
@@ -68,14 +69,33 @@ class ToolExecutor:
         *,
         sleep: Callable[[float], None] = time.sleep,
         request_store: TicketStore | None = None,
+        metrics: MetricsRecorder | None = None,
+        clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._registry = registry
         self._cfg = settings.tools
         self._sleep = sleep
         self._store = request_store
+        self._metrics = metrics
+        self._clock = clock
 
     def execute(
         self, name: str, raw_args: dict[str, Any], *, agent: str, confirmed: bool = False
+    ) -> ToolResult:
+        started = self._clock()
+        attempt_ms: list[float] = []
+        result = self._execute(name, raw_args, confirmed, attempt_ms)
+        if self._metrics is not None:
+            self._metrics.record(ToolCallRecord(
+                tool=name, agent=agent, outcome=result.outcome.value,
+                error_code=result.code.value if result.code else None,
+                attempts=result.attempts, attempt_latencies_ms=attempt_ms,
+                total_latency_ms=(self._clock() - started) * 1000,
+            ))
+        return result
+
+    def _execute(
+        self, name: str, raw_args: dict[str, Any], confirmed: bool, attempt_ms: list[float]
     ) -> ToolResult:
         try:
             tool = self._registry.get(name)
@@ -104,7 +124,7 @@ class ToolExecutor:
             args = args.model_copy(update={"request_id": request_id})
             if self._store is not None:
                 self._store.begin(request_id)
-        result = self._run_with_retry(name, tool, args, request_id)
+        result = self._run_with_retry(name, tool, args, request_id, attempt_ms)
         if result.outcome is Outcome.SUCCESS and request_id and self._store is not None:
             number = _issue_number(result.data)
             if number is not None:
@@ -112,23 +132,29 @@ class ToolExecutor:
         return result
 
     def _run_with_retry(
-        self, name: str, tool: RegisteredTool, args: BaseModel, request_id: str | None
+        self, name: str, tool: RegisteredTool, args: BaseModel, request_id: str | None,
+        attempt_ms: list[float],
     ) -> ToolResult:
         for attempt in range(1, self._cfg.max_attempts + 1):
+            attempt_start = self._clock()
             try:
                 if attempt > 1 and request_id and tool.recover is not None:
                     # An earlier attempt may have created the issue even though its response was lost.
                     existing = tool.recover(request_id)
                     if existing is not None:
+                        attempt_ms.append((self._clock() - attempt_start) * 1000)
                         return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=attempt, data=existing)
                 data = tool.fn(args)
             except TRANSIENT:
+                attempt_ms.append((self._clock() - attempt_start) * 1000)
                 if attempt < self._cfg.max_attempts:
                     self._sleep(self._cfg.backoff_seconds * 2 ** (attempt - 1))
                 continue
             except Exception as exc:  # permanent: not retried; the message is not kept (FR-G11)
+                attempt_ms.append((self._clock() - attempt_start) * 1000)
                 return ToolResult(tool=name, outcome=Outcome.ERROR, attempts=attempt,
                                   error=type(exc).__name__)
+            attempt_ms.append((self._clock() - attempt_start) * 1000)
             return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=attempt, data=data)
         return ToolResult(
             tool=name, outcome=Outcome.UNAVAILABLE, attempts=self._cfg.max_attempts,

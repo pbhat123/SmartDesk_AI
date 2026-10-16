@@ -7,7 +7,7 @@ models:
     id: gpt-5.4-mini
     context_window: 400000
     max_output: 128000
-    reasoning_effort: none   # unverified until the T0.9 spike
+    reasoning_effort: none   # verified in the T0.9 spike
     price: {input: 0.75, cached_input: 0.075, output: 4.50}
   light:                     # Light-Model tier
     id: gpt-4o-mini

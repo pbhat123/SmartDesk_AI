@@ -57,3 +57,20 @@ def test_handle_has_no_hardcoded_ids(settings):
             update={"light": settings.models.light.model_copy(update={"id": "other-light"})})}
     )
     assert get_llm("CHITCHAT", swapped, builder=RecordingBuilder()).model_id == "other-light"
+
+
+def test_openai_builder_passes_reasoning_effort_for_main_only(settings, monkeypatch):
+    import langchain_openai
+
+    from smartdesk_ai.config.env import EnvSettings
+    from smartdesk_ai.llm import factory
+
+    seen = []
+    monkeypatch.setattr(langchain_openai, "ChatOpenAI", lambda **kw: seen.append(kw) or object())
+    monkeypatch.setattr(factory, "load_env", lambda: EnvSettings(openai_api_key="sk-test"))
+    factory.get_llm_for_tier("ORCHESTRATOR", "main", settings)
+    factory.get_llm_for_tier("CHITCHAT", "light", settings)
+    main_kw, light_kw = seen
+    assert main_kw["model"] == settings.models.main.id
+    assert main_kw["reasoning_effort"] == settings.models.main.reasoning_effort
+    assert "reasoning_effort" not in light_kw

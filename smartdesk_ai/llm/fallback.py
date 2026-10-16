@@ -2,13 +2,15 @@
 
 Each model is retried first. If it still fails, the call goes to the other tier, except:
 - at budget level 1 or higher a call never goes to Main-Model (FR-F2, FR-H8);
-- before a Main to Light fallback the prompt must fit Light-Model's context window.
+- before a Main to Light fallback the prompt must fit Light-Model's context window minus its max output.
 If nothing can answer, the result carries a graceful message and `ok` is False.
 """
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+
+import tiktoken
 
 from smartdesk_ai.config.settings import Settings, Tier
 from smartdesk_ai.llm.factory import ModelBuilder, get_llm_for_tier, openai_builder
@@ -19,7 +21,6 @@ GRACEFUL_MESSAGE = (
     "I'm having trouble reaching my language model right now. "
     "Please try again in a few minutes."
 )
-CHARS_PER_TOKEN = 4  # rough estimate; avoids a tokenizer download and is safe for a window check
 
 
 @dataclass(frozen=True)
@@ -30,11 +31,12 @@ class LLMResult:
     fell_back: bool
 
 
-def estimate_tokens(prompt: Any) -> int:
+def count_tokens(prompt: Any, model_id: str) -> int:
+    """Prompt tokens by the model's own tiktoken encoding (FR-H5)."""
     text = prompt if isinstance(prompt, str) else " ".join(
         str(getattr(m, "content", m)) for m in prompt
     )
-    return len(text) // CHARS_PER_TOKEN + 1
+    return len(tiktoken.encoding_for_model(model_id).encode(text))
 
 
 def _fallback_tier(primary: Tier, budget_level: int) -> Tier | None:
@@ -62,7 +64,8 @@ def invoke_with_fallback(
     for tier in candidates:
         is_fallback = tier != primary
         if is_fallback and tier == "light":
-            if estimate_tokens(prompt) > settings.models.light.context_window:
+            light = settings.models.light
+            if count_tokens(prompt, light.id) > light.context_window - light.max_output:
                 continue  # oversize prompt is never sent to Light-Model
         try:
             handle = get_llm_for_tier(task, tier, settings, builder=builder)

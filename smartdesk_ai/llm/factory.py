@@ -29,7 +29,11 @@ def openai_builder(model_id: str, model_cfg: ChatModel) -> Any:
         raise RuntimeError("OPENAI_API_KEY is not set (see .env.example)")
     from langchain_openai import ChatOpenAI
 
-    return ChatOpenAI(model=model_id, api_key=env.openai_api_key)
+    kwargs: dict[str, Any] = {}
+    effort = getattr(model_cfg, "reasoning_effort", None)  # only the Main tier has one
+    if effort is not None:
+        kwargs["reasoning_effort"] = effort
+    return ChatOpenAI(model=model_id, api_key=env.openai_api_key, **kwargs)
 
 
 def get_llm_for_tier(

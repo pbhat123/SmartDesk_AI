@@ -1,0 +1,21 @@
+{"id": "gap-001", "question": "Why does my monitor flicker every few minutes?", "gap_topic": "Monitor flickering", "expected_category": "IT", "grey_zone": false, "split": "dev"}
+{"id": "gap-002", "question": "The external screen on my dock flickers whenever I plug it in. Who can fix it?", "gap_topic": "Monitor flickering", "expected_category": "IT", "grey_zone": true, "split": "test"}
+{"id": "gap-003", "question": "My second display goes black for a second at random times. Can IT look at it?", "gap_topic": "Monitor flickering", "expected_category": "IT", "grey_zone": true, "split": "dev"}
+{"id": "gap-004", "question": "Where can I leave my car when I come to the Bengaluru office?", "gap_topic": "Office parking", "expected_category": "MISC", "grey_zone": false, "split": "dev"}
+{"id": "gap-005", "question": "Is there a spot for my motorbike at the Pune site, and does it cost anything?", "gap_topic": "Office parking", "expected_category": "MISC", "grey_zone": false, "split": "test"}
+{"id": "gap-006", "question": "Can I be reimbursed for parking fees when I visit a customer?", "gap_topic": "Office parking", "expected_category": "MISC", "grey_zone": true, "split": "dev"}
+{"id": "gap-007", "question": "What is on the lunch menu in the cafeteria today?", "gap_topic": "Cafeteria menu", "expected_category": "MISC", "grey_zone": false, "split": "dev"}
+{"id": "gap-008", "question": "Is there a canteen in the Pune office and when does it open?", "gap_topic": "Cafeteria menu", "expected_category": "MISC", "grey_zone": false, "split": "test"}
+{"id": "gap-009", "question": "Does the company subsidise food for people who come in on core office days?", "gap_topic": "Cafeteria menu", "expected_category": "MISC", "grey_zone": true, "split": "dev"}
+{"id": "gap-010", "question": "How do I reserve a desk for my office days?", "gap_topic": "Desk booking", "expected_category": "MISC", "grey_zone": false, "split": "dev"}
+{"id": "gap-011", "question": "Is there an app for booking a seat on the days I come in?", "gap_topic": "Desk booking", "expected_category": "MISC", "grey_zone": false, "split": "test"}
+{"id": "gap-012", "question": "I'm in on Wednesday. Can I choose a particular desk near my team?", "gap_topic": "Desk booking", "expected_category": "MISC", "grey_zone": true, "split": "dev"}
+{"id": "gap-013", "question": "Does SmartDesk AI have a sabbatical programme?", "gap_topic": "Sabbatical leave", "expected_category": "HR", "grey_zone": false, "split": "dev"}
+{"id": "gap-014", "question": "Can I take a three-month unpaid break after five years with the company?", "gap_topic": "Sabbatical leave", "expected_category": "HR", "grey_zone": true, "split": "test"}
+{"id": "gap-015", "question": "Is there a bonus if a friend I recommend gets hired?", "gap_topic": "Employee referral bonus", "expected_category": "HR", "grey_zone": false, "split": "dev"}
+{"id": "gap-016", "question": "How much do I receive for referring a candidate who then joins?", "gap_topic": "Employee referral bonus", "expected_category": "HR", "grey_zone": true, "split": "test"}
+{"id": "gap-017", "question": "Is there a yearly training allowance for courses?", "gap_topic": "Learning and certification budget", "expected_category": "HR", "grey_zone": false, "split": "dev"}
+{"id": "gap-018", "question": "Can the company pay for my cloud certification exam?", "gap_topic": "Learning and certification budget", "expected_category": "HR", "grey_zone": true, "split": "test"}
+{"id": "gap-019", "question": "How do I claim the fee for an online course I took?", "gap_topic": "Learning and certification budget", "expected_category": "HR", "grey_zone": true, "split": "dev"}
+{"id": "gap-020", "question": "When is the next team offsite?", "gap_topic": "Company offsites and events", "expected_category": "MISC", "grey_zone": false, "split": "dev"}
+{"id": "gap-021", "question": "Is there a company annual day this year?", "gap_topic": "Company offsites and events", "expected_category": "MISC", "grey_zone": false, "split": "test"}

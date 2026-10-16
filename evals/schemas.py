@@ -17,3 +17,12 @@ class KBQuestion(BaseModel):
     type: QuestionType
     reference_answer: str = Field(min_length=20)
     split: Split
+
+
+class GapQuestion(BaseModel):
+    id: str
+    question: str = Field(min_length=10)
+    gap_topic: str  # a section title in kb/GAPS.md
+    expected_category: Category
+    grey_zone: bool  # workplace-related and close to existing KB wording
+    split: Split

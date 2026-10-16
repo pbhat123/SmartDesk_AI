@@ -42,6 +42,6 @@ python -m evals.run                      # Ragas + retrieval ablations
 - Tests use mock mode for GitHub and LLM; no test may create real issues or spend API budget.
 - Never create a ticket without explicit confirmation (FR-B2, G12). Never invent ticket details (FR-B13).
 - Real calls (OpenAI, GitHub, public tickets repo) cost money or are public: confirm with the user before running anything beyond mocks.
-- Keep PLAN.md and TASKS.md current as work progresses. Commit in small steps, only when asked.
+- Keep PLAN.md and TASKS.md current as work progresses. Commit each completed task separately with its FR ids, as part of a named batch. Never push without asking.
 - Deadline: Oct 23, 2026; core target Oct 18. Default branch is `main`.
 

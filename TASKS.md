@@ -2,7 +2,7 @@
 
 Derived from PLAN.md section 7, against SPEC.md draft v3 (approved). Core milestone is SPEC sections 3A to 3G, due 10-18. Safety and ops items H1, H2, H3, H8, H13 are due 10-19.
 
-Rules (CLAUDE.md): one task at a time; write its test first, implement, run `pytest`, then tick the box. Tests run in mock mode (no network, no real issues, no API spend). Anything beyond mocks (OpenAI, GitHub, public tickets repo) needs explicit confirmation first, marked **[CONFIRM]**. Do not start the next task unprompted.
+Rules (CLAUDE.md): Work through the tasks the user names, in order, per CLAUDE.md: test first, implement, run pytest, tick the box, commit each task separately. Stop at the end of the named range, at the first unfixable failure, or at any [CONFIRM] step. Tests run in mock mode (no network, no real issues, no API spend). Anything beyond mocks (OpenAI, GitHub, public tickets repo) needs explicit confirmation first, marked **[CONFIRM]**.
 
 Conventions: paths are relative to the repo root; `sd/` means `smartdesk_ai/`. "Test" is the acceptance test that must pass before the box is ticked; the FR ids in each row are cited in commits and tests.
 

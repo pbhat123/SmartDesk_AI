@@ -37,12 +37,19 @@ class CrossEncoderReranker:
         self._predict = predict
 
     @classmethod
+    def from_cross_encoder(cls, model) -> "CrossEncoderReranker":
+        """Wrap a sentence-transformers CrossEncoder. Its `predict` applies a sigmoid to single-label
+        models by default, which would be squashed a second time here, so ask for the raw logits."""
+        from torch.nn import Identity
+
+        return cls(lambda pairs: [float(s) for s in model.predict(pairs, activation_fn=Identity())])
+
+    @classmethod
     def from_model(cls, model_id: str) -> "CrossEncoderReranker":
         """Load a sentence-transformers cross-encoder. The first call downloads the model."""
         from sentence_transformers import CrossEncoder
 
-        model = CrossEncoder(model_id)
-        return cls(lambda pairs: [float(s) for s in model.predict(pairs)])
+        return cls.from_cross_encoder(CrossEncoder(model_id))
 
     def rerank(self, query: str, candidates: list[ScoredChunk]) -> list[ScoredChunk]:
         if not candidates:

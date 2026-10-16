@@ -148,3 +148,27 @@ def test_split_entries_return_the_whole_entry_not_one_piece(tmp_path, settings):
     assert len({e.entry_id for e in result.entries}) == len(result.entries)
     for e in result.entries:
         assert e.text == BODIES[e.entry_id]
+
+
+# --- the wrapper around a real sentence-transformers model ------------------------------
+
+class FakeCrossEncoder:
+    """Records how predict is called, like sentence-transformers' CrossEncoder."""
+
+    def __init__(self, logits):
+        self.logits, self.kwargs = logits, None
+
+    def predict(self, pairs, **kwargs):
+        self.kwargs = kwargs
+        return self.logits
+
+
+def test_from_cross_encoder_asks_for_raw_logits_so_sigmoid_is_applied_once():
+    from torch.nn import Identity
+
+    model = FakeCrossEncoder([1.8651, -10.195])
+    rr = CrossEncoderReranker.from_cross_encoder(model)
+    out = rr.rerank("q", [scored("A#0", 0.1), scored("B#0", 0.2)])
+    assert isinstance(model.kwargs["activation_fn"], Identity)
+    assert out[0].score == pytest.approx(sigmoid(1.8651)) and out[0].score > 0.85
+    assert out[1].score < 0.001  # an irrelevant passage must be able to score near 0

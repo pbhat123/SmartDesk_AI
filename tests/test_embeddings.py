@@ -24,3 +24,18 @@ def test_documents_and_queries_use_the_same_space_and_empty_text_is_safe():
     e = HashingEmbeddings()
     assert e.embed_documents(["abc def"])[0] == e.embed_query("abc def")
     assert e.embed_query("") == [0.0] * e.dim
+
+
+def test_get_embeddings_uses_the_configured_model_and_the_key_from_the_project_env():
+    import pytest
+
+    from smartdesk_ai.config.env import load_env
+    from smartdesk_ai.config.settings import load_settings
+    from smartdesk_ai.rag.embeddings import embedder_id, get_embeddings
+
+    env = load_env({"OPENAI_API_KEY": "sk-test-not-real"}, dotenv_path=None)
+    emb = get_embeddings(load_settings(), env)  # constructing it makes no network call
+    assert embedder_id(emb) == "text-embedding-3-small"
+    assert emb.openai_api_key.get_secret_value() == "sk-test-not-real"
+    with pytest.raises(RuntimeError, match="OPENAI_API_KEY"):
+        get_embeddings(load_settings(), load_env({}, dotenv_path=None))

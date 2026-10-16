@@ -9,6 +9,7 @@ import math
 import re
 from typing import Protocol
 
+from smartdesk_ai.config.env import EnvSettings, load_env
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.rag.index import STOPWORDS
 
@@ -55,11 +56,15 @@ class HashingEmbeddings:
         return self._vector(text)
 
 
-def get_embeddings(settings: Settings) -> Embeddings:
-    """The real embedder (OpenAI). Calling it spends API budget: only for real ingest runs."""
+def get_embeddings(settings: Settings, env: EnvSettings | None = None) -> Embeddings:
+    """The real embedder (OpenAI). Calling it spends API budget: only for real ingest runs.
+    The key comes from the project's env loader, because `.env` is not exported to `os.environ`."""
+    env = env or load_env()
+    if env.openai_api_key is None:
+        raise RuntimeError("OPENAI_API_KEY is not set (see .env.example)")
     from langchain_openai import OpenAIEmbeddings
 
-    return OpenAIEmbeddings(model=settings.models.embedding.id)
+    return OpenAIEmbeddings(model=settings.models.embedding.id, api_key=env.openai_api_key)
 
 
 def embedder_id(embeddings: Embeddings) -> str:

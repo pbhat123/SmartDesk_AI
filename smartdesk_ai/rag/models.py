@@ -33,3 +33,21 @@ class ScoredChunk(BaseModel):
     chunk: Chunk
     score: float
     stage: str  # bm25, dense, rrf, rerank
+
+
+class ParentEntry(BaseModel):
+    """A whole KB entry as the answering step sees it (FR-A6): never just one piece of it."""
+
+    model_config = ConfigDict(frozen=True)
+
+    entry_id: str
+    domain: Literal["IT", "HR"]
+    title: str
+    header: str  # "Document > Section"
+    text: str  # the full entry body
+    source_file: str
+
+
+class RetrievedEntry(ParentEntry):
+    score: float  # of the best-scoring piece
+    chunk_id: str  # that piece

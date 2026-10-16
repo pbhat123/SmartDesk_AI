@@ -68,10 +68,15 @@ class EmbeddingModel(_Strict):
     price: EmbeddingPrice
 
 
+class RerankerModel(_Strict):
+    id: str  # Hugging Face model id, loaded locally by sentence-transformers
+
+
 class Models(_Strict):
     main: MainModel
     light: ChatModel
     embedding: EmbeddingModel
+    reranker: RerankerModel
 
 
 class Budget(_Strict):

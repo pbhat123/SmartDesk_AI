@@ -13,7 +13,7 @@ from chromadb.api.models.Collection import Collection
 from chromadb.config import Settings as ChromaSettings
 from rank_bm25 import BM25Okapi
 
-from smartdesk_ai.rag.models import Chunk
+from smartdesk_ai.rag.models import Chunk, ParentEntry
 
 if TYPE_CHECKING:  # embeddings imports STOPWORDS from here
     from smartdesk_ai.rag.embeddings import Embeddings
@@ -43,6 +43,7 @@ class KBIndex:
     """Both indexes plus the embedder used to query the dense one."""
 
     chunks: list[Chunk]
+    entries: dict[str, ParentEntry]  # full parent text per entry id
     bm25: BM25Okapi
     collection: Collection
     embeddings: Embeddings
@@ -58,11 +59,14 @@ def open_index(index_dir: Path, embeddings: Embeddings) -> KBIndex:
     if not bm25_path.is_file() or not (index_dir / CHROMA_DIR).is_dir():
         raise IndexNotBuilt(f"no index in {index_dir}; run: python -m smartdesk_ai.rag.ingest")
     payload = json.loads(bm25_path.read_text())
+    if "entries" not in payload:
+        raise IndexNotBuilt(f"index in {index_dir} is from an older version; rebuild: python -m smartdesk_ai.rag.ingest")
     client = chromadb.PersistentClient(
         path=str(index_dir / CHROMA_DIR), settings=ChromaSettings(anonymized_telemetry=False)
     )
     return KBIndex(
         chunks=[Chunk(**c) for c in payload["chunks"]],
+        entries={k: ParentEntry(**v) for k, v in payload["entries"].items()},
         bm25=BM25Okapi(payload["tokens"]),
         collection=client.get_collection(COLLECTION),
         embeddings=embeddings,

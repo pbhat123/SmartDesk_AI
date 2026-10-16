@@ -17,6 +17,8 @@ models:
   embedding:
     id: text-embedding-3-small
     price: {input: 0.02}
+  reranker:                  # local cross-encoder (FR-A6), no per-token price
+    id: BAAI/bge-reranker-base
 
 # Task-to-tier map (FR-H17). Budget cutoff 1 and outage fallback override it.
 tiers:

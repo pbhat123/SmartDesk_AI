@@ -20,7 +20,7 @@ from smartdesk_ai.rag.chunking import TokenCounter, chunk_entry, count_tokens
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
 from smartdesk_ai.rag.index import BM25_FILE, CHROMA_DIR, COLLECTION, bm25_tokens
 from smartdesk_ai.rag.kb_schema import Entry, KBValidationError, parse_entries, validate_entries
-from smartdesk_ai.rag.models import Chunk
+from smartdesk_ai.rag.models import Chunk, ParentEntry
 
 logger = logging.getLogger(__name__)
 
@@ -60,9 +60,17 @@ def load_policy_entries(kb_dir: Path) -> tuple[list[Entry], list[str], list[str]
     return validate_entries(entries), read, missing
 
 
-def _write_bm25(index_dir: Path, chunks: list[Chunk]) -> None:
+def _write_bm25(index_dir: Path, chunks: list[Chunk], entries: list[Entry]) -> None:
+    parents = {
+        e.id: ParentEntry(
+            entry_id=e.id, domain=e.domain, title=e.title, source_file=e.source, text=e.body,
+            header=f"{e.document} > {e.heading}" if e.document else e.heading,
+        ).model_dump()
+        for e in entries
+    }
     payload = {
         "chunks": [c.model_dump() for c in chunks],
+        "entries": parents,
         "tokens": [bm25_tokens(c.embed_text) for c in chunks],
     }
     tmp = index_dir / (BM25_FILE + ".tmp")
@@ -99,7 +107,7 @@ def ingest(
     removed = sorted(before - after)
     if removed:
         collection.delete(ids=removed)
-    _write_bm25(index_dir, chunks)
+    _write_bm25(index_dir, chunks, entries)
     return IngestReport(
         files_read=read, missing_files=missing, entries=len(entries), chunks=len(chunks),
         added=sorted(after - before), removed=removed,

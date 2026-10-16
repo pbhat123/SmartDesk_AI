@@ -38,6 +38,11 @@ llm:
   retry_attempts: 3
   backoff_seconds: 0.5
 
+# Tool executor retry (FR-G4): at most this many total attempts, transient failures only.
+tools:
+  max_attempts: 3
+  backoff_seconds: 0.2
+
 # Daily spend (FR-H8). cutoff_1: everything moves to Light-Model.
 # cutoff_2: total daily spend at which service stops (a further $5 after cutoff_1).
 budget:

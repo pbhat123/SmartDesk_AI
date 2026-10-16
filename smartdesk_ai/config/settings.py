@@ -84,6 +84,11 @@ class LLMRetry(_Strict):
     backoff_seconds: NonNegative  # first wait; doubles each retry
 
 
+class ToolRetry(_Strict):
+    max_attempts: Annotated[int, Field(gt=0)]  # total attempts per tool call (FR-G4)
+    backoff_seconds: NonNegative  # first wait; doubles each retry
+
+
 class Budget(_Strict):
     timezone: str
     cutoff_1_usd: NonNegative
@@ -176,6 +181,7 @@ class Settings(_Strict):
     models: Models
     tiers: dict[str, Tier]
     llm: LLMRetry
+    tools: ToolRetry
     budget: Budget
     rate_limits: RateLimits
     compaction: Compaction

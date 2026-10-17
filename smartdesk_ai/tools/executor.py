@@ -115,6 +115,8 @@ class ToolExecutor:
         started = self._clock()
         attempt_ms: list[tuple[float, str]] = []
         scope = current_scope()
+        if scope is not None:
+            scope[0].set_email(_email_of(raw_args))  # from here on the request carries a masked user ID
         counter = _rate_counter(name, agent)
         limited = self._rate_limited(scope, counter, raw_args)
         result = limited or self._execute(name, raw_args, confirmed, attempt_ms)
@@ -157,9 +159,10 @@ class ToolExecutor:
         assert self._trace is not None
         for number, (ms, outcome) in enumerate(attempt_ms, 1):
             self._trace.event("tool_attempt", tool=name, agent=agent, attempt=number, outcome=outcome,
-                              latency_ms=ms)
+                              latency_ms=ms, **self._trace.request_fields(current_scope()[0] if current_scope() else None))
+        fields = self._trace.request_fields(current_scope()[0] if current_scope() else None)
         self._trace.event(
-            "tool_call", tool=name, agent=agent, args=raw_args, outcome=result.outcome.value,
+            "tool_call", tool=name, agent=agent, args=raw_args, **fields, outcome=result.outcome.value,
             error_code=result.code.value if result.code else None, error=result.error,
             attempts=result.attempts, latency_ms=total_ms, ticket=_issue_number(result.data),
         )

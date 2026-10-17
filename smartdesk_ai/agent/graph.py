@@ -63,6 +63,7 @@ from smartdesk_ai.agent.ticket_agent import (
     t_reask,
 )
 from smartdesk_ai.ops.compaction import Compactor
+from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
@@ -435,7 +436,12 @@ def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
     answer (FR-A12)."""
 
     def kb_responder(session_id: str, text: str) -> Turn:
+        scope = current_scope()
+        if scope is not None:  # an email the session already knows identifies the user for this request
+            scope[0].set_email(graph.get_state(thread_config(session_id)).values.get("email"))
         state = run_turn(graph, session_id, text)
+        if scope is not None:
+            scope[0].set_email(state.email)
         part = state.part_result
         debug: dict[str, Any] = {"steps": state.steps}
         if part is not None:

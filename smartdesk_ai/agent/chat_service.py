@@ -20,7 +20,8 @@ from smartdesk_ai.guardrails.input_guard import build_input_guard
 from smartdesk_ai.guardrails.output_guard import build_output_guard
 from smartdesk_ai.llm.fallback import SERVICE_UNAVAILABLE_MESSAGE
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
-from smartdesk_ai.ops.runtime import RequestContext, Services, goal_from_steps, request_scope
+from smartdesk_ai.guardrails.pii import EMAIL
+from smartdesk_ai.ops.runtime import RequestContext, Services, current_scope, goal_from_steps, request_scope
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR
 
 logger = logging.getLogger(__name__)
@@ -110,8 +111,20 @@ class ChatService:
             reply.debug["cost_usd"] = cost
         return reply
 
+    def _log(self, kind: str, ctx: RequestContext | None = None, **fields: Any) -> None:
+        trace = self._services.trace
+        if trace is not None:
+            scope = current_scope()
+            trace.event(kind, **fields, **trace.request_fields(scope[0] if scope else None))
+
     def _handle(self, session_id: str, text: str) -> ChatReply:
         decision = self._input_guard(text)
+        found = EMAIL.search(decision.text)  # an email typed in this message identifies the user from here on
+        if found:
+            scope = current_scope()
+            if scope is not None:
+                scope[0].set_email(found.group())
+        self._log("request", text=decision.text, blocked=decision.blocked, reason=decision.reason)
         debug: dict[str, Any] = {}
         if decision.blocked:
             reply_text = decision.refusal or ""
@@ -123,6 +136,9 @@ class ChatService:
             if isinstance(produced, Turn):
                 debug.update(produced.debug)
         reply_text = self._output_guard(reply_text)
+        for index, step in enumerate(debug.get("steps", [])):
+            self._log("agent_step", step=step, index=index)
+        self._log("reply", text=reply_text, blocked=decision.blocked)
         logger.debug("turn done session=%s blocked=%s", session_id, decision.blocked)
         return ChatReply(text=reply_text, debug=debug)
 

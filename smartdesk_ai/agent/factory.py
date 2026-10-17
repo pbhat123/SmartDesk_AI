@@ -121,7 +121,8 @@ def build_responder(
         judge_b = _builder_for(MockGroundingModel())
         compact_b = _builder_for(MockCompactionModel())
     # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
-    trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)))
+    trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)),
+                     prompt_versions=settings.prompts)
     spend = SpendStore(Path(data_dir) / OPS_DB)
     budget = BudgetController(settings, spend)
     # Mock runs count tokens but price nothing, so they never touch the real daily budget.

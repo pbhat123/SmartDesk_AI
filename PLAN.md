@@ -473,3 +473,15 @@ Cost is computed from the `config.yaml` price table: uncached input at the input
 - 4 completion tokens for the one-word reply on the main model with 0 reasoning tokens; I did not look into the extra tokens.
 
 **Config change proposals (none applied):** none are required. IDs, `reasoning_effort: none`, and the price-table fields all worked as configured. Optional, only if you want it: a `models.*.snapshot` field is not needed, since the trace log can record the returned snapshot at call time.
+
+---
+
+## 13. Phase 4 build notes
+
+### 13.1 T4.1 to T4.5 (routing groundwork, mock only)
+- `memory/checkpointer.py`: `make_checkpointer(path, state_types)` builds the `SqliteSaver` by hand (long-lived connection, per section 12.1) and allow-lists every state model. Callers close `saver.conn`.
+- `agent/state.py`: `AgentState` plus `IntentResult`, `PendingOffer`, `TicketDraft`, all in `STATE_MODELS` (a test fails if a new model is not listed). `thread_config()` is the only way to build the LangGraph config and refuses anything that looks like an email.
+- `agent/intents.py`: `classify_intent` (one ORCHESTRATOR call, JSON out, every failure becomes `ClassifierError`), `route_for`, `dialog_update` (a new intent mid-flow clears `awaiting` and `pending_offer`), `make_classifier`.
+- `agent/router.py`: `route_message` (classifier first; tool pick on error, invalid output or confidence below `thresholds.routing_confidence`), `make_tool_picker` (TOOL_SELECT, `bind_tools` with the three schemas), scope rules (confident `out_of_scope` deflects; unsure scope goes to the KB path).
+- Prompts added: `orchestrator_v1.md`, `tool_select_v1.md`.
+- Placeholder wording: `CLARIFYING_QUESTION` and `DEFLECTION_REPLY` are fixed strings in `router.py` until T4.27 moves them to the CHITCHAT task.

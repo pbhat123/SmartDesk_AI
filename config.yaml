@@ -96,6 +96,7 @@ thresholds:
 # Input and output guardrails (FR-H1, FR-H2).
 guardrails:
   pii_min_score: 0.5         # Presidio hits below this confidence are ignored
+  moderation_model: omni-moderation-latest   # OpenAI Moderation API (free); check the ID before live use
 
 # Hybrid retrieval (SPEC section 2, FR-A6): top-k from each retriever, RRF constant,
 # entries kept after rerank and collapse by entry_id.

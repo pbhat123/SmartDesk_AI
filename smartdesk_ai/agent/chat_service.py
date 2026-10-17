@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
+from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 
 logger = logging.getLogger(__name__)
@@ -32,17 +33,6 @@ class ChatReply(BaseModel):
     text: str
     ticket: int | None = None
     debug: dict[str, Any] = Field(default_factory=dict)
-
-
-class GuardDecision(BaseModel):
-    """Result of the input guard: the (possibly redacted) text, or a refusal."""
-
-    model_config = ConfigDict(frozen=True)
-
-    text: str
-    blocked: bool = False
-    refusal: str | None = None
-    reason: str | None = None
 
 
 class Turn(BaseModel):

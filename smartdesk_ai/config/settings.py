@@ -156,6 +156,7 @@ class Thresholds(_Strict):
 
 class Guardrails(_Strict):
     pii_min_score: Unit  # Presidio hits below this confidence are ignored (FR-H1)
+    moderation_model: str  # OpenAI Moderation API model, input and output (FR-H1, FR-H2)
 
 
 RetrievalStrategy = Literal["hybrid_rerank", "dense", "hybrid", "dense_rerank"]

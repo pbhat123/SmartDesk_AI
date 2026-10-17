@@ -163,7 +163,7 @@ def test_module_entry_point_runs_with_a_bare_environment(tmp_path):
     env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(ROOT)}
     result = subprocess.run(
         [sys.executable, "-m", "smartdesk_ai.agent"],
-        input="hello\nquit\n",
+        input="zzqx wvvk plorf\nquit\n",
         capture_output=True,
         text=True,
         cwd=tmp_path,

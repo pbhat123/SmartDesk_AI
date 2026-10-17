@@ -146,6 +146,7 @@ class Thresholds(_Strict):
     routing_confidence: Unit  # FR-D8
     semantic_cache_cutoff: Unit
     injection_heuristic: Unit  # classifier runs only above this (FR-H1)
+    escalation_mock: Unit  # replaces `escalation` when modes.llm is mock: hashing embeddings score lower
     duplicate_title: Unit  # title similarity at which an open ticket counts as a duplicate (FR-F4)
 
 

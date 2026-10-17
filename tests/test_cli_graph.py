@@ -85,6 +85,16 @@ def test_mock_answer_model_cites_the_top_entry_and_uses_only_its_text():
     from langchain_core.messages import HumanMessage
 
     reply = MockAnswerModel().invoke([
-        HumanMessage("Question: q\n\nContext:\n[IT-PWD-01] Password reset\nUse the portal. Then log in.\n\n[HR-X-1] Other\nNo.")
+        HumanMessage("Question: How do I reset my password with the portal?\n\nContext:\n[IT-PWD-01] Password reset\n"
+                     "Use the portal. Then log in.\n\n[HR-X-1] Other\nNo.")
     ])
     assert '"IT-PWD-01"' in reply.content and "Use the portal." in reply.content
+
+
+def test_mock_answer_model_says_insufficient_when_the_question_barely_overlaps():
+    from langchain_core.messages import HumanMessage
+
+    reply = MockAnswerModel().invoke([
+        HumanMessage("Question: Where can I park my car?\n\nContext:\n[IT-PWD-01] Password reset\nUse the portal.")
+    ])
+    assert '"insufficient": true' in reply.content

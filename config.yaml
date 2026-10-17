@@ -83,6 +83,7 @@ input:
 
 thresholds:
   escalation: 0.45           # provisional; dev 0.89 KB answered / 0.69 gap escalated; re-check end to end in T6.4
+  escalation_mock: 0.10      # mock mode only (hashing embeddings are weaker); the mock answer model judges sufficiency
   routing_confidence: 0.60   # provisional, tuned in T4.4 (FR-D8)
   semantic_cache_cutoff: 0.95  # provisional, tuned in T6.10 (high cut-off, cache rules)
   duplicate_title: 0.80      # provisional; title similarity at which an open ticket counts as a duplicate (FR-F4)

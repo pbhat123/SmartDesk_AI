@@ -7,21 +7,36 @@ import json
 import re
 from types import SimpleNamespace
 
-_ENTRY = re.compile(r"^\[([A-Za-z0-9-]+)\] (.*)\n(.*)$", re.M)
+_ENTRY = re.compile(r"^\[([A-Za-z0-9-]+)\] ([^\n]*)\n(.*?)(?=\n\n\[|\Z)", re.M | re.S)
+
+
+_STOPWORDS = frozenset(
+    "what when where which that this with have from your about does there their they will would could should "
+    "into than then them these those been being were more most some such only also just like want need can "
+    "how why who whom whose".split()
+)
+MIN_OVERLAP = 3  # content words the question must share with the top entry for the mock to answer
+
+
+def _content_words(text: str) -> set[str]:
+    return {w for w in re.findall(r"[a-z]{4,}", text.lower()) if w not in _STOPWORDS}
 
 
 class MockAnswerModel:
-    """Answers with the first sentence of the top context entry and cites that entry."""
+    """Answers with the first sentence of the top context entry and cites that entry, but only when the
+    question shares enough content words with it; otherwise it reports insufficient context. A
+    stand-in for a real model's judgement, so the mock-mode demo offers a ticket for gaps."""
 
     def invoke(self, messages):
         human = str(messages[-1].content)
-        match = _ENTRY.search(human)
-        if match is None:
-            reply = {"answer": "", "insufficient": True, "citations": []}
-        else:
-            entry_id, _title, text = match.groups()
-            first_sentence = re.split(r"(?<=[.!?])\s", text.strip(), maxsplit=1)[0]
-            reply = {"answer": first_sentence, "insufficient": False, "citations": [entry_id]}
+        entry = _ENTRY.search(human)
+        question = re.search(r"^Question: (.*)$", human, re.M)
+        reply = {"answer": "", "insufficient": True, "citations": []}
+        if entry and question:
+            entry_id, title, text = entry.groups()
+            if len(_content_words(question.group(1)) & _content_words(f"{title} {text}")) >= MIN_OVERLAP:
+                first_sentence = re.split(r"(?<=[.!?])\s", text.strip(), maxsplit=1)[0]
+                reply = {"answer": first_sentence, "insufficient": False, "citations": [entry_id]}
         return SimpleNamespace(content=json.dumps(reply))
 
 

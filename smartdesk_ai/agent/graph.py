@@ -12,13 +12,12 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
 from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY, AnswerError, AnswerResult, should_escalate
+from smartdesk_ai.agent.ticket_agent import escalation_offer
 from smartdesk_ai.agent.state import AgentState, ChunkRef, Domain, PartResult, PendingOffer, thread_config
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
 OFFER_AGENT = "kb"
-# Placeholder until the escalation handoff (T4.10) writes the merged offer.
-OFFER_TEXT = "Would you like me to open a ticket for this?"
 
 
 class KBFirstViolation(RuntimeError):
@@ -117,7 +116,7 @@ def offer_node(state: AgentState) -> dict[str, Any]:
     if "search_kb" not in state.steps:
         raise KBFirstViolation("a ticket may only be offered after search_kb ran (FR-A14)")
     question = _question(state)
-    reply = f"{INSUFFICIENT_REPLY} {OFFER_TEXT}"
+    reply = escalation_offer(email_known=bool(state.email))
     return {
         "steps": state.steps + ["offer"],
         "pending_offer": PendingOffer(unanswered_text=question),
@@ -145,8 +144,14 @@ def build_kb_graph(deps: KBDeps, checkpointer: Any = None):
     return builder.compile(checkpointer=checkpointer)
 
 
-def run_turn(graph: Any, thread_id: str, text: str, *, search_domain: Domain | None = None) -> AgentState:
-    """Run one employee turn on a thread and return the resulting state."""
+def run_turn(
+    graph: Any, thread_id: str, text: str, *, search_domain: Domain | None = None, email: str | None = None
+) -> AgentState:
+    """Run one employee turn on a thread and return the resulting state. A given `email`
+    becomes the session email; without one, the thread keeps what it already knows."""
     config = thread_config(thread_id)
-    graph.invoke({"messages": [HumanMessage(text)], "search_domain": search_domain}, config)
+    turn_input: dict[str, Any] = {"messages": [HumanMessage(text)], "search_domain": search_domain}
+    if email is not None:
+        turn_input["email"] = email
+    graph.invoke(turn_input, config)
     return AgentState(**graph.get_state(config).values)

@@ -77,6 +77,10 @@ class TicketClient(Protocol):
         """Create the labels that do not exist yet; return the names created (FR-B11)."""
         ...
 
+    def latest_update(self, number: int) -> str | None:
+        """The text of the most recent comment on the issue, or None if there is none (FR-C9)."""
+        ...
+
 
 # --- mock mode ---------------------------------------------------------------
 
@@ -93,6 +97,7 @@ class MockTicketClient:
         self.lose_responses = 0
         self._issues: dict[int, Ticket] = {}
         self._labels: set[str] = set()
+        self._comments: dict[int, list[str]] = {}
 
     def create(self, draft: TicketCreate) -> Ticket:
         if self.fail_before_create:
@@ -123,6 +128,16 @@ class MockTicketClient:
         created = [spec.name for spec in labels if spec.name.lower() not in self._labels]
         self._labels.update(name.lower() for name in created)
         return created
+
+    def add_comment(self, number: int, body: str) -> None:
+        """A team comment, as someone would add in GitHub. Mock-only helper for tests and seeding."""
+        self.get(number)
+        self._comments.setdefault(number, []).append(body)
+
+    def latest_update(self, number: int) -> str | None:
+        self.get(number)
+        comments = self._comments.get(number)
+        return comments[-1] if comments else None
 
 
 # --- REST --------------------------------------------------------------------
@@ -217,6 +232,20 @@ class GitHubRestClient:
                 if request_id_of(ticket.body) == request_id:
                     return ticket
         return None
+
+    def latest_update(self, number: int) -> str | None:
+        newest: tuple[str, str] | None = None
+        for page in self._pages(f"/repos/{self._repo}/issues/{number}/comments", {}):
+            for item in page:
+                try:
+                    stamp, body = item["created_at"], item["body"]
+                except (KeyError, TypeError):
+                    raise TicketError("malformed comment in the GitHub response") from None
+                if not isinstance(stamp, str) or not isinstance(body, str):
+                    raise TicketError("malformed comment in the GitHub response")
+                if newest is None or stamp > newest[0]:  # ISO 8601 UTC stamps sort as text
+                    newest = (stamp, body)
+        return newest[1].strip() if newest else None
 
     def ensure_labels(self, labels: Sequence[LabelSpec]) -> list[str]:
         have = {item["name"].lower() for page in self._pages(f"/repos/{self._repo}/labels", {}) for item in page}

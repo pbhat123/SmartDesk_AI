@@ -1,8 +1,10 @@
-"""The agent graph, KB path (FR-A14, FR-A19; PLAN 4.2).
+"""The agent graph (FR-A14, FR-A19, FR-D8, FR-G12; PLAN 4.2).
 
-`kb_search` runs `search_kb` through the executor and answers from the chunks. A question the
-KB cannot answer is retried once against the whole KB (`kb_retry`, FR-A19) and then goes to `offer`, which is reachable only from here, so retrieval is always
-attempted before a ticket is offered (FR-A14). `steps` is the per-turn trace.
+Every turn starts at `entry`. A reply to a pending offer or email request goes to `offer_reply`
+(FR-A16); anything else goes to `route`, which classifies and picks a path. The KB path is
+`kb_search` -> (`kb_retry`) -> `reply` or `offer`; `offer` is reachable only from the KB nodes,
+so retrieval is always attempted before a ticket is offered (FR-A14). The ticket path starts at
+`t_collect`. `steps` is the per-turn trace.
 """
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
@@ -11,7 +13,6 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
-from smartdesk_ai.agent.chat_service import Turn
 from smartdesk_ai.agent.answer import (
     INSUFFICIENT_REPLY,
     AnswerError,
@@ -19,12 +20,32 @@ from smartdesk_ai.agent.answer import (
     AnswerUnavailable,
     should_escalate,
 )
-from smartdesk_ai.agent.ticket_agent import escalation_offer
-from smartdesk_ai.agent.state import AgentState, ChunkRef, Domain, PartResult, PendingOffer, thread_config
+from smartdesk_ai.agent.chat_service import Turn
+from smartdesk_ai.agent.intents import dialog_update_for
+from smartdesk_ai.agent.router import (
+    SMALLTALK_REPLY,
+    RouteDecision,
+    Router,
+    clarifying_question,
+    deflection_reply,
+)
+from smartdesk_ai.agent.state import (
+    AgentState,
+    ChunkRef,
+    Domain,
+    IntentResult,
+    PartResult,
+    PendingOffer,
+    RouteKind,
+    thread_config,
+)
+from smartdesk_ai.agent.ticket_agent import escalation_offer, handle_offer_reply, make_t_collect_node
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
 OFFER_AGENT = "kb"
+# Placeholder until the status flow (T4.22 to T4.26).
+STATUS_PLACEHOLDER = "Ticket status checks are not available yet."
 
 
 class KBFirstViolation(RuntimeError):
@@ -52,8 +73,107 @@ def _question(state: AgentState) -> str:
     return ""
 
 
+def _last_human_index(state: AgentState) -> int:
+    for index in range(len(state.messages) - 1, -1, -1):
+        if isinstance(state.messages[index], HumanMessage):
+            return index
+    return 0
+
+
 def _chunk_refs(found: SearchKBResult) -> list[ChunkRef]:
     return [ChunkRef(entry_id=c.entry_id, title=c.title, score=c.score) for c in found.chunks]
+
+
+# --- entry and routing -------------------------------------------------------------------------
+
+
+def entry_node(state: AgentState) -> dict[str, Any]:
+    """Start of every turn: a fresh trace and no leftovers from the previous turn."""
+    return {"steps": ["start"], "part_result": None, "reply": ""}
+
+
+def make_after_entry(has_router: bool) -> Callable[[AgentState], str]:
+    def after_entry(state: AgentState) -> str:
+        if state.awaiting in ("offer_reply", "email") and state.pending_offer is not None:
+            return "offer_reply"
+        return "route" if has_router else "kb_search"
+
+    return after_entry
+
+
+def offer_reply_node(state: AgentState) -> dict[str, Any]:
+    """Read the reply to a ticket offer or email request (FR-A16). Anything else is a new turn."""
+    out = handle_offer_reply(state, _question(state))
+    steps = state.steps + [f"offer_reply:{out.kind}"]
+    if out.kind == "unclear":
+        return {"steps": steps}
+    update = dict(out.update)
+    if out.kind == "declined":
+        update["ticket_context_start"] = len(state.messages)
+    if out.kind == "agreed":  # the next node speaks; this reply would only be a second message
+        return {**update, "steps": steps}
+    return {**update, "steps": steps, "reply": out.reply, "messages": [AIMessage(out.reply)]}
+
+
+def make_after_offer_reply(has_router: bool) -> Callable[[AgentState], str]:
+    def after_offer_reply(state: AgentState) -> str:
+        last = state.steps[-1]
+        if last == "offer_reply:agreed":
+            return "t_collect"
+        if last == "offer_reply:unclear":
+            return "route" if has_router else "kb_search"
+        return END
+
+    return after_offer_reply
+
+
+def _route_kind(decision: RouteDecision) -> RouteKind:
+    if decision.clarify:
+        return "clarify"
+    if decision.deflect:
+        return "deflect"
+    return {"kb_query": "kb", "create_ticket": "ticket", "ticket_status": "status"}.get(
+        decision.intent or "", "smalltalk"
+    )
+
+
+def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
+    def route_node(state: AgentState) -> dict[str, Any]:
+        decision = route(_question(state), state.awaiting, state.last_topic)
+        intent = None
+        if decision.intent is not None:
+            intent = IntentResult(
+                intent=decision.intent, confidence=decision.confidence or 0.0, route_source=decision.source
+            )
+        return {
+            **dialog_update_for(state, decision.intent),
+            "route_kind": _route_kind(decision),
+            "search_domain": {"it_worker": "IT", "hr_worker": "HR"}.get(decision.route),
+            "intent": intent,
+            "steps": state.steps + ["route"],
+        }
+
+    return route_node
+
+
+def after_route(state: AgentState) -> str:
+    return {"kb": "kb_search", "ticket": "t_collect", "status": "status_stub"}.get(state.route_kind or "", "chitchat")
+
+
+def chitchat_node(state: AgentState) -> dict[str, Any]:
+    """Placeholder replies until the CHITCHAT task (T4.27)."""
+    reply = {"deflect": deflection_reply(), "clarify": clarifying_question()}.get(
+        state.route_kind or "", SMALLTALK_REPLY
+    )
+    return {"steps": state.steps + ["chitchat"], "reply": reply, "messages": [AIMessage(reply)]}
+
+
+def status_stub_node(state: AgentState) -> dict[str, Any]:
+    return {"steps": state.steps + ["status"], "reply": STATUS_PLACEHOLDER,
+            "messages": [AIMessage(STATUS_PLACEHOLDER)]}
+
+
+# --- KB path ---------------------------------------------------------------------------------
 
 
 def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> PartResult | Unavailable:
@@ -88,9 +208,9 @@ def make_kb_search_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
     def kb_search(state: AgentState) -> dict[str, Any]:
         outcome = _search_and_answer(deps, _question(state), state.search_domain)
         if isinstance(outcome, Unavailable):
-            return {"steps": ["start", "search_kb", outcome.step], "part_result": None, "reply": outcome.message,
-                    "messages": [AIMessage(outcome.message)]}
-        return {"steps": ["start", "search_kb", "answer"], "part_result": outcome, "reply": outcome.answer}
+            return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
+                    "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
+        return {"steps": state.steps + ["search_kb", "answer"], "part_result": outcome, "reply": outcome.answer}
 
     return kb_search
 
@@ -139,6 +259,7 @@ def offer_node(state: AgentState) -> dict[str, Any]:
         "steps": state.steps + ["offer"],
         "pending_offer": PendingOffer(unanswered_text=question),
         "awaiting": "offer_reply",
+        "ticket_context_start": _last_human_index(state),  # the ticket covers the unanswered question on
         "reply": reply,
         "messages": [AIMessage(reply)],
     }
@@ -148,17 +269,35 @@ def reply_node(state: AgentState) -> dict[str, Any]:
     return {"steps": state.steps + ["reply"], "messages": [AIMessage(state.reply)]}
 
 
-def build_kb_graph(deps: KBDeps, checkpointer: Any = None):
+def build_kb_graph(deps: KBDeps, checkpointer: Any = None, *, route: Router | None = None):
+    """Compile the agent graph. Without a `route`, every new message goes to the KB path."""
     builder = StateGraph(AgentState)
+    builder.add_node("entry", entry_node)
+    builder.add_node("offer_reply", offer_reply_node)
     builder.add_node("kb_search", make_kb_search_node(deps))
     builder.add_node("kb_retry", make_kb_retry_node(deps))
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
-    builder.add_edge(START, "kb_search")
+    builder.add_node("t_collect", make_t_collect_node())
+    builder.add_edge(START, "entry")
+    builder.add_conditional_edges("entry", make_after_entry(route is not None),
+                                  ["offer_reply", "route", "kb_search"] if route else ["offer_reply", "kb_search"])
+    builder.add_conditional_edges(
+        "offer_reply", make_after_offer_reply(route is not None),
+        ["t_collect", "route", "kb_search", END] if route else ["t_collect", "kb_search", END],
+    )
+    if route is not None:
+        builder.add_node("route", make_route_node(route))
+        builder.add_node("chitchat", chitchat_node)
+        builder.add_node("status_stub", status_stub_node)
+        builder.add_conditional_edges("route", after_route, ["kb_search", "t_collect", "status_stub", "chitchat"])
+        builder.add_edge("chitchat", END)
+        builder.add_edge("status_stub", END)
     builder.add_conditional_edges("kb_search", after_kb_search, ["kb_retry", "offer", "reply", END])
     builder.add_conditional_edges("kb_retry", after_kb_retry, ["offer", "reply", END])
     builder.add_edge("offer", END)
     builder.add_edge("reply", END)
+    builder.add_edge("t_collect", END)
     return builder.compile(checkpointer=checkpointer)
 
 
@@ -176,8 +315,9 @@ def run_turn(
 
 
 def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
-    """A ChatService responder over the KB graph. The session ID is the thread ID. The debug
-    details are the last search's chunks with scores and the generated answer (FR-A12)."""
+    """A ChatService responder over the graph. The session ID is the thread ID. The debug
+    details are the turn's trace and, when the KB ran, its chunks with scores and the generated
+    answer (FR-A12)."""
 
     def kb_responder(session_id: str, text: str) -> Turn:
         state = run_turn(graph, session_id, text)

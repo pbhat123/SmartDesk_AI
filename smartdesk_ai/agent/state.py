@@ -17,6 +17,7 @@ RouteSource = Literal["classifier", "tool_pick"]
 Category = Literal["IT", "HR", "MISC"]
 Priority = Literal["low", "medium", "high", "critical"]
 Domain = Literal["IT", "HR"]
+RouteKind = Literal["kb", "ticket", "status", "smalltalk", "deflect", "clarify"]
 
 
 class IntentResult(BaseModel):
@@ -73,6 +74,8 @@ class AgentState(BaseModel):
     intent: IntentResult | None = None
     pending_offer: PendingOffer | None = None
     ticket: TicketDraft | None = None
+    route_kind: RouteKind | None = None  # where routing sent this turn
+    ticket_context_start: int = 0  # index in `messages` where the current ticket's conversation begins
     search_domain: Domain | None = None  # KB filter chosen by routing for this turn
     part_result: PartResult | None = None
     steps: list[str] = []  # this turn's trace, e.g. ["search_kb", "answer", "offer"] (FR-H11)

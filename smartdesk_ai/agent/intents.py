@@ -82,17 +82,21 @@ def route_for(result: IntentResult) -> Route:
     return "none"
 
 
-def dialog_update(state: AgentState, result: IntentResult) -> dict[str, Any]:
-    """State changes after classifying: a new topic mid-flow clears the pending offer (FR-D2).
+def dialog_update_for(state: AgentState, intent: str | None) -> dict[str, Any]:
+    """State changes after an intent is known: a new topic mid-flow clears the pending offer (FR-D2).
 
-    A partly built ticket draft goes with it; the session email stays. Continuing the flow,
-    or an unclear reply, keeps the state as it is.
+    A partly built ticket draft goes with it; the session email stays. Continuing the flow, an
+    unclear reply, or no intent at all (a chitchat tool pick) keeps the state as it is.
     """
-    if state.awaiting == "none" or result.intent == "ambiguous":
+    if state.awaiting == "none" or intent is None or intent == "ambiguous":
         return {}
-    if result.intent == _CONTINUES[state.awaiting]:
+    if intent == _CONTINUES[state.awaiting]:
         return {}
     return {"awaiting": "none", "pending_offer": None, "ticket": None}
+
+
+def dialog_update(state: AgentState, result: IntentResult) -> dict[str, Any]:
+    return dialog_update_for(state, result.intent)
 
 
 def make_classifier(

@@ -31,6 +31,7 @@ _TOOL_INTENT: dict[str, Intent] = {
 
 # Placeholder wording until the CHITCHAT task writes replies (T4.27).
 CLARIFYING_QUESTION = "Could you tell me a little more about what you need help with?"
+SMALLTALK_REPLY = "Hello! I can answer IT and HR questions, open a support ticket, or check on a ticket. What do you need?"
 DEFLECTION_REPLY = (
     "Sorry, I can't help with that one. I'm here for IT, HR and workplace questions, "
     "such as accounts, equipment, leave and office services."
@@ -67,6 +68,7 @@ class RouteDecision(BaseModel):
 
 
 ClassifyFn = Callable[..., IntentResult]
+Router = Callable[[str, Awaiting, str | None], "RouteDecision"]  # (text, awaiting, last topic) -> decision
 ToolPicker = Callable[[str, Awaiting], ToolPick]
 
 
@@ -146,3 +148,18 @@ def make_tool_picker(
         return ToolPick(tool=name, domain=domain if domain in ("IT", "HR") and name == "search_kb" else None)
 
     return pick
+
+
+def make_router(settings: Settings, *, builder: ModelBuilder = openai_builder, budget_level: int = 0) -> Router:
+    """The routing function of the agent graph: the classifier first, the tool pick as the
+    fallback, with the confidence threshold from config (FR-D8)."""
+    from smartdesk_ai.agent.intents import make_classifier
+
+    classify = make_classifier(settings, builder=builder, budget_level=budget_level)
+    pick = make_tool_picker(settings, builder=builder, budget_level=budget_level)
+    threshold = settings.thresholds.routing_confidence
+
+    def route(text: str, awaiting: Awaiting, last_topic: str | None) -> RouteDecision:
+        return route_message(text, awaiting, last_topic, classify, pick, threshold)
+
+    return route

@@ -198,3 +198,22 @@ def test_tool_picker_call_failure_is_a_tool_pick_error(settings):
     pick, _ = build_picker(settings, Boom([]))
     with pytest.raises(ToolPickError):
         pick("x", "none")
+
+
+def test_make_router_wires_the_classifier_the_tool_pick_and_the_config_threshold(settings):
+    from smartdesk_ai.agent.router import make_router
+    from smartdesk_ai.llm.mock import MockRoutingModel
+
+    route = make_router(settings, builder=lambda model_id, cfg: MockRoutingModel())
+    decision = route("How many sick days do I get?", "none", None)
+    assert (decision.intent, decision.route, decision.source) == ("kb_query", "hr_worker", "classifier")
+    assert route("It's not working", "none", None).clarify
+
+
+def test_the_mock_routing_model_matches_the_whole_intent_eval_set():
+    from smartdesk_ai.agent.intents import classify_intent, route_for
+    from smartdesk_ai.llm.mock import MockRoutingModel
+
+    for row in ROWS:
+        result = classify_intent(MockRoutingModel(), "prompt", row.utterance, row.awaiting)
+        assert (result.intent, route_for(result)) == (row.expected_intent, row.expected_route), row.id

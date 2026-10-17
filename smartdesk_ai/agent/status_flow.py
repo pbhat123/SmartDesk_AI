@@ -2,7 +2,8 @@
 
 The lookup is a `get_tickets` call through the executor: the SQLite map first, the search fallback
 second, then the status and the latest team comment read live from GitHub (FR-C2, FR-C10, FR-C11).
-Team comment text is untrusted (FR-C9); it is never given to a model here.
+Team comment text is untrusted (FR-C9): no model is called in this flow after the lookup, and the text
+reaches the employee, and so the saved transcript, only as `TeamUpdate.quoted()`.
 """
 import re
 from collections.abc import Callable, Sequence
@@ -19,6 +20,7 @@ from smartdesk_ai.tools.executor import Outcome
 AGENT = "status_flow"
 ASK_EMAIL_FOR_STATUS = "To check on your tickets I need your work email address. What is it?"
 DECLINED_EMAIL = "No problem. Just ask whenever you'd like me to check on a ticket."
+NO_UPDATE_YET = "No updates from the support team yet."
 NO_TICKETS = "You have no tickets on file. If you expected to see one, please check the email address you gave me."
 LOOKUP_FAILED = "Sorry, I couldn't check your tickets just now. Please try again later."
 PICK_QUESTION = "Which one would you like to know more about? You can say \"the second one\" or give its number."
@@ -99,8 +101,15 @@ def render_list(refs: Sequence[TicketRef]) -> str:
     return "\n".join(lines + ["", PICK_QUESTION])
 
 
-def render_chosen(ticket: Ticket) -> str:
-    return f"Ticket #{ticket.number}: {ticket.title} ({ticket.status.value})"  # the full display: T4.26
+def render_ticket(ticket: Ticket, update: TeamUpdate | None) -> str:
+    """One ticket: ID, title, status, link, and the latest team update (FR-C7). Everything but the update
+    is copied from GitHub's response; the update is untrusted text and appears only quoted (FR-C9)."""
+    lines = [f"Ticket #{ticket.number}: {ticket.title}", f"Status: {ticket.status.value}", ticket.url, ""]
+    if update is None:
+        lines.append(NO_UPDATE_YET)
+    else:
+        lines += ["Latest update from the support team:", update.quoted()]
+    return "\n".join(lines)
 
 
 def _say(state: AgentState, step: str, reply: str, **update: Any) -> dict[str, Any]:
@@ -115,13 +124,12 @@ def make_s_lookup_node(executor: Any) -> Callable[[AgentState], dict[str, Any]]:
         out = lookup_tickets(executor, state.email)
         if isinstance(out, StatusUnavailable):
             return _say(state, "s_lookup", out.message, status_candidates=[], awaiting="none")
-        refs = [ticket_ref(t) for t in out.tickets]
+        refs = [ticket_ref(t) for t in sorted(out.tickets, key=lambda t: t.number, reverse=True)]  # newest first
         if len(refs) >= 2:  # list briefly and let them choose (FR-C3)
             return _say(state, "s_lookup", render_list(refs), status_candidates=refs, awaiting="ticket_pick")
         if not refs:  # say so plainly, and invent nothing (FR-C4)
             return _say(state, "s_lookup", NO_TICKETS, status_candidates=[], awaiting="none")
-        # One ticket: the display follows in T4.26.
-        return _say(state, "s_lookup", f"I found {len(refs)} ticket(s) for you.", status_candidates=refs,
+        return _say(state, "s_lookup", render_ticket(out.tickets[0], out.latest_update), status_candidates=[],
                     awaiting="none")
 
     return s_lookup
@@ -170,7 +178,8 @@ def make_s_pick_node(executor: Any) -> Callable[[AgentState], dict[str, Any]]:
         if not out.tickets:
             return _say(state, "s_pick:gone", "I couldn't find that ticket any more.", awaiting="none",
                         status_candidates=[])
-        return _say(state, "s_pick:ok", render_chosen(out.tickets[0]), awaiting="none", status_candidates=[])
+        return _say(state, "s_pick:ok", render_ticket(out.tickets[0], out.latest_update), awaiting="none",
+                    status_candidates=[])
 
     return s_pick
 

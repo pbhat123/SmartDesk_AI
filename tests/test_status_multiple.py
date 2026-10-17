@@ -31,7 +31,7 @@ def listed(stack, tid=None):
 
 def test_two_or_more_tickets_produce_a_pick_list_and_wait_for_the_choice(stack):
     _, state = listed(stack)
-    numbers = stack.store.numbers_for(MANY_EMAIL)
+    numbers = sorted(stack.store.numbers_for(MANY_EMAIL), reverse=True)  # newest first
     assert state.awaiting == "ticket_pick" and [c.number for c in state.status_candidates] == numbers
     for ref in state.status_candidates:
         assert f"#{ref.number}" in state.reply and ref.title in state.reply and f"({ref.status})" in state.reply

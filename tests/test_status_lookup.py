@@ -161,7 +161,7 @@ def test_a_new_topic_while_the_email_is_awaited_leaves_the_status_flow(stack):
 
 def test_the_lookup_in_the_graph_remembers_what_it_found(stack):
     state = run_turn(stack.graph, new_thread_id(), "Any updates on my tickets?", email=MANY_EMAIL)
-    assert [c.number for c in state.status_candidates] == sorted(stack.store.numbers_for(MANY_EMAIL))
+    assert [c.number for c in state.status_candidates] == sorted(stack.store.numbers_for(MANY_EMAIL), reverse=True)
     assert {c.status for c in state.status_candidates} == {"Resolved", "Open"}
 
 

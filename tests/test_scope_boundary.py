@@ -115,3 +115,24 @@ def test_a_dead_classifier_with_no_tool_pick_is_chitchat_not_a_guess_at_scope():
 def test_confident_out_of_scope_is_deflected_even_when_the_pick_would_search():
     decision = route_message("weather?", "none", None, lambda *a, **k: IntentResult(intent="out_of_scope", confidence=0.95), no_pick, THRESHOLD)
     assert decision.deflect
+
+
+# --- T4.10 re-check: the full acceptance, routed through the real KB graph ----------------
+
+
+def test_workplace_gaps_end_in_a_ticket_offer_and_unrelated_never_do(built_index_dir, settings, tmp_path):
+    from smartdesk_ai.agent.graph import run_turn
+    from smartdesk_ai.agent.state import new_thread_id
+    from tests.agent_helpers import build_test_graph
+    from tests.llm_fakes import FakeAnswerLLM
+
+    graph, spy = build_test_graph(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM("insufficient"))
+    for row in GAPS:
+        decision = route(row)
+        state = run_turn(graph, new_thread_id(), row.utterance)  # misc route: whole-KB search
+        assert state.pending_offer is not None and "ticket" in state.reply.lower(), row.id
+    searched = len(spy.calls)
+    for row in UNRELATED:
+        decision = route(row)
+        assert decision.deflect and "ticket" not in deflection_reply().lower(), row.id
+    assert len(spy.calls) == searched, "a deflection must not touch the KB or the ticket path"

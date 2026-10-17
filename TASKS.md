@@ -97,7 +97,7 @@ Exit: flows A/B/C scripted; 0/1/2+ status; confirm yes/no/edit; routing set; CLI
 
 | Done | ID | Task | FRs | Files | Acceptance test |
 |---|---|---|---|---|---|
-| [ ] | T4.1 | SQLite checkpointer for session state + pending draft; restart-safe | H10, G12 | `sd/memory/checkpointer.py`, `tests/test_checkpointer_restart.py` | Restart keeps pending draft and history for a thread ID |
+| [x] | T4.1 | SQLite checkpointer for session state + pending draft; restart-safe | H10, G12 | `sd/memory/checkpointer.py`, `tests/test_checkpointer_restart.py` | Restart keeps pending draft and history for a thread ID |
 | [ ] | T4.2 | Graph state (Pydantic): email, last topic, pending draft, `awaiting`, messages; thread ID per session | D2, G12 | `sd/agent/state.py`, `tests/test_state.py` | State round-trips through the SQLite checkpointer; two thread IDs never mix |
 | [ ] | T4.3 | Intent classifier with confidence and `awaiting` input; six intents | D1, D2 | `sd/agent/intents.py`, `tests/test_intent_classifier.py` | Over `evals/intents.jsonl` (mock LLM fixtures) route matches expected; "yes" with `awaiting=offer_reply` routes correctly; new intent mid-flow clears pending offer |
 | [ ] | T4.4 | Routing: classifier first; fallback to model tool pick on error/invalid/low confidence; mapping `search_kb`/`create_ticket`/`get_tickets`/no tool | D8, G2 | `sd/agent/router.py`, `tests/test_routing.py` | Forced classifier error gives route from tool pick; confident `ambiguous` gets exactly one clarifying question and no fallback; no tool maps to chitchat |

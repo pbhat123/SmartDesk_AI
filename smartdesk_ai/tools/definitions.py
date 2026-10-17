@@ -35,6 +35,10 @@ class CreateTicketArgs(_Args):
 
 class GetTicketsArgs(_Args):
     email: str | None = Field(default=None, description="The employee's email; ask if unknown.")
+    ticket_number: int | None = Field(
+        default=None, ge=1,
+        description="Narrow to one of the employee's own tickets, to read its latest team update.",
+    )
 
 
 class ToolDefinition(BaseModel):

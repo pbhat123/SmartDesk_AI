@@ -64,7 +64,7 @@ def test_the_graph_sends_the_phrases_to_the_status_flow(built_index_dir, setting
     stack = assemble(built_index_dir, settings, tmp_path, routed=True)
     state = run_turn(stack.graph, new_thread_id(), phrase, email=EMAIL)
     assert state.route_kind == "status" and state.intent.intent == "ticket_status"
-    assert "status" in state.steps
+    assert "s_lookup" in state.steps
     assert stack.spy.calls == [], "a status question is not a KB search"
     assert state.pending_offer is None and state.ticket is None
 

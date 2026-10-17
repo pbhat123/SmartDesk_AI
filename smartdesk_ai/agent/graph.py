@@ -40,7 +40,7 @@ from smartdesk_ai.agent.state import (
     RouteKind,
     thread_config,
 )
-from smartdesk_ai.agent.status_flow import status_stub_node
+from smartdesk_ai.agent.status_flow import after_s_email_reply, make_s_lookup_node, s_email_reply
 from smartdesk_ai.agent.ticket_agent import (
     TicketDeps,
     escalation_offer,
@@ -112,6 +112,8 @@ def entry_node(state: AgentState) -> dict[str, Any]:
 
 def make_after_entry(has_router: bool) -> Callable[[AgentState], str]:
     def after_entry(state: AgentState) -> str:
+        if state.awaiting == "email" and state.status_pending_email:
+            return "s_email_reply"
         if state.awaiting in ("offer_reply", "email") and state.pending_offer is not None:
             return "offer_reply"
         return "route" if has_router else "kb_search"
@@ -164,8 +166,11 @@ def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
             intent = IntentResult(
                 intent=decision.intent, confidence=decision.confidence or 0.0, route_source=decision.source
             )
+        cleared = dialog_update_for(state, decision.intent)
+        if cleared:  # a new topic leaves the status flow too
+            cleared = {**cleared, "status_pending_email": False, "status_candidates": []}
         return {
-            **dialog_update_for(state, decision.intent),
+            **cleared,
             "route_kind": _route_kind(decision),
             "search_domain": {"it_worker": "IT", "hr_worker": "HR"}.get(decision.route),
             "intent": intent,
@@ -176,7 +181,7 @@ def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
 
 
 def after_route(state: AgentState) -> str:
-    return {"kb": "kb_search", "ticket": "t_collect", "status": "status_stub"}.get(state.route_kind or "", "chitchat")
+    return {"kb": "kb_search", "ticket": "t_collect", "status": "s_lookup"}.get(state.route_kind or "", "chitchat")
 
 
 def chitchat_node(state: AgentState) -> dict[str, Any]:
@@ -308,8 +313,10 @@ def build_kb_graph(
     builder.add_node("reply", reply_node)
     builder.add_node("t_collect", make_t_collect_node(drafting=tickets is not None))
     builder.add_edge(START, "entry")
-    builder.add_conditional_edges("entry", make_after_entry(route is not None),
-                                  ["offer_reply", "route", "kb_search"] if route else ["offer_reply", "kb_search"])
+    builder.add_conditional_edges(
+        "entry", make_after_entry(route is not None),
+        ["offer_reply", "route", "kb_search", "s_email_reply"] if route else ["offer_reply", "kb_search"],
+    )
     builder.add_conditional_edges(
         "offer_reply", make_after_offer_reply(route is not None),
         ["t_collect", "route", "kb_search", END] if route else ["t_collect", "kb_search", END],
@@ -317,10 +324,12 @@ def build_kb_graph(
     if route is not None:
         builder.add_node("route", make_route_node(route))
         builder.add_node("chitchat", chitchat_node)
-        builder.add_node("status_stub", status_stub_node)
-        builder.add_conditional_edges("route", after_route, ["kb_search", "t_collect", "status_stub", "chitchat"])
+        builder.add_node("s_lookup", make_s_lookup_node(deps.executor))
+        builder.add_node("s_email_reply", s_email_reply)
+        builder.add_conditional_edges("route", after_route, ["kb_search", "t_collect", "s_lookup", "chitchat"])
+        builder.add_conditional_edges("s_email_reply", after_s_email_reply, ["s_lookup", "route", END])
         builder.add_edge("chitchat", END)
-        builder.add_edge("status_stub", END)
+        builder.add_edge("s_lookup", END)
     builder.add_conditional_edges("kb_search", after_kb_search, ["kb_retry", "offer", "reply", END])
     builder.add_conditional_edges("kb_retry", after_kb_retry, ["offer", "reply", END])
     builder.add_edge("offer", END)

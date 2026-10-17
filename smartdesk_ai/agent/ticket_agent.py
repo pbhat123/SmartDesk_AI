@@ -88,6 +88,12 @@ def find_email(text: str) -> str | None:
     return None
 
 
+def is_refusal(text: str) -> bool:
+    """A plain "no", "no thanks", "never mind" and the like."""
+    words = _words(text)
+    return words in _NO or words.startswith("no ")
+
+
 def _words(text: str) -> str:
     return re.sub(r"\s+", " ", text.strip().strip(_EDGE_PUNCTUATION).lower())
 
@@ -255,7 +261,7 @@ def make_t_dup_check_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, 
         result = deps.executor.execute("get_tickets", {"email": state.email}, agent="ticket_agent")
         if result.outcome is not Outcome.SUCCESS:  # the request-ID protection still holds (FR-G6)
             return {"steps": steps + ["dup_check_skipped"], "duplicate": None}
-        match = find_duplicate(state.ticket.title, result.data, deps.duplicate_threshold)
+        match = find_duplicate(state.ticket.title, result.data.tickets, deps.duplicate_threshold)
         if match is None:
             return {"steps": steps, "duplicate": None}
         ref = TicketRef(number=match.number, title=match.title, status=match.status.value, url=match.url)

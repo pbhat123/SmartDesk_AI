@@ -97,6 +97,8 @@ class AgentState(BaseModel):
     ticket: TicketDraft | None = None
     route_kind: RouteKind | None = None  # where routing sent this turn
     ticket_context_start: int = 0  # index in `messages` where the current ticket's conversation begins
+    status_pending_email: bool = False  # the status flow asked for the email (awaiting is "email")
+    status_candidates: list[TicketRef] = []  # the tickets found by the last status lookup (FR-C3)
     duplicate: TicketRef | None = None  # an open near-identical ticket found before the gate (FR-F4)
     gate: ConfirmDecision | None = None  # the last reply at the approval gate
     gate_unclear: int = 0  # unclear replies at the current gate; the second one cancels (FR-G12)

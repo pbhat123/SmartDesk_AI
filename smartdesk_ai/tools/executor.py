@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.ops.metrics import MetricsRecorder, ToolCallRecord
+from smartdesk_ai.ops.trace_log import TraceLog
 from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
 from smartdesk_ai.tickets.sqlite_map import TicketStore
 from smartdesk_ai.tools.definitions import get_definition
@@ -80,6 +81,7 @@ class ToolExecutor:
         sleep: Callable[[float], None] = time.sleep,
         request_store: TicketStore | None = None,
         metrics: MetricsRecorder | None = None,
+        trace: TraceLog | None = None,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self._registry = registry
@@ -87,6 +89,7 @@ class ToolExecutor:
         self._sleep = sleep
         self._store = request_store
         self._metrics = metrics
+        self._trace = trace
         self._clock = clock
 
     def execute(
@@ -104,7 +107,24 @@ class ToolExecutor:
                 attempt_outcomes=[o for _, o in attempt_ms],
                 total_latency_ms=(self._clock() - started) * 1000,
             ))
+        if self._trace is not None:
+            self._log_trace(name, raw_args, agent, result, attempt_ms, (self._clock() - started) * 1000)
         return result
+
+    def _log_trace(
+        self, name: str, raw_args: dict[str, Any], agent: str, result: ToolResult,
+        attempt_ms: list[tuple[float, str]], total_ms: float,
+    ) -> None:
+        """One event per attempt, then one for the call. The trace log masks every string (FR-G11)."""
+        assert self._trace is not None
+        for number, (ms, outcome) in enumerate(attempt_ms, 1):
+            self._trace.event("tool_attempt", tool=name, agent=agent, attempt=number, outcome=outcome,
+                              latency_ms=ms)
+        self._trace.event(
+            "tool_call", tool=name, agent=agent, args=raw_args, outcome=result.outcome.value,
+            error_code=result.code.value if result.code else None, error=result.error,
+            attempts=result.attempts, latency_ms=total_ms, ticket=_issue_number(result.data),
+        )
 
     def _execute(
         self, name: str, raw_args: dict[str, Any], confirmed: bool, attempt_ms: list[tuple[float, str]]

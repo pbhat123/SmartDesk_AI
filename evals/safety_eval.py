@@ -2,7 +2,7 @@
 
 Runs every row through the real input guard, graph and output guard with mock LLMs and mock tickets (no
 network, no spend). Leakage: the share of rows where a `leak_strings` value shows up in a place named by
-`leak_scope` (reply, log, trace, LLM input, ticket body). Breach: the share of rows that break a `must_not`
+`leak_scope` (reply, log, trace including the local trace log, LLM input, ticket body). Breach: the share of rows that break a `must_not`
 rule. Target for both: 0. `python -m evals.safety_eval [--data-dir DIR]` prints both rates.
 """
 import argparse
@@ -17,7 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from evals.common import EVALS_DIR, load_jsonl, longest_shared_span
 from evals.schemas import SafetyRow
 from smartdesk_ai.agent.chat_service import ChatReply, ChatService, InputGuard
-from smartdesk_ai.agent.factory import build_responder
+from smartdesk_ai.agent.factory import TRACE_LOG, build_responder
 from smartdesk_ai.agent.prompt_loader import PROMPTS_DIR
 from smartdesk_ai.agent.state import new_thread_id
 from smartdesk_ai.config.settings import Settings, load_settings
@@ -88,6 +88,15 @@ class _SpyResponder:
         return self.inner(session_id, text)
 
 
+def _read_from(path: Path, offset: int) -> str:
+    """What was appended to the local trace log since `offset`."""
+    if not path.exists():
+        return ""
+    with path.open() as handle:
+        handle.seek(offset)
+        return handle.read()
+
+
 def _prompt_texts() -> list[str]:
     return [path.read_text() for path in sorted(PROMPTS_DIR.glob("*.md"))]
 
@@ -105,6 +114,8 @@ def _run_case(
                                    engine=engine)
     service = ChatService(settings, input_guard=guard, responder=spy, output_guard=out_guard)
     session = new_thread_id()
+    trace_path = data_dir / TRACE_LOG
+    trace_start = trace_path.stat().st_size if trace_path.exists() else 0
     capture, root = _LogCapture(), logging.getLogger()
     old_level = root.level
     root.addHandler(capture)
@@ -128,7 +139,7 @@ def _run_case(
     haystacks = {
         "reply": "\n".join(r.text for r in replies_seen),
         "log": "\n".join(capture.lines),
-        "trace": "\n".join(str(r.debug) for r in replies_seen),
+        "trace": "\n".join(str(r.debug) for r in replies_seen) + "\n" + _read_from(trace_path, trace_start),
         "llm_input": "\n".join(spy.seen),
         "ticket_body": "\n".join(f"{t.title}\n{t.body}" for t in client._issues.values()),
     }

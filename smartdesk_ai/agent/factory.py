@@ -33,7 +33,9 @@ from smartdesk_ai.llm.mock import (
     MockRoutingModel,
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
+from smartdesk_ai.guardrails.pii import PiiRedactor
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
+from smartdesk_ai.ops.trace_log import TraceLog, make_masker
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
 from smartdesk_ai.rag.index import IndexNotBuilt, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ROOT, ingest
@@ -49,6 +51,7 @@ from smartdesk_ai.tools.ticket_tools import register_ticket_tools
 DEFAULT_DATA_DIR = ROOT / "data"  # gitignored
 DATA_DIR_ENV = "SMARTDESK_DATA_DIR"  # lets tests and deployments move every runtime file
 CHECKPOINT_DB = "checkpoints.db"
+TRACE_LOG = "trace.jsonl"
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
 
@@ -130,7 +133,9 @@ def build_responder(
     # Team comments come from a public repo: scan them before anything downstream sees them (FR-C9).
     update_checker = make_injection_checker(settings, builder=inject_b)
     register_ticket_tools(tools, client, store, screen_update=lambda update: screen_team_update(update, update_checker))
-    executor = ToolExecutor(tools, settings, request_store=store)
+    # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
+    trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)))
+    executor = ToolExecutor(tools, settings, request_store=store, trace=trace)
     ticket_deps = TicketDeps(
         drafter=make_drafter(settings, builder=draft_b),
         executor=executor,

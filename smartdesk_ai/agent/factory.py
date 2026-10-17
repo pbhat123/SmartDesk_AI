@@ -38,7 +38,7 @@ from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embed
 from smartdesk_ai.rag.index import IndexNotBuilt, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ROOT, ingest
 from smartdesk_ai.rag.rerank import load_reranker
-from smartdesk_ai.tickets import TicketConfigError, create_ticket_client
+from smartdesk_ai.tickets import TicketClient, TicketConfigError, create_ticket_client
 from smartdesk_ai.tickets.seed import seed
 from smartdesk_ai.tickets.sqlite_map import TicketStore
 from smartdesk_ai.tools.executor import ToolExecutor
@@ -76,6 +76,7 @@ def build_responder(
     data_dir: Path | None = None,
     kb_dir: Path = DEFAULT_KB_DIR,
     registry: HealthRegistry | None = None,
+    client: TicketClient | None = None,
 ) -> Responder:
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
@@ -112,10 +113,11 @@ def build_responder(
         ) from None
     if live:
         reranker = load_reranker(settings, registry)  # degrades to RRF order, never fails (FR-F7)
-    try:
-        client = create_ticket_client(settings, env)
-    except TicketConfigError as error:
-        raise LiveModeUnavailable(f"{error}. Set it in .env (see .env.example).") from error
+    if client is None:  # a caller may hand in its own client, e.g. the safety eval to inspect tickets
+        try:
+            client = create_ticket_client(settings, env)
+        except TicketConfigError as error:
+            raise LiveModeUnavailable(f"{error}. Set it in .env (see .env.example).") from error
 
     Path(data_dir).mkdir(parents=True, exist_ok=True)
     # Mock tickets live in memory, so their numbers never reach the live map in app.db.

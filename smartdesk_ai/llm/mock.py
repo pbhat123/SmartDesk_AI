@@ -45,7 +45,7 @@ _STATUS = re.compile(
     r"\b(status|updates?)\b.*\b(ticket|issue|request)\b|\bdid anyone look\b|\bmy tickets?\b", re.I
 )
 _SMALLTALK = re.compile(r"^(hi|hello|hey|thanks|thank you|bye|goodbye|good morning|how are you)\b", re.I)
-_OUT_OF_SCOPE = re.compile(r"\b(weather|recipe|cricket|world cup|poem|joke|python function)\b", re.I)
+_OUT_OF_SCOPE = re.compile(r"\b(weather|recipe|cricket|world cup|poem|joke|python function|python script|mutual funds?|prime minister)\b", re.I)
 _AMBIGUOUS = re.compile(r"^(it'?s not working|i need (some )?help|i have a question|can you sort that out)", re.I)
 _ORDINAL = re.compile(r"\b(first|second|third|fourth|last|one|\d+)\b", re.I)
 _YES_WORDS = re.compile(r"^(yes|yeah|yep|sure|ok|okay|please do|go ahead)\b", re.I)

@@ -41,7 +41,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
     store = TicketStore(tmp_path / "tickets.db")
     registry = ToolRegistry()
     registry.register("search_kb", spy)
-    register_ticket_tools(registry, client)
+    register_ticket_tools(registry, client, store)
     executor = ToolExecutor(registry, settings, request_store=store, sleep=lambda _: None)
     answer = make_answerer(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM())
     saver = make_checkpointer(tmp_path / name, STATE_MODELS)
@@ -52,6 +52,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
             drafter=make_drafter(settings, builder=lambda model_id, cfg: drafter_llm),
             executor=executor,
             parse_confirm=parse_confirm or rule_parser,
+            duplicate_threshold=settings.thresholds.duplicate_title,
         )
     graph = build_kb_graph(KBDeps(executor=executor, answer=answer), saver, route=route, tickets=tickets)
     return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, executor=executor, saver=saver)

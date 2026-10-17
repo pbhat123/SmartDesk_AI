@@ -45,13 +45,18 @@ from smartdesk_ai.agent.ticket_agent import (
     escalation_offer,
     handle_offer_reply,
     after_t_confirm,
+    after_t_dup_ask,
+    after_t_dup_check,
     make_t_collect_node,
     make_t_confirm_node,
     make_t_create_node,
+    make_t_dup_ask_node,
+    make_t_dup_check_node,
     make_t_draft_node,
     make_t_present_node,
     t_apply_edit,
     t_cancel,
+    t_dup_reask,
     t_reask,
 )
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
@@ -292,7 +297,7 @@ def after_t_collect(state: AgentState) -> str:
 
 def after_t_draft(state: AgentState) -> str:
     """A drafting outage has already replied; otherwise show the summary."""
-    return END if state.reply else "t_present"
+    return END if state.reply else "t_dup_check"
 
 
 def build_kb_graph(
@@ -332,7 +337,13 @@ def build_kb_graph(
         builder.add_node("t_draft", make_t_draft_node(tickets))
         builder.add_node("t_present", make_t_present_node())
         builder.add_conditional_edges("t_collect", after_t_collect, ["t_draft", END])
-        builder.add_conditional_edges("t_draft", after_t_draft, ["t_present", END])
+        builder.add_node("t_dup_check", make_t_dup_check_node(tickets))
+        builder.add_node("t_dup_ask", make_t_dup_ask_node(tickets))
+        builder.add_node("t_dup_reask", t_dup_reask)
+        builder.add_conditional_edges("t_draft", after_t_draft, ["t_dup_check", END])
+        builder.add_conditional_edges("t_dup_check", after_t_dup_check, ["t_dup_ask", "t_present"])
+        builder.add_conditional_edges("t_dup_ask", after_t_dup_ask, ["t_present", "t_cancel", "t_dup_reask"])
+        builder.add_edge("t_dup_reask", "t_dup_ask")
         builder.add_node("t_confirm", make_t_confirm_node(tickets))
         builder.add_node("t_apply_edit", t_apply_edit)
         builder.add_node("t_reask", t_reask)

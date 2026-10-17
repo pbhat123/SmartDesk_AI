@@ -68,7 +68,7 @@ def test_the_graph_shows_the_summary_after_drafting(built_index_dir, settings, t
     out = run_turn(graph, tid, "yes")
     assert out.reply == confirmation_summary(out.ticket, EMAIL)
     assert "Priority: High" in out.reply and "Shall I go ahead and create this?" in out.reply
-    assert out.steps[-2:] == ["t_draft", "t_present"]
+    assert out.steps[-3:] == ["t_draft", "t_dup_check", "t_present"]
     assert out.messages[-1].content == out.reply
 
 

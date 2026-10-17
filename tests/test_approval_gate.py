@@ -188,7 +188,8 @@ def test_an_edit_that_changes_nothing_counts_as_unclear(stack):
 
 
 def test_the_create_node_refuses_to_run_without_a_yes(stack):
-    node = make_t_create_node(TicketDeps(drafter=lambda s: None, executor=stack.executor, parse_confirm=rule_parser))
+    node = make_t_create_node(TicketDeps(drafter=lambda s: None, executor=stack.executor, parse_confirm=rule_parser,
+                                    duplicate_threshold=0.8))
     state = AgentState(email=EMAIL, ticket=TicketDraft(title="t", description="d", category="IT"))
     with pytest.raises(RuntimeError, match="confirm"):
         node(state)

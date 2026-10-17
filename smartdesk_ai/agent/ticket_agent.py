@@ -5,6 +5,7 @@ The handoff merges the "I don't know" notice, the ticket offer and the email req
 message. Giving an email counts as agreeing. If the email is already known the offer is a plain
 yes or no. A refusal ends the flow. Nothing here creates a ticket (FR-B2).
 """
+import difflib
 import re
 import time
 from collections.abc import Callable, Sequence
@@ -31,6 +32,7 @@ from smartdesk_ai.agent.state import (
     PendingOffer,
     Priority,
     TicketDraft,
+    TicketRef,
 )
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, FallbackChat
@@ -177,8 +179,9 @@ class TicketDeps(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
     drafter: Callable[[Sequence[str]], TicketDraft]
-    executor: Any  # ToolExecutor with create_ticket registered; every tool call goes through it
+    executor: Any  # ToolExecutor with create_ticket and get_tickets registered; every tool call goes through it
     parse_confirm: ConfirmParser
+    duplicate_threshold: float  # config: thresholds.duplicate_title
 
 
 CONFIRM_QUESTION = "Shall I go ahead and create this?"
@@ -201,13 +204,97 @@ def confirmation_summary(draft: TicketDraft, email: str) -> str:
 
 
 def make_t_present_node() -> Callable[[AgentState], dict[str, Any]]:
-    """Show the summary of the current draft. Reached after drafting and after every edit."""
+    """Show the summary of the current draft. Reached after drafting, after the duplicate question
+    and after every edit. Each approval question has its own allowance of unclear replies."""
 
     def t_present(state: AgentState) -> dict[str, Any]:
         reply = confirmation_summary(state.ticket, state.email or "")
-        return {"steps": state.steps + ["t_present"], "reply": reply, "messages": [AIMessage(reply)]}
+        return {"steps": state.steps + ["t_present"], "reply": reply, "messages": [AIMessage(reply)],
+                "gate_unclear": 0, "duplicate": None}
 
     return t_present
+
+
+# --- duplicate request check (FR-F4) -------------------------------------------------------------------
+
+DUPLICATE_ASK = "Do you want me to open another one?"
+DUPLICATE_REASK = "Sorry, I didn't catch that. Please reply yes to open another ticket, or no to keep the one you have."
+
+
+def _normal_title(title: str) -> str:
+    return " ".join(re.findall(r"[a-z0-9]+", title.lower()))
+
+
+def title_similarity(a: str, b: str) -> float:
+    """How alike two ticket titles are, 0 to 1, ignoring case and punctuation."""
+    return difflib.SequenceMatcher(None, _normal_title(a), _normal_title(b)).ratio()
+
+
+def find_duplicate(title: str, tickets: Sequence[Any], threshold: float) -> Any | None:
+    """The open ticket whose title is closest to `title`, if it is at least `threshold` alike."""
+    best, best_score = None, 0.0
+    for ticket in tickets:
+        if ticket.state != "open":
+            continue
+        score = title_similarity(title, ticket.title)
+        if score >= threshold and score > best_score:
+            best, best_score = ticket, score
+    return best
+
+
+def duplicate_question(ref: TicketRef) -> str:
+    return (
+        f"You already have an open ticket that looks the same: #{ref.number} \"{ref.title}\" "
+        f"({ref.status}), {ref.url}. {DUPLICATE_ASK}"
+    )
+
+
+def make_t_dup_check_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
+    def t_dup_check(state: AgentState) -> dict[str, Any]:
+        steps = state.steps + ["t_dup_check"]
+        result = deps.executor.execute("get_tickets", {"email": state.email}, agent="ticket_agent")
+        if result.outcome is not Outcome.SUCCESS:  # the request-ID protection still holds (FR-G6)
+            return {"steps": steps + ["dup_check_skipped"], "duplicate": None}
+        match = find_duplicate(state.ticket.title, result.data, deps.duplicate_threshold)
+        if match is None:
+            return {"steps": steps, "duplicate": None}
+        ref = TicketRef(number=match.number, title=match.title, status=match.status.value, url=match.url)
+        reply = duplicate_question(ref)
+        return {"steps": steps, "duplicate": ref, "reply": reply, "messages": [AIMessage(reply)]}
+
+    return t_dup_check
+
+
+def make_t_dup_ask_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
+    """The second interrupt: yes or no to opening another ticket. Same rules as the gate."""
+
+    def t_dup_ask(state: AgentState) -> dict[str, Any]:
+        reply = str(interrupt({"question": duplicate_question(state.duplicate)}))
+        decision = deps.parse_confirm(reply, state.ticket)
+        if decision.decision not in ("yes", "no"):  # an edit makes no sense here
+            decision = ConfirmDecision(decision="unclear")
+        unclear = state.gate_unclear + 1 if decision.decision == "unclear" else state.gate_unclear
+        return {"steps": state.steps + ["t_dup_ask"], "gate": decision, "gate_unclear": unclear}
+
+    return t_dup_ask
+
+
+def after_t_dup_ask(state: AgentState) -> str:
+    decision = state.gate.decision if state.gate else "unclear"
+    if decision == "yes":
+        return "t_present"
+    if decision == "no":
+        return "t_cancel"
+    return "t_cancel" if state.gate_unclear >= MAX_UNCLEAR else "t_dup_reask"
+
+
+def t_dup_reask(state: AgentState) -> dict[str, Any]:
+    reply = f"{DUPLICATE_REASK}\n\n{duplicate_question(state.duplicate)}"
+    return {"steps": state.steps + ["t_dup_reask"], "reply": reply, "messages": [AIMessage(reply)]}
+
+
+def after_t_dup_check(state: AgentState) -> str:
+    return "t_dup_ask" if state.duplicate is not None else "t_present"
 
 
 def make_t_draft_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
@@ -369,7 +456,7 @@ def _summary(state: AgentState) -> str:
 def _end_flow(state: AgentState) -> dict[str, Any]:
     """Leave the ticket flow: the draft and the pending offer are done with, the email stays."""
     return {
-        "ticket": None, "pending_offer": None, "awaiting": "none", "gate": None, "gate_unclear": 0,
+        "ticket": None, "pending_offer": None, "awaiting": "none", "gate": None, "gate_unclear": 0, "duplicate": None,
         "ticket_context_start": len(state.messages) + 1,  # past the reply this node is about to add
     }
 

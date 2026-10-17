@@ -85,6 +85,7 @@ thresholds:
   escalation: 0.45           # provisional; dev 0.89 KB answered / 0.69 gap escalated; re-check end to end in T6.4
   routing_confidence: 0.60   # provisional, tuned in T4.4 (FR-D8)
   semantic_cache_cutoff: 0.95  # provisional, tuned in T6.10 (high cut-off, cache rules)
+  duplicate_title: 0.80      # provisional; title similarity at which an open ticket counts as a duplicate (FR-F4)
   injection_heuristic: 0.30  # provisional, tuned in T5.4 (LLM classifier runs only above this, FR-H1)
 
 # Hybrid retrieval (SPEC section 2, FR-A6): top-k from each retriever, RRF constant,

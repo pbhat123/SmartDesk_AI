@@ -5,8 +5,9 @@ or fills in a number, link or status; if the response lacks one, the client rais
 """
 from collections.abc import Callable
 
-from smartdesk_ai.tickets import Ticket, TicketClient, TicketCreate
-from smartdesk_ai.tools.definitions import CreateTicketArgs
+from smartdesk_ai.tickets import Ticket, TicketClient, TicketCreate, find_tickets
+from smartdesk_ai.tickets.sqlite_map import TicketStore
+from smartdesk_ai.tools.definitions import CreateTicketArgs, GetTicketsArgs
 from smartdesk_ai.tools.registry import ToolRegistry
 
 
@@ -18,5 +19,15 @@ def make_create_ticket(client: TicketClient) -> Callable[[CreateTicketArgs], Tic
     return create_ticket
 
 
-def register_ticket_tools(registry: ToolRegistry, client: TicketClient) -> None:
+def make_get_tickets(client: TicketClient, store: TicketStore) -> Callable[[GetTicketsArgs], list[Ticket]]:
+    def get_tickets(args: GetTicketsArgs) -> list[Ticket]:
+        # The executor has checked the email before this runs (FR-G5).
+        return find_tickets(args.email, client, store)
+
+    return get_tickets
+
+
+def register_ticket_tools(registry: ToolRegistry, client: TicketClient, store: TicketStore | None = None) -> None:
     registry.register("create_ticket", make_create_ticket(client), recover=client.find_by_request_id)
+    if store is not None:
+        registry.register("get_tickets", make_get_tickets(client, store))

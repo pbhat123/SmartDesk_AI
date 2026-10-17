@@ -67,7 +67,7 @@ def mask_emails_in(text: str) -> str:
     return EMAIL.sub(lambda m: mask_email(m.group()), text)
 
 
-def _digits(text: str) -> str:
+def digits_of(text: str) -> str:
     return re.sub(r"\D", "", text)
 
 
@@ -89,14 +89,14 @@ def regex_spans(text: str) -> list[Span]:
         return all(match.end() <= s.start or match.start() >= s.end for s in found)
 
     for match in _CARD.finditer(text):
-        if 13 <= len(_digits(match.group())) <= 19 and _luhn_ok(_digits(match.group())) and free(match):
+        if 13 <= len(digits_of(match.group())) <= 19 and _luhn_ok(digits_of(match.group())) and free(match):
             found.append(Span(start=match.start(), end=match.end(), kind="CARD"))
     for pattern in (_AADHAAR, _PAN, _SSN):
         for match in pattern.finditer(text):
             if free(match):
                 found.append(Span(start=match.start(), end=match.end(), kind="ID"))
     for match in _PHONE.finditer(text):
-        if _MIN_PHONE_DIGITS <= len(_digits(match.group())) <= _MAX_PHONE_DIGITS and free(match):
+        if _MIN_PHONE_DIGITS <= len(digits_of(match.group())) <= _MAX_PHONE_DIGITS and free(match):
             found.append(Span(start=match.start(), end=match.end(), kind="PHONE"))
     return found
 
@@ -167,8 +167,9 @@ class PiiRedactor:
             return []
         return [Span(start=s, end=e, kind=PRESIDIO_KINDS[entity]) for entity, s, e in hits if entity in PRESIDIO_KINDS]
 
-    def _redact_segment(self, text: str) -> Redaction:
-        spans = _merge(regex_spans(text) + self._presidio_spans(text))
+    def _redact_segment(self, text: str, keep: frozenset[str]) -> Redaction:
+        spans = [s for s in _merge(regex_spans(text) + self._presidio_spans(text))
+                 if digits_of(text[s.start:s.end]) not in keep]
         out, cursor = [], 0
         for span in spans:
             out += [text[cursor:span.start], PLACEHOLDERS[span.kind]]
@@ -176,15 +177,16 @@ class PiiRedactor:
         out.append(text[cursor:])
         return Redaction(text="".join(out), kinds=[s.kind for s in spans])
 
-    def redact(self, text: str) -> Redaction:
-        """Redact everything but email addresses, which are cut out first and put back unchanged."""
+    def redact(self, text: str, keep_numbers: frozenset[str] = frozenset()) -> Redaction:
+        """Redact everything but email addresses, which are cut out first and put back unchanged.
+        `keep_numbers` are digit strings that are not personal (the company's own contact numbers)."""
         pieces: list[str] = []
         kinds: list[str] = []
         cursor = 0
         for match in EMAIL.finditer(text):
-            part = self._redact_segment(text[cursor:match.start()])
+            part = self._redact_segment(text[cursor:match.start()], keep_numbers)
             pieces += [part.text, match.group()]
             kinds += part.kinds
             cursor = match.end()
-        tail = self._redact_segment(text[cursor:])
+        tail = self._redact_segment(text[cursor:], keep_numbers)
         return Redaction(text="".join(pieces) + tail.text, kinds=kinds + tail.kinds)

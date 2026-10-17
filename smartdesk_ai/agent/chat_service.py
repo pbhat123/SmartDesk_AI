@@ -16,7 +16,9 @@ from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
 from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.guardrails.input_guard import build_input_guard
+from smartdesk_ai.guardrails.output_guard import build_output_guard
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
+from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +115,8 @@ def build_service(
     responder: Responder = stub_responder,
     responder_factory: Callable[[Settings], Responder] | None = None,
     input_guard: InputGuard | None = None,
+    output_guard: OutputGuard | None = None,
+    kb_dir: Path = DEFAULT_KB_DIR,
 ) -> ChatService:
     """Assemble the service. Missing keys or optional components never raise (FR-F7).
 
@@ -127,4 +131,7 @@ def build_service(
     if input_guard is None:  # every message passes the guard before the graph (FR-H1)
         input_guard = build_input_guard(
             settings, environ=environ, dotenv_path=dotenv_path, registry=registry)
-    return ChatService(settings, input_guard=input_guard, responder=responder)
+    if output_guard is None:  # every reply passes the guard before it is shown (FR-H2)
+        output_guard = build_output_guard(
+            settings, kb_dir, environ=environ, dotenv_path=dotenv_path, registry=registry)
+    return ChatService(settings, input_guard=input_guard, responder=responder, output_guard=output_guard)

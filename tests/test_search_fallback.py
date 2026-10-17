@@ -1,4 +1,4 @@
-"""T3.16: map first; if the map has nothing for an email, search issue bodies and backfill (FR-C11, FR-C2)."""
+"""T3.16 and follow-up: map rows and a search of issue bodies are merged, new numbers backfilled (FR-C11, FR-C2)."""
 import httpx
 import pytest
 from pydantic import SecretStr
@@ -49,22 +49,34 @@ def test_hand_created_issue_not_in_map_is_found_by_email_then_appears_in_map(sto
     assert store.numbers_for(SAM) == [made.number]  # backfilled
 
 
-def test_after_the_backfill_the_map_answers_and_search_is_not_used_again(store):
+def test_second_lookup_searches_again_but_does_not_duplicate(store):
     client = SpyClient()
-    by_hand(client, SAM)
+    made = by_hand(client, SAM)
     find_tickets(SAM, client, store)
-    find_tickets(SAM, client, store)
-    assert client.searches == [SAM]
+    again = find_tickets(SAM, client, store)
+    assert client.searches == [SAM, SAM]
+    assert [t.number for t in again] == [made.number]
+    assert store.numbers_for(SAM) == [made.number]
 
 
-def test_map_rows_win_and_no_search_runs(store):
+def test_email_with_map_rows_and_a_hand_made_issue_returns_both(store):
     client = SpyClient()
     mine = client.create(TicketCreate(title="VPN", description="d", category=Category.IT,
                                       email=SAM, request_id="req-1"))
     store.link_email(SAM, mine.number)
-    by_hand(client, SAM)  # also SAM's, but the spec only searches when the map is empty
+    hand = by_hand(client, SAM)
+    found = find_tickets(SAM, client, store)
+    assert [t.number for t in found] == [mine.number, hand.number]
+    assert store.numbers_for(SAM) == [mine.number, hand.number]  # the new number was backfilled
+
+
+def test_a_ticket_in_both_the_map_and_the_search_appears_once(store):
+    client = SpyClient()
+    mine = client.create(TicketCreate(title="VPN", description="d", category=Category.IT,
+                                      email=SAM, request_id="req-1"))
+    store.link_email(SAM, mine.number)
     assert [t.number for t in find_tickets(SAM, client, store)] == [mine.number]
-    assert client.searches == []
+    assert client.searches == [SAM]
 
 
 def test_every_hand_created_issue_is_backfilled(store):
@@ -104,12 +116,21 @@ def test_a_map_row_for_a_deleted_issue_is_skipped(store):
     assert [t.number for t in find_tickets(SAM, client, store)] == [kept.number]
 
 
-def test_search_failure_surfaces_as_a_transient_error_and_writes_nothing(store):
+def test_search_failure_with_an_empty_map_surfaces_as_a_transient_error(store):
     client = SpyClient()
     client.fail_searches = 1
     with pytest.raises(TransientTicketError):
         find_tickets(SAM, client, store)
     assert store.numbers_for(SAM) == []
+
+
+def test_search_failure_does_not_hide_tickets_the_map_already_knows(store):
+    client = SpyClient()
+    mine = client.create(TicketCreate(title="VPN", description="d", category=Category.IT,
+                                      email=SAM, request_id="req-1"))
+    store.link_email(SAM, mine.number)
+    client.fail_searches = 1
+    assert [t.number for t in find_tickets(SAM, client, store)] == [mine.number]
 
 
 # --- REST search over a mocked HTTP layer -----------------------------------------------

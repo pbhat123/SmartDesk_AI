@@ -12,6 +12,7 @@ from smartdesk_ai.tickets.schemas import (
     ALL_LABELS,
     Category,
     Priority,
+    TeamUpdate,
     Ticket,
     TicketConfigError,
     TicketCreate,
@@ -23,7 +24,7 @@ from smartdesk_ai.tickets.search_fallback import find_tickets
 from smartdesk_ai.tickets.status import TicketStatus, derive_status
 
 __all__ = [
-    "ALL_LABELS", "Category", "GitHubRestClient", "MockTicketClient", "Priority", "Ticket", "TicketClient",
+    "ALL_LABELS", "Category", "GitHubRestClient", "MockTicketClient", "Priority", "TeamUpdate", "Ticket", "TicketClient",
     "TicketConfigError", "TicketCreate", "TicketError", "TicketNotFound", "TicketStatus", "TransientTicketError",
     "build_issue", "create_ticket_client", "derive_status", "employee_email_of", "find_tickets", "request_id_of",
 ]

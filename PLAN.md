@@ -120,12 +120,12 @@ class TicketStatus(StrEnum): OPEN; IN_PROGRESS; RESOLVED; CLOSED
 class TicketClient(Protocol):
     def create(self, d: TicketCreate) -> Ticket
     def get(self, number: int) -> Ticket
-    def latest_update(self, number: int) -> str | None
+    def latest_update(self, number: int) -> TeamUpdate | None            # newest comment by OWNER/MEMBER/COLLABORATOR; text is untrusted, use .quoted()
     def find_by_request_id(self, request_id: str) -> Ticket | None   # uses list-issues, not search (flag F-03)
     def search_by_email(self, email: str) -> list[Ticket]
 class GitHubRestClient; class MockTicketClient                       # GitHubMcpClient only if time allows
 class TicketStore:  begin/complete/get (request log, FR-G6); link_email(email, number); numbers_for(email)   # built T3.7, T3.13
-def find_tickets(email, client, store) -> list[Ticket]               # map first, search fallback + backfill (FR-C11)
+def find_tickets(email, client, store) -> list[Ticket]               # map + search merged by issue number, new numbers backfilled (FR-C11)
 def derive_status(state: str, labels) -> TicketStatus                # FR-C6
 ```
 **As built (T3.10 to T3.16).** `TicketClient` also has `ensure_labels(labels)` (idempotent, FR-B11); `create_ticket_client(settings, env)` picks `MockTicketClient` or `GitHubRestClient` from `modes.tickets` (config only, no `TICKETS_MODE` env override; live mode without `GITHUB_TOKEN`/`TICKETS_REPO` raises `TicketConfigError`). `Ticket` is `{number, url, title, body, state, labels}` copied from the GitHub response, with `.status` and `.receipt()`; a response missing a field raises `TicketError`, never a filled-in ticket (FR-B13). Transient failures (network, timeout, 429, 5xx, rate-limit 403) raise `TransientTicketError`, a `ConnectionError` subclass, so the executor retries them without `tickets/` importing `tools/`. `MockTicketClient` can `fail_before_create`, `lose_responses`, `fail_searches`, and has `add_issue`/`add_comment` for hand-made data. The executor writes the email map row after a successful create; `tools/ticket_tools.py` registers `create_ticket` with `find_by_request_id` as its recovery check. `get_tickets` is not registered yet: it composes `find_tickets`, `derive_status` and `latest_update` in the status flow (Phase 4).

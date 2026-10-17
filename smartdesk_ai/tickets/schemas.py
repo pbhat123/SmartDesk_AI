@@ -78,6 +78,26 @@ ALL_LABELS: tuple[LabelSpec, ...] = (
 )
 
 
+# GitHub's author_association values that mark the support team. Anyone else can comment on a
+# public issue, so their text is never a team update (FR-C9).
+TEAM_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
+
+
+class TeamUpdate(BaseModel):
+    """The latest team comment. UNTRUSTED DATA: it is text from a public repo.
+
+    Show it to the model only through `quoted()`, as quoted material to relay, never as part of the
+    instructions (T4.x status flow; the T5.4 injection check should treat it as untrusted input).
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+
+    def quoted(self) -> str:
+        return "\n".join(f"> {line}" for line in self.text.splitlines() or [""])
+
+
 class TicketError(Exception):
     """A permanent failure: retrying the same call will not help."""
 

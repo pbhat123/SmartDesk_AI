@@ -13,7 +13,9 @@ from pydantic import BaseModel, SecretStr, ValidationError
 from smartdesk_ai.config.env import EnvSettings
 from smartdesk_ai.config.settings import GitHub, Settings
 from smartdesk_ai.tickets.schemas import (
+    TEAM_ASSOCIATIONS,
     LabelSpec,
+    TeamUpdate,
     Ticket,
     TicketConfigError,
     TicketCreate,
@@ -81,8 +83,11 @@ class TicketClient(Protocol):
         """Create the labels that do not exist yet; return the names created (FR-B11)."""
         ...
 
-    def latest_update(self, number: int) -> str | None:
-        """The text of the most recent comment on the issue, or None if there is none (FR-C9)."""
+    def latest_update(self, number: int) -> TeamUpdate | None:
+        """The newest comment by the repo's owner, a member or a collaborator, or None (FR-C9).
+
+        Comments from anyone else are ignored. The text is untrusted data: see `TeamUpdate`.
+        """
         ...
 
     def search_by_email(self, email: str) -> list[Ticket]:
@@ -108,7 +113,7 @@ class MockTicketClient:
         self.lose_responses = 0
         self._issues: dict[int, Ticket] = {}
         self._labels: set[str] = set()
-        self._comments: dict[int, list[str]] = {}
+        self._comments: dict[int, list[tuple[str, str]]] = {}
         self.fail_searches = 0
 
     def create(self, draft: TicketCreate) -> Ticket:
@@ -150,15 +155,15 @@ class MockTicketClient:
             raise TransientTicketError("mock: search unavailable")
         return [t for t in self._issues.values() if _same_email(employee_email_of(t.body), email)]
 
-    def add_comment(self, number: int, body: str) -> None:
-        """A team comment, as someone would add in GitHub. Mock-only helper for tests and seeding."""
+    def add_comment(self, number: int, body: str, *, author_association: str = "MEMBER") -> None:
+        """A comment, as someone would add in GitHub (a team member by default). Mock-only helper."""
         self.get(number)
-        self._comments.setdefault(number, []).append(body)
+        self._comments.setdefault(number, []).append((author_association, body))
 
-    def latest_update(self, number: int) -> str | None:
+    def latest_update(self, number: int) -> TeamUpdate | None:
         self.get(number)
-        comments = self._comments.get(number)
-        return comments[-1] if comments else None
+        team = [body for assoc, body in self._comments.get(number, []) if assoc in TEAM_ASSOCIATIONS]
+        return TeamUpdate(text=team[-1].strip()) if team else None
 
 
 # --- REST --------------------------------------------------------------------
@@ -254,7 +259,7 @@ class GitHubRestClient:
                     return ticket
         return None
 
-    def latest_update(self, number: int) -> str | None:
+    def latest_update(self, number: int) -> TeamUpdate | None:
         newest: tuple[str, str] | None = None
         for page in self._pages(f"/repos/{self._repo}/issues/{number}/comments", {}):
             for item in page:
@@ -264,9 +269,11 @@ class GitHubRestClient:
                     raise TicketError("malformed comment in the GitHub response") from None
                 if not isinstance(stamp, str) or not isinstance(body, str):
                     raise TicketError("malformed comment in the GitHub response")
+                if item.get("author_association") not in TEAM_ASSOCIATIONS:
+                    continue  # anyone can comment on a public issue; only the team's words count
                 if newest is None or stamp > newest[0]:  # ISO 8601 UTC stamps sort as text
                     newest = (stamp, body)
-        return newest[1].strip() if newest else None
+        return TeamUpdate(text=newest[1].strip()) if newest else None
 
     def search_by_email(self, email: str) -> list[Ticket]:
         # Search matches loosely, so every hit is checked against the real Employee line.

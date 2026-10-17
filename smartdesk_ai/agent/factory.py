@@ -36,9 +36,11 @@ from smartdesk_ai.llm.mock import (
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.guardrails.pii import PiiRedactor
+from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.compaction import Compactor, make_summarizer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.metrics import MetricsRecorder
+from smartdesk_ai.ops.runtime import Services
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
 from smartdesk_ai.rag.index import IndexNotBuilt, open_index
@@ -56,6 +58,7 @@ DEFAULT_DATA_DIR = ROOT / "data"  # gitignored
 DATA_DIR_ENV = "SMARTDESK_DATA_DIR"  # lets tests and deployments move every runtime file
 CHECKPOINT_DB = "checkpoints.db"
 TRACE_LOG = "trace.jsonl"
+COST_LOG = "cost.jsonl"
 TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab reads them
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
@@ -114,8 +117,12 @@ def build_responder(
         inject_b = _builder_for(MockInjectionModel())
         judge_b = _builder_for(MockGroundingModel())
         compact_b = _builder_for(MockCompactionModel())
+    # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
+    trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)))
+    cost = CostTracker(settings, priced=live, path=Path(data_dir) / COST_LOG)  # mock runs count tokens, price nothing
+    services = Services(cost=cost, trace=trace)
     try:
-        index = open_index(index_dir, embeddings)
+        index = open_index(index_dir, CostedEmbeddings(embeddings, cost, settings))
     except IndexNotBuilt:
         raise LiveModeUnavailable(
             f"the KB index is missing in {index_dir}. Build it with: python -m smartdesk_ai.rag.ingest"
@@ -139,8 +146,6 @@ def build_responder(
     # Team comments come from a public repo: scan them before anything downstream sees them (FR-C9).
     update_checker = make_injection_checker(settings, builder=inject_b)
     register_ticket_tools(tools, client, store, screen_update=lambda update: screen_team_update(update, update_checker))
-    # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
-    trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)))
     executor = ToolExecutor(
         tools, settings, request_store=store, trace=trace, metrics=MetricsRecorder(Path(data_dir) / TOOL_METRICS_LOG))
     ticket_deps = TicketDeps(
@@ -160,4 +165,6 @@ def build_responder(
         chitchat=make_chitchat(settings, builder=chat_b),
         compactor=Compactor(settings, make_summarizer(settings, builder=compact_b), overhead_tokens=prompt_tokens),
     )
-    return make_kb_responder(graph)
+    responder = make_kb_responder(graph)
+    responder.services = services  # build_service hands them to ChatService, which opens the request scopes
+    return responder

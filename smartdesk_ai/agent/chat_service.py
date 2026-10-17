@@ -6,6 +6,7 @@ real input guard (T5.5) and, through `responder_factory`, the graph (T4.x) using
 Raw user text is never logged here.
 """
 import logging
+import uuid
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,7 @@ from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.guardrails.input_guard import build_input_guard
 from smartdesk_ai.guardrails.output_guard import build_output_guard
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
+from smartdesk_ai.ops.runtime import RequestContext, Services, goal_from_steps, request_scope
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR
 
 logger = logging.getLogger(__name__)
@@ -71,11 +73,13 @@ class ChatService:
         input_guard: InputGuard = no_input_guard,
         responder: Responder = stub_responder,
         output_guard: OutputGuard = no_output_guard,
+        services: Services | None = None,
     ) -> None:
         self.settings = settings
         self._input_guard = input_guard
         self._responder = responder
         self._output_guard = output_guard
+        self._services = services or Services()
 
     def _edge_case(self, text: str) -> ChatReply | None:
         if not text.strip():
@@ -91,6 +95,15 @@ class ChatService:
         edge = self._edge_case(text)
         if edge is not None:  # cheap checks first: nothing reaches a guard, a model or a tool (FR-F4)
             return edge
+        ctx = RequestContext(session_id=session_id, request_id=uuid.uuid4().hex)
+        with request_scope(ctx, self._services):
+            reply = self._handle(session_id, text)
+        cost = self._services.finish_request(ctx, goal_from_steps(reply.debug.get("steps", [])))
+        if self._services.cost is not None:
+            reply.debug["cost_usd"] = cost
+        return reply
+
+    def _handle(self, session_id: str, text: str) -> ChatReply:
         decision = self._input_guard(text)
         debug: dict[str, Any] = {}
         if decision.blocked:
@@ -134,4 +147,5 @@ def build_service(
     if output_guard is None:  # every reply passes the guard before it is shown (FR-H2)
         output_guard = build_output_guard(
             settings, kb_dir, environ=environ, dotenv_path=dotenv_path, registry=registry)
-    return ChatService(settings, input_guard=input_guard, responder=responder, output_guard=output_guard)
+    return ChatService(settings, input_guard=input_guard, responder=responder, output_guard=output_guard,
+                       services=getattr(responder, "services", None))

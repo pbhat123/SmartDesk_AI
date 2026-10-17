@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.ops.metrics import MetricsRecorder, ToolCallRecord
+from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.ops.trace_log import TraceLog
 from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
 from smartdesk_ai.tickets.sqlite_map import TicketStore
@@ -107,6 +108,9 @@ class ToolExecutor:
                 attempt_outcomes=[o for _, o in attempt_ms],
                 total_latency_ms=(self._clock() - started) * 1000,
             ))
+        scope = current_scope()
+        if scope is not None:
+            scope[1].on_tool(scope[0], agent, name)
         if self._trace is not None:
             self._log_trace(name, raw_args, agent, result, attempt_ms, (self._clock() - started) * 1000)
         return result

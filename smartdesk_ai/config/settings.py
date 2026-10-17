@@ -154,6 +154,10 @@ class Thresholds(_Strict):
     duplicate_title: Unit  # title similarity at which an open ticket counts as a duplicate (FR-F4)
 
 
+class Guardrails(_Strict):
+    pii_min_score: Unit  # Presidio hits below this confidence are ignored (FR-H1)
+
+
 RetrievalStrategy = Literal["hybrid_rerank", "dense", "hybrid", "dense_rerank"]
 
 
@@ -208,6 +212,7 @@ class Settings(_Strict):
     status: StatusList
     input: InputLimits
     thresholds: Thresholds
+    guardrails: Guardrails
     retrieval: Retrieval
     chunking: Chunking
     prompts: dict[str, Annotated[int, Field(ge=1)]]

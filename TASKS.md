@@ -136,7 +136,7 @@ Exit: safety set leakage 0, breach 0; budget and rate-limit ACs; masked logs. Du
 
 | Done | ID | Task | FRs | Files | Acceptance test |
 |---|---|---|---|---|---|
-| [ ] | T5.1 | Presidio PII detection and redaction, plus regex fallback (email, phone, card, government ID) | H1, F7 (Presidio) | `sd/guardrails/pii.py`, `tests/test_pii.py` | Injected phone/card/ID redacted before LLM call, log, trace, ticket body; with Presidio forced to fail, regex still redacts a phone number and degraded mode is logged |
+| [x] | T5.1 | Presidio PII detection and redaction, plus regex fallback (email, phone, card, government ID) | H1, F7 (Presidio) | `sd/guardrails/pii.py`, `tests/test_pii.py` | Injected phone/card/ID redacted before LLM call, log, trace, ticket body; with Presidio forced to fail, regex still redacts a phone number and degraded mode is logged |
 | [ ] | T5.2 | Name reduction on user input only ("John Doe" to "John D."; single name unchanged) | H1, G11 | `sd/guardrails/names.py`, `tests/test_names.py` | Two full names both reduced in reply, log, trace, ticket body; KB text unaltered |
 | [ ] | T5.3 | Moderation (OpenAI Moderation API, mocked) on input | H1 | `sd/guardrails/input_guard.py`, `tests/test_input_moderation.py` | Toxic message gives polite refusal, reason logged, no tool call |
 | [ ] | T5.4 | Prompt-injection check: heuristic score, LLM classifier only above low threshold. Also cover team-update text from ticket comments (`TeamUpdate`, public repo, untrusted): scan it before it reaches the model and pass it only via `TeamUpdate.quoted()` | H1 | `sd/guardrails/injection.py`, `tests/test_injection.py` | High-score input triggers classifier and refusal; low-score input makes zero classifier calls |

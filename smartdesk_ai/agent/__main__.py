@@ -16,8 +16,12 @@ from smartdesk_ai.tickets.seed import EMAILS
 EXIT_WORDS = {"quit", "exit"}
 
 
-def format_debug(debug: dict[str, Any]) -> list[str]:
-    """Debug lines for one reply. Retrieved chunks are ranked with their scores, then the answer."""
+SAME_AS_REPLY = "(same as the reply above)"
+
+
+def format_debug(debug: dict[str, Any], reply: str | None = None) -> list[str]:
+    """Debug lines for one reply. Retrieved chunks are ranked with their scores, then the answer,
+    which is not printed a second time when the reply already contains it (FR-A12)."""
     lines = []
     if "chunks" in debug:
         chunks = debug["chunks"]
@@ -26,7 +30,9 @@ def format_debug(debug: dict[str, Any]) -> list[str]:
         for rank, chunk in enumerate(chunks, 1):
             lines.append(f"[debug] {rank}. {chunk['entry_id']} score={chunk['score']:.3f} {chunk['title']}")
     if "answer" in debug:
-        lines.append(f"[debug] answer: {debug['answer']}")
+        answer = debug["answer"]
+        shown = bool(answer) and reply is not None and answer in reply
+        lines.append(f"[debug] answer: {SAME_AS_REPLY if shown else answer}")
     lines.extend(f"[debug] {key}={value}" for key, value in debug.items() if key not in ("chunks", "answer"))
     return lines
 
@@ -86,7 +92,7 @@ def main(
         reply = service.handle(session_id, line)
         output(reply.text)
         if args.debug:
-            for debug_line in format_debug(reply.debug):
+            for debug_line in format_debug(reply.debug, reply.text):
                 output(debug_line)
     return 0
 

@@ -2,7 +2,7 @@
 Mock LLM; retrieval runs for real over the shipped KB with the hashing embedder."""
 from pathlib import Path
 
-from smartdesk_ai.agent.__main__ import format_debug, main
+from smartdesk_ai.agent.__main__ import SAME_AS_REPLY, format_debug, main
 from smartdesk_ai.agent.chat_service import ChatService, Turn
 from smartdesk_ai.agent.graph import make_kb_responder
 from tests.agent_helpers import build_test_graph
@@ -35,7 +35,7 @@ def test_debug_lists_chunks_with_scores_and_the_generated_answer(built_index_dir
         entry_id, score = line.split()[2], float(line.split("score=")[1].split()[0])
         assert "-" in entry_id and 0.0 <= score <= 1.0
     answers = [line for line in debug if line.startswith("[debug] answer:")]
-    assert answers and "Here is what the policy says." in answers[0]
+    assert answers and "Here is what the policy says." in "\n".join(out)
 
 
 def test_chunk_lines_are_ranked_and_show_the_entry_title(built_index_dir, settings, tmp_path):
@@ -54,7 +54,8 @@ def test_without_the_flag_no_debug_lines_are_printed(built_index_dir, settings, 
 def test_a_gap_question_shows_the_chunks_and_the_i_dont_know_answer(built_index_dir, settings, tmp_path):
     responder = responder_for(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM("insufficient"))
     out = run_cli(["--debug"], responder, lines=("Is there parking near the office?", "quit"))
-    assert any(line.startswith("[debug] answer:") and "don't know" in line for line in out)
+    assert any(line.startswith("[debug] answer:") for line in out)
+    assert any("don't know" in line for line in out if not line.startswith("[debug]"))
     assert any("score=" in line for line in out)
 
 
@@ -72,3 +73,21 @@ def test_service_merges_turn_debug_into_the_reply(settings):
 def test_format_debug_handles_missing_parts():
     assert format_debug({}) == []
     assert format_debug({"chunks": [], "answer": ""}) == ["[debug] no chunks retrieved", "[debug] answer: "]
+
+
+def test_the_answer_text_appears_exactly_once_in_debug_output(built_index_dir, settings, tmp_path):
+    answer = "Here is what the policy says."
+    out = run_cli(["--debug"], responder_for(built_index_dir, settings, tmp_path))
+    assert sum(line.count(answer) for line in out) == 1
+    assert [line for line in out if line.startswith("[debug] answer:")] == [f"[debug] answer: {SAME_AS_REPLY}"]
+
+
+def test_a_gap_answer_is_not_repeated_either(built_index_dir, settings, tmp_path):
+    responder = responder_for(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM("insufficient"))
+    out = run_cli(["--debug"], responder, lines=("Is there parking near the office?", "quit"))
+    assert sum(line.count("I don't know the answer to that") for line in out) == 1
+
+
+def test_format_debug_prints_a_differing_answer_in_full():
+    assert format_debug({"answer": "short"}, reply="something else") == ["[debug] answer: short"]
+    assert format_debug({"answer": "short"}, reply="a short one") == [f"[debug] answer: {SAME_AS_REPLY}"]

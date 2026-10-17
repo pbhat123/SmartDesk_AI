@@ -485,3 +485,9 @@ Cost is computed from the `config.yaml` price table: uncached input at the input
 - `agent/router.py`: `route_message` (classifier first; tool pick on error, invalid output or confidence below `thresholds.routing_confidence`), `make_tool_picker` (TOOL_SELECT, `bind_tools` with the three schemas), scope rules (confident `out_of_scope` deflects; unsure scope goes to the KB path).
 - Prompts added: `orchestrator_v1.md`, `tool_select_v1.md`.
 - Placeholder wording: `CLARIFYING_QUESTION` and `DEFLECTION_REPLY` are fixed strings in `router.py` until T4.27 moves them to the CHITCHAT task.
+
+### 13.2 T4.6 to T4.11 (KB path, mock only)
+- `agent/answer.py`: `answer_from_context` (WORKER_ANSWER, JSON validated by `AnswerReply`, no model call when there are no chunks), citations filtered to retrieved ids (an answer with none is not shown), `should_escalate` (any one signal). `llm/structured.py` holds the shared reply parser; the live client uses structured-output mode, the mock path plain JSON.
+- `agent/graph.py`: `kb_search` (search_kb through the executor, then answer) -> `kb_retry` (one whole-KB search, only if the first was domain-filtered) -> `offer` (reachable only from the two KB nodes and guarded by `KBFirstViolation`) or `reply`. `steps` is the per-turn trace. `run_turn` and `make_kb_responder` are what the CLI uses.
+- `agent/ticket_agent.py`: `escalation_offer` (merged offer and email request, or a plain yes/no when the email is known) and `handle_offer_reply` (email agrees, yes, no ends the flow, anything else is left to the router). Ticket collection starts at T4.12.
+- `--debug` prints ranked chunks with scores, then the answer. The CLI still defaults to the stub responder; wiring the live graph needs the real index and OpenAI keys and is left for the full graph (T4.29).

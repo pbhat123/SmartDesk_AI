@@ -83,3 +83,47 @@ class MockRoutingModel:
         if _HR.search(text):
             return "kb_query", "HR"
         return "kb_query", "MISC"
+
+
+_DRAFT_IT = re.compile(
+    r"\b(password|vpn|laptop|mfa|tableau|screen|outlook|wi-?fi|phishing|dock|headset|software|install\w*|"
+    r"monitor|keyboard|printer|mouse|slack|login|account|computer|phone)\b", re.I)
+_DRAFT_HR = re.compile(
+    r"\b(leave|payslip|payroll|salary|policy|tax|first day|buddy|insurance|probation|colleague|stock|"
+    r"performance review|claim|conflict of interest|onboarding|paternity|maternity|appraisal|expenses?|benefits?)\b",
+    re.I)
+_CRITICAL = re.compile(r"\b(nobody can|no one can|everyone|all of us|security|stolen|phishing|breach)\b", re.I)
+_HIGH = re.compile(r"\b(cannot|can't|can not|unable to|locked out|blocked)\b.*\b(work|login|log in|access)\b|locked out",
+                   re.I)
+_MEDIUM = re.compile(r"\b(slow|keeps|dropping|flicker\w*|intermittent|sometimes)\b", re.I)
+
+
+def infer_mock_category(text: str) -> str:
+    if _DRAFT_IT.search(text):
+        return "IT"
+    return "HR" if _DRAFT_HR.search(text) else "MISC"
+
+
+def infer_mock_priority(text: str) -> str | None:
+    """Impact words only, as the prompt asks: never a question, and None when there is no sign."""
+    for pattern, level in ((_CRITICAL, "critical"), (_HIGH, "high"), (_MEDIUM, "medium")):
+        if pattern.search(text):
+            return level
+    return None
+
+
+class MockDraftModel:
+    """Drafts a ticket from the employee's statements using only their own words."""
+
+    def invoke(self, messages):
+        human = str(messages[-1].content)
+        statements = [line[2:] for line in human.splitlines() if line.startswith("- ")]
+        joined = " ".join(statements)
+        title = " ".join(statements[0].split()).rstrip("?.!") if statements else "Support request"
+        reply = {
+            "title": title[:80],
+            "description": "\n".join(statements) or title,
+            "category": infer_mock_category(joined),
+            "priority": infer_mock_priority(joined),
+        }
+        return SimpleNamespace(content=json.dumps(reply))

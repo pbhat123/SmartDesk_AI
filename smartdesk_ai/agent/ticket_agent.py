@@ -210,6 +210,16 @@ class DraftReply(BaseModel):
     category: Category
     priority: Priority | None = None
 
+    @field_validator("category", mode="before")
+    @classmethod
+    def _category_case(cls, value: Any) -> Any:
+        return value.strip().upper() if isinstance(value, str) else value
+
+    @field_validator("priority", mode="before")
+    @classmethod
+    def _priority_case(cls, value: Any) -> Any:
+        return value.strip().lower() if isinstance(value, str) else value
+
     @field_validator("title")
     @classmethod
     def _one_line(cls, value: str) -> str:

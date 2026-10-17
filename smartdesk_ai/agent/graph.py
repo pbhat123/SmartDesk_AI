@@ -45,6 +45,7 @@ from smartdesk_ai.agent.ticket_agent import (
     handle_offer_reply,
     make_t_collect_node,
     make_t_draft_node,
+    make_t_present_node,
 )
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
@@ -280,6 +281,11 @@ def after_t_collect(state: AgentState) -> str:
     return "t_draft" if state.steps[-1] == "t_collect" and state.reply == "" else END
 
 
+def after_t_draft(state: AgentState) -> str:
+    """A drafting outage has already replied; otherwise show the summary."""
+    return END if state.reply else "t_present"
+
+
 def build_kb_graph(
     deps: KBDeps, checkpointer: Any = None, *, route: Router | None = None, tickets: TicketDeps | None = None
 ):
@@ -315,8 +321,10 @@ def build_kb_graph(
         builder.add_edge("t_collect", END)
     else:
         builder.add_node("t_draft", make_t_draft_node(tickets))
+        builder.add_node("t_present", make_t_present_node())
         builder.add_conditional_edges("t_collect", after_t_collect, ["t_draft", END])
-        builder.add_edge("t_draft", END)
+        builder.add_conditional_edges("t_draft", after_t_draft, ["t_present", END])
+        builder.add_edge("t_present", END)
     return builder.compile(checkpointer=checkpointer)
 
 

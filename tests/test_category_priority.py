@@ -120,8 +120,11 @@ def test_no_message_in_the_offer_to_draft_flow_asks_about_priority(built_index_d
     out = run_turn(graph, tid, "priya.k@smartdesk.example")
     assistant = [m.content.lower() for m in out.messages if m.type == "ai"]
     assert out.ticket is not None and out.ticket.priority == "high"
-    assert assistant and not any("priority" in text for text in assistant)
-    assert not any("?" in text and "urgent" in text for text in assistant)
+    assert assistant
+    for text in assistant:  # priority may appear only as the summary's own labelled line, never in a question
+        for line in text.splitlines():
+            if "priority" in line:
+                assert line.startswith("priority:") and "?" not in line
 
 
 def test_make_drafter_passes_the_inferred_values_through(settings):

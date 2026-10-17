@@ -162,7 +162,33 @@ class TicketDeps(BaseModel):
     drafter: Callable[[Sequence[str]], TicketDraft]
 
 
-DRAFT_READY_REPLY = "I've put together a draft of your ticket."
+CONFIRM_QUESTION = "Shall I go ahead and create this?"
+_PRIORITY_WORDS = {"low": "Low", "medium": "Medium", "high": "High", "critical": "Critical"}
+
+
+def confirmation_summary(draft: TicketDraft, email: str) -> str:
+    """The summary shown at the approval gate: every field, then an explicit question (FR-B8)."""
+    lines = [
+        "Here is the ticket I'm ready to create:",
+        "",
+        f"Title: {draft.title}",
+        f"Description: {draft.description}",
+        f"Category: {draft.category}",
+    ]
+    if draft.priority is not None:
+        lines.append(f"Priority: {_PRIORITY_WORDS[draft.priority]}")
+    lines += [f"Email: {email}", "", CONFIRM_QUESTION]
+    return "\n".join(lines)
+
+
+def make_t_present_node() -> Callable[[AgentState], dict[str, Any]]:
+    """Show the summary of the current draft. Reached after drafting and after every edit."""
+
+    def t_present(state: AgentState) -> dict[str, Any]:
+        reply = confirmation_summary(state.ticket, state.email or "")
+        return {"steps": state.steps + ["t_present"], "reply": reply, "messages": [AIMessage(reply)]}
+
+    return t_present
 
 
 def make_t_draft_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
@@ -173,8 +199,7 @@ def make_t_draft_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]
         except DraftUnavailable as outage:  # nothing is created; the employee can try again later
             return {"steps": steps + ["llm_unavailable"], "reply": outage.message,
                     "messages": [AIMessage(outage.message)], "awaiting": "none", "pending_offer": None}
-        return {"steps": steps, "ticket": draft, "awaiting": "none", "reply": DRAFT_READY_REPLY,
-                "messages": [AIMessage(DRAFT_READY_REPLY)]}
+        return {"steps": steps, "ticket": draft, "awaiting": "none"}
 
     return t_draft
 

@@ -127,3 +127,37 @@ class MockDraftModel:
             "priority": infer_mock_priority(joined),
         }
         return SimpleNamespace(content=json.dumps(reply))
+
+
+_CONFIRM_YES = re.compile(r"^(yes|yeah|yep|sure|ok(ay)?|go ahead|please do|looks good|that'?s right)\b", re.I)
+_CONFIRM_NO = re.compile(r"^(no|nope|cancel|never mind|don'?t|do not)\b", re.I)
+_CONFIRM_PRIORITY = re.compile(
+    r"\b(?:priority(?: to| is)?|make it|set it to)\s+(low|medium|high|critical)\b|\b(low|medium|high|critical) priority\b", re.I)
+_CONFIRM_TITLE = re.compile(r"\b(?:change|set|rename)\b.*\btitle (?:to|as)\s+(.+)$", re.I)
+_CONFIRM_CATEGORY = re.compile(r"\b(?:category (?:to |is )?|this is for |it'?s an? )(it|hr|misc)\b", re.I)
+_CONFIRM_DETAILS = re.compile(r"^(?:also|additionally|and also|add)[:,]?\s+(.+)$", re.I)
+
+
+class MockConfirmModel:
+    """Keyword stand-in for the CONFIRM_PARSE task: yes, no, a few kinds of edit, else unclear."""
+
+    def invoke(self, messages):
+        human = str(messages[-1].content)
+        text = human.split("Employee reply:", 1)[1].strip()
+        reply: dict[str, str | None] = {"decision": "unclear"}
+        edit: dict[str, str] = {}
+        if (match := _CONFIRM_PRIORITY.search(text)):
+            edit["priority"] = (match.group(1) or match.group(2)).lower()
+        if (match := _CONFIRM_TITLE.search(text)):
+            edit["title"] = match.group(1).strip()
+        if (match := _CONFIRM_CATEGORY.search(text)):
+            edit["category"] = match.group(1).upper()
+        if (match := _CONFIRM_DETAILS.match(text)):
+            edit["details"] = match.group(1).strip()
+        if edit:
+            reply = {"decision": "edit", **edit}
+        elif _CONFIRM_NO.match(text):
+            reply = {"decision": "no"}
+        elif _CONFIRM_YES.match(text):
+            reply = {"decision": "yes"}
+        return SimpleNamespace(content=json.dumps(reply))

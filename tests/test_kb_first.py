@@ -16,7 +16,7 @@ def test_a_ticket_offer_is_always_preceded_by_a_search_kb_call(built_index_dir, 
     offers = 0
     for gap in GAPS:
         state = run_turn(graph, new_thread_id(), gap.question)
-        assert state.pending_offer is not None and state.awaiting == "offer_reply", gap.id
+        assert state.pending_offer is not None and state.awaiting == "email", gap.id  # the offer asks for the email
         assert state.steps.index("search_kb") < state.steps.index("offer"), gap.id
         offers += 1
     assert offers == len(GAPS) and len(spy.calls) >= len(GAPS)

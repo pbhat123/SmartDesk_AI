@@ -125,7 +125,8 @@ def offer_reply_node(state: AgentState) -> dict[str, Any]:
     if out.kind == "declined":
         update["ticket_context_start"] = len(state.messages)
     if out.kind == "agreed":  # the next node speaks; this reply would only be a second message
-        return {**update, "steps": steps}
+        agreed = IntentResult(intent="create_ticket", confidence=1.0)
+        return {**update, "intent": agreed, "steps": steps}
     return {**update, "steps": steps, "reply": out.reply, "messages": [AIMessage(out.reply)]}
 
 
@@ -272,7 +273,8 @@ def offer_node(state: AgentState) -> dict[str, Any]:
     return {
         "steps": state.steps + ["offer"],
         "pending_offer": PendingOffer(unanswered_text=question),
-        "awaiting": "offer_reply",
+        # The merged offer asks for the email when it is unknown (FR-A16); both states read the same replies.
+        "awaiting": "offer_reply" if state.email else "email",
         "ticket_context_start": _last_human_index(state),  # the ticket covers the unanswered question on
         "reply": reply,
         "messages": [AIMessage(reply)],

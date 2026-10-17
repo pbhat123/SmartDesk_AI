@@ -95,7 +95,7 @@ _DRAFT_HR = re.compile(
 _CRITICAL = re.compile(r"\b(nobody can|no one can|everyone|all of us|security|stolen|phishing|breach)\b", re.I)
 _HIGH = re.compile(r"\b(cannot|can't|can not|unable to|locked out|blocked)\b.*\b(work|login|log in|access)\b|locked out",
                    re.I)
-_MEDIUM = re.compile(r"\b(slow|keeps|dropping|flicker\w*|intermittent|sometimes)\b", re.I)
+_MEDIUM = re.compile(r"\b(slow|keeps|dropping|flicker\w*|intermittent|sometimes|broken|failing|not working)\b", re.I)
 
 
 def infer_mock_category(text: str) -> str:

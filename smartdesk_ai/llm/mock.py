@@ -48,12 +48,6 @@ _SMALLTALK = re.compile(r"^(hi|hello|hey|thanks|thank you|bye|goodbye|good morni
 _OUT_OF_SCOPE = re.compile(r"\b(weather|recipe|cricket|world cup|poem|joke|python function)\b", re.I)
 _AMBIGUOUS = re.compile(r"^(it'?s not working|i need (some )?help|i have a question|can you sort that out)", re.I)
 _ORDINAL = re.compile(r"\b(first|second|third|fourth|last|one|\d+)\b", re.I)
-_IT = re.compile(
-    r"\b(password|vpn|laptop|monitor|wi-?fi|mfa|software|install|keyboard|printer|slack|screen|outlook|"
-    r"computer|machine|login|account locked|tableau)\b", re.I)
-_HR = re.compile(
-    r"\b(leave|sick|payroll|salary|payslip|pay|paid|expenses?|reimburse\w*|benefits?|stock|probation|"
-    r"wfh|work from home|appraisal|review|resign\w*|sabbatical|holiday|office on|travel)\b", re.I)
 _YES_WORDS = re.compile(r"^(yes|yeah|yep|sure|ok|okay|please do|go ahead)\b", re.I)
 
 
@@ -93,19 +87,16 @@ class MockRoutingModel:
             return "smalltalk", None
         if _OUT_OF_SCOPE.search(text):
             return "out_of_scope", None
-        if _IT.search(text):
-            return "kb_query", "IT"
-        if _HR.search(text):
-            return "kb_query", "HR"
-        return "kb_query", "MISC"
+        return "kb_query", infer_mock_category(text)  # the same rules as the drafter: one domain view (FR-D7)
 
 
 _DRAFT_IT = re.compile(
     r"\b(password|vpn|laptop|mfa|tableau|screen|outlook|wi-?fi|phishing|dock|headset|software|install\w*|"
-    r"monitor|keyboard|printer|mouse|slack|login|account|computer|phone)\b", re.I)
+    r"monitor|keyboard|printer|mouse|slack|login|account|computer|machine|phone)\b", re.I)
 _DRAFT_HR = re.compile(
     r"\b(leave|payslip|payroll|salary|policy|tax|first day|buddy|insurance|probation|colleague|stock|"
-    r"performance review|claim|conflict of interest|onboarding|paternity|maternity|appraisal|expenses?|benefits?)\b",
+    r"performance review|claim|conflict of interest|onboarding|paternity|maternity|appraisal|expenses?|benefits?|"
+    r"sick|pay|paid|reimburse\w*|wfh|work from home|review|resign\w*|sabbatical|holiday|travel|office on)\b",
     re.I)
 _CRITICAL = re.compile(r"\b(nobody can|no one can|everyone|all of us|security|stolen|phishing|breach)\b", re.I)
 _HIGH = re.compile(r"\b(cannot|can't|can not|unable to|locked out|blocked)\b.*\b(work|login|log in|access)\b|locked out",

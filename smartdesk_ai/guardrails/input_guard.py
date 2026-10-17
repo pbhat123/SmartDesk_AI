@@ -1,6 +1,6 @@
 """The input guard (FR-H1): runs on every user message before the agent graph.
 
-Order: PII redaction (email kept), name reduction, Moderation. Each later step sees only the redacted
+Order: PII redaction (email kept), name reduction, Moderation, injection check. Each later step sees only the redacted
 text, so raw PII never reaches the Moderation API, a log or a trace. A blocked message gets a polite
 refusal and the reason is logged; the text is never logged. There is no topic filter here: that is the
 orchestrator's `out_of_scope` intent (FR-D9).
@@ -8,6 +8,8 @@ orchestrator's `out_of_scope` intent (FR-D9).
 import logging
 
 from smartdesk_ai.guardrails.decision import GuardDecision
+from smartdesk_ai.guardrails.injection import REFUSAL as INJECTION_REFUSAL
+from smartdesk_ai.guardrails.injection import InjectionChecker
 from smartdesk_ai.guardrails.moderation import Moderator
 from smartdesk_ai.guardrails.names import NameReducer
 from smartdesk_ai.guardrails.pii import PiiRedactor, mask_emails_in
@@ -21,10 +23,13 @@ MODERATION_REFUSAL = (
 
 
 class InputGuard:
-    def __init__(self, pii: PiiRedactor, names: NameReducer, moderator: Moderator) -> None:
+    def __init__(
+        self, pii: PiiRedactor, names: NameReducer, moderator: Moderator, injection: InjectionChecker | None = None
+    ) -> None:
         self._pii = pii
         self._names = names
         self._moderator = moderator
+        self._injection = injection
 
     def __call__(self, text: str) -> GuardDecision:
         redacted = self._pii.redact(text)
@@ -35,6 +40,10 @@ class InputGuard:
         reason = self._moderation_reason(safe)
         if reason is not None:
             return self._block(safe, MODERATION_REFUSAL, reason)
+        if self._injection is not None:
+            verdict = self._injection.check(mask_emails_in(safe))
+            if verdict.injected:
+                return self._block(safe, INJECTION_REFUSAL, verdict.reason or "injection")
         return GuardDecision(text=safe)
 
     def _moderation_reason(self, safe_text: str) -> str | None:

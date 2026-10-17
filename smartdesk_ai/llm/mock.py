@@ -185,3 +185,19 @@ class MockConfirmModel:
         elif _CONFIRM_YES.match(text):
             reply = {"decision": "yes"}
         return SimpleNamespace(content=json.dumps(reply))
+
+
+_MOCK_INJECTION = re.compile(
+    r"\b(?:ignore|disregard|forget)\b.*\b(?:instructions|rules|policies|knowledge base)\b|system prompt|developer mode|"
+    r"above this message|^\s*\[system\]", re.I | re.S)
+_MOCK_INJECTION_BENIGN = re.compile(r"\b(?:laptop|screen|boot|error)\b", re.I)
+
+
+class MockInjectionModel:
+    """Stand-in for the INJECTION_CLASSIFIER task: a text that tells the assistant to drop its rules is an
+    injection, unless it only quotes such a phrase while describing a device problem."""
+
+    def invoke(self, messages):
+        text = str(messages[-1].content).split("<<<TEXT\n", 1)[-1].rsplit("\nTEXT>>>", 1)[0]
+        hit = bool(_MOCK_INJECTION.search(text)) and not _MOCK_INJECTION_BENIGN.search(text)
+        return SimpleNamespace(content=json.dumps({"injection": hit, "reason": "mock rule" if hit else None}))

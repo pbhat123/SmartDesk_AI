@@ -21,6 +21,9 @@ def make_create_ticket(client: TicketClient) -> Callable[[CreateTicketArgs], Tic
     return create_ticket
 
 
+UpdateScreen = Callable[[TeamUpdate | None], TeamUpdate | None]
+
+
 class TicketsResult(BaseModel):
     """The employee's tickets as GitHub reports them, in number order (FR-C2). `latest_update` is the
     newest team comment, fetched live, and is set only when exactly one ticket is returned.
@@ -32,7 +35,9 @@ class TicketsResult(BaseModel):
     latest_update: TeamUpdate | None = None
 
 
-def make_get_tickets(client: TicketClient, store: TicketStore) -> Callable[[GetTicketsArgs], TicketsResult]:
+def make_get_tickets(
+    client: TicketClient, store: TicketStore, screen_update: UpdateScreen | None = None
+) -> Callable[[GetTicketsArgs], TicketsResult]:
     def get_tickets(args: GetTicketsArgs) -> TicketsResult:
         # The executor has checked the email before this runs (FR-G5).
         found = find_tickets(args.email, client, store)
@@ -44,12 +49,17 @@ def make_get_tickets(client: TicketClient, store: TicketStore) -> Callable[[GetT
                 update = client.latest_update(found[0].number)
             except TicketNotFound:
                 update = None
+        if screen_update is not None:  # public-repo text is scanned before anything downstream sees it (FR-C9)
+            update = screen_update(update)
         return TicketsResult(tickets=found, latest_update=update)
 
     return get_tickets
 
 
-def register_ticket_tools(registry: ToolRegistry, client: TicketClient, store: TicketStore | None = None) -> None:
+def register_ticket_tools(
+    registry: ToolRegistry, client: TicketClient, store: TicketStore | None = None,
+    screen_update: UpdateScreen | None = None,
+) -> None:
     registry.register("create_ticket", make_create_ticket(client), recover=client.find_by_request_id)
     if store is not None:
-        registry.register("get_tickets", make_get_tickets(client, store))
+        registry.register("get_tickets", make_get_tickets(client, store, screen_update))

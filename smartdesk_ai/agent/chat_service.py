@@ -1,8 +1,8 @@
 """Per-turn wrapper around the agent (PLAN section 5).
 
-Skeleton for T0.6: the guards are no-ops and the responder is a stub, so the app
-starts and answers with no keys, no Redis and no tracing (FR-F6, FR-F7). Later
-tasks plug in the real guards (T5.x) and the graph (T4.x) through the same hooks.
+Skeleton for T0.6: the guards default to no-ops and the responder to a stub, so the app
+starts and answers with no keys, no Redis and no tracing (FR-F6, FR-F7). `build_service` plugs in the
+real input guard (T5.5) and, through `responder_factory`, the graph (T4.x) using the same hooks.
 Raw user text is never logged here.
 """
 import logging
@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
 from smartdesk_ai.guardrails.decision import GuardDecision
+from smartdesk_ai.guardrails.input_guard import build_input_guard
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 
 logger = logging.getLogger(__name__)
@@ -111,14 +112,19 @@ def build_service(
     config_path: Path = DEFAULT_CONFIG,
     responder: Responder = stub_responder,
     responder_factory: Callable[[Settings], Responder] | None = None,
+    input_guard: InputGuard | None = None,
 ) -> ChatService:
     """Assemble the service. Missing keys or optional components never raise (FR-F7).
 
     Only an invalid config.yaml is fatal, since nothing can run without it.
     """
     env = load_env(environ=environ, dotenv_path=dotenv_path)
-    (registry if registry is not None else get_registry()).register_env(env)
+    registry = registry if registry is not None else get_registry()
+    registry.register_env(env)
     settings = load_settings(config_path)
     if responder_factory is not None:
         responder = responder_factory(settings)
-    return ChatService(settings, responder=responder)
+    if input_guard is None:  # every message passes the guard before the graph (FR-H1)
+        input_guard = build_input_guard(
+            settings, environ=environ, dotenv_path=dotenv_path, registry=registry)
+    return ChatService(settings, input_guard=input_guard, responder=responder)

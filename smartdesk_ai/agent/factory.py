@@ -20,8 +20,9 @@ from smartdesk_ai.agent.state import STATE_MODELS
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import Settings
+from smartdesk_ai.guardrails.injection import make_injection_checker, screen_team_update
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
-from smartdesk_ai.llm.mock import MockAnswerModel, MockChitchatModel, MockConfirmModel, MockDraftModel, MockRoutingModel
+from smartdesk_ai.llm.mock import MockAnswerModel, MockInjectionModel, MockChitchatModel, MockConfirmModel, MockDraftModel, MockRoutingModel
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
@@ -81,7 +82,7 @@ def build_responder(
             )
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
-        answer_b = route_b = draft_b = confirm_b = chat_b = openai_builder
+        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = openai_builder
     else:
         embeddings = HashingEmbeddings()
         index_dir = Path(data_dir) / "index_mock"
@@ -92,6 +93,7 @@ def build_responder(
         answer_b, route_b = _builder_for(MockAnswerModel()), _builder_for(MockRoutingModel())
         draft_b, confirm_b = _builder_for(MockDraftModel()), _builder_for(MockConfirmModel())
         chat_b = _builder_for(MockChitchatModel())
+        inject_b = _builder_for(MockInjectionModel())
     try:
         index = open_index(index_dir, embeddings)
     except IndexNotBuilt:
@@ -113,7 +115,9 @@ def build_responder(
         seed(client, store)
     tools = ToolRegistry()
     tools.register("search_kb", make_search_kb(index, search_settings, reranker=reranker, health=registry))
-    register_ticket_tools(tools, client, store)
+    # Team comments come from a public repo: scan them before anything downstream sees them (FR-C9).
+    update_checker = make_injection_checker(settings, builder=inject_b)
+    register_ticket_tools(tools, client, store, screen_update=lambda update: screen_team_update(update, update_checker))
     executor = ToolExecutor(tools, settings, request_store=store)
     ticket_deps = TicketDeps(
         drafter=make_drafter(settings, builder=draft_b),

@@ -151,6 +151,8 @@ class OutputGuard: grounding(answer, chunks) -> GroundingVerdict; finalize(reply
 ```
 Files: `sd/guardrails/pii.py` (`PiiRedactor`, `mask_email`), `names.py` (`reduce_names`), `injection.py`, `input_guard.py` (`InputGuard`), `output_guard.py` (`OutputGuard`; the grounding judge itself runs inside `agent/answer.py`, FR-H2).
 
+Built in T5.1 to T5.5: `names.py` exposes `NameReducer.reduce`; `moderation.py` (Moderator interface, `OpenAIModerator`, offline `KeywordModerator`) and `decision.py` (`GuardDecision`) were added; `injection.py` also holds `screen_team_update`, wired into the `get_tickets` tool through `register_ticket_tools(screen_update=...)`. `build_service` builds the guard by default (`build_input_guard`). Presidio is loaded once per process, never auto-downloads its spaCy model, and Aadhaar and PAN are regex-only.
+
 ### 3.7 `ops/`
 `budget.py` (`BudgetGuard.level() -> 0|1|2`, `record(cost)`; persisted per day in `app.db`), `cost.py` (price table, per-request/task/agent/tier/step cost), `rate_limit.py` (`RateLimiter.check(kind, key) -> Allowed | Denied(wait_minutes)`), `trace_log.py` (local sink + optional Langfuse/LangSmith sinks, masked), `tracing.py` (optional Langfuse/LangSmith sinks with masking), `metrics.py`, `hitl_counters.py`, `drift.py`, `compaction.py` (`maybe_compact(state) -> StatePatch`), `cache.py` (`AnswerCache` Protocol; `RedisCache`, `InMemoryCache`; `get/put/clear`), `health.py` (`register_degraded(component, reason)`).
 

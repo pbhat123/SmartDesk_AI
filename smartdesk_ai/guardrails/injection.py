@@ -130,3 +130,7 @@ def screen_team_update(update: TeamUpdate | None, checker: InjectionChecker) -> 
         return update
     logger.warning("team update withheld: reason=%s", verdict.reason)
     return TeamUpdate(text=UPDATE_WITHHELD)
+
+
+def make_injection_checker(settings: Settings, *, builder: ModelBuilder = openai_builder) -> InjectionChecker:
+    return InjectionChecker(settings.thresholds.injection_heuristic, make_injection_classifier(settings, builder=builder))

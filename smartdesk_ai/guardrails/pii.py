@@ -8,6 +8,7 @@ mode is recorded (FR-F7). Names are handled in `names.py`.
 """
 import logging
 import re
+from functools import lru_cache
 from collections.abc import Callable, Sequence
 from typing import Any, Protocol
 
@@ -23,14 +24,13 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 PLACEHOLDERS = {"PHONE": "[PHONE]", "CARD": "[CARD]", "ID": "[ID]"}
 
 # Presidio entity name -> our kind. EMAIL_ADDRESS is left out on purpose: email is an allowed field.
+# Aadhaar and PAN are left to the regex checks: the default English analyzer has no recognizer for them.
 PRESIDIO_KINDS = {
     "PHONE_NUMBER": "PHONE",
     "CREDIT_CARD": "CARD",
     "US_SSN": "ID",
     "US_PASSPORT": "ID",
     "US_DRIVER_LICENSE": "ID",
-    "IN_AADHAAR": "ID",
-    "IN_PAN": "ID",
     "IBAN_CODE": "ID",
 }
 
@@ -116,6 +116,14 @@ class PresidioEngine:
         return [(r.entity_type, r.start, r.end) for r in results]
 
 
+@lru_cache(maxsize=1)
+def _analyzer_engine() -> Any:
+    from presidio_analyzer import AnalyzerEngine
+
+    logging.getLogger("presidio-analyzer").setLevel(logging.ERROR)  # it warns about every unused language recognizer
+    return AnalyzerEngine()  # loads the spaCy model once per process
+
+
 def load_presidio_engine() -> PresidioEngine:
     """Build the real analyzer. Raises if Presidio or the spaCy model is missing; it never downloads
     the model itself (Presidio would otherwise fetch it silently)."""
@@ -123,9 +131,7 @@ def load_presidio_engine() -> PresidioEngine:
 
     if not spacy.util.is_package(SPACY_MODEL):
         raise RuntimeError(f"spaCy model {SPACY_MODEL} is not installed (python -m spacy download {SPACY_MODEL})")
-    from presidio_analyzer import AnalyzerEngine
-
-    return PresidioEngine(AnalyzerEngine())
+    return PresidioEngine(_analyzer_engine())
 
 
 def make_presidio_engine(

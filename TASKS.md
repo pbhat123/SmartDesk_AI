@@ -121,7 +121,7 @@ Exit: flows A/B/C scripted; 0/1/2+ status; confirm yes/no/edit; routing set; CLI
 | [x] | T4.22 | Status flow: trigger phrases route to status | C5 | `sd/agent/status_flow.py`, `tests/test_status_routing.py` | The three example phrases route to ticket_status via the intent set |
 | [x] | T4.23 | Status lookup: map then live GitHub fetch | C2 | `sd/agent/status_flow.py`, `tests/test_status_lookup.py` | Seeded mock: lookup returns status and latest comment fetched live |
 | [x] | T4.24 | Multiple tickets: list briefly, user picks | C3 | `sd/agent/status_flow.py`, `tests/test_status_multiple.py` | 2+ tickets produce a pick list (`awaiting=ticket_pick`); "the second one" selects it |
-| [ ] | T4.25 | No tickets: clear message | C4 | `sd/agent/status_flow.py`, `tests/test_status_none.py` | 0 tickets says so clearly and offers nothing invented |
+| [x] | T4.25 | No tickets: clear message | C4 | `sd/agent/status_flow.py`, `tests/test_status_none.py` | 0 tickets says so clearly and offers nothing invented |
 | [ ] | T4.26 | Single ticket display: ID, title, status, latest team update | C7 | `sd/agent/status_flow.py`, `tests/test_status_single.py` | 1 ticket reply contains all four fields (flow C) |
 | [ ] | T4.27 | Tone and small talk: greetings, thanks, goodbyes, empathy before ticket offer | D4, D5 | `sd/agent/chitchat.py`, `sd/agent/prompts/chitchat_v1.md`, `tests/test_chitchat.py` | Small-talk intents get a reply with no tool call; ticket offer is preceded by an acknowledgement (mock-checked phrase class) |
 | [ ] | T4.28 | Multi-turn: follow-ups use context; email remembered whole session | D6 | `sd/agent/graph.py`, `tests/test_multi_turn.py` | Multi-turn script never re-asks for email; "what about sick leave?" resolves using prior topic |

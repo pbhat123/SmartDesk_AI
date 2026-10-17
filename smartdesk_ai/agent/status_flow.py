@@ -19,6 +19,7 @@ from smartdesk_ai.tools.executor import Outcome
 AGENT = "status_flow"
 ASK_EMAIL_FOR_STATUS = "To check on your tickets I need your work email address. What is it?"
 DECLINED_EMAIL = "No problem. Just ask whenever you'd like me to check on a ticket."
+NO_TICKETS = "You have no tickets on file. If you expected to see one, please check the email address you gave me."
 LOOKUP_FAILED = "Sorry, I couldn't check your tickets just now. Please try again later."
 PICK_QUESTION = "Which one would you like to know more about? You can say \"the second one\" or give its number."
 
@@ -117,7 +118,9 @@ def make_s_lookup_node(executor: Any) -> Callable[[AgentState], dict[str, Any]]:
         refs = [ticket_ref(t) for t in out.tickets]
         if len(refs) >= 2:  # list briefly and let them choose (FR-C3)
             return _say(state, "s_lookup", render_list(refs), status_candidates=refs, awaiting="ticket_pick")
-        # None and one ticket: the messages follow in T4.25 and T4.26.
+        if not refs:  # say so plainly, and invent nothing (FR-C4)
+            return _say(state, "s_lookup", NO_TICKETS, status_candidates=[], awaiting="none")
+        # One ticket: the display follows in T4.26.
         return _say(state, "s_lookup", f"I found {len(refs)} ticket(s) for you.", status_candidates=refs,
                     awaiting="none")
 

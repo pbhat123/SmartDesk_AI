@@ -20,10 +20,14 @@ def load(name: str) -> Scenario:
     return load_scenario(SCENARIOS / f"{name}.yaml")
 
 
+STATUS_STEPS = {"tickets_none", "ticket_list", "ticket_status_single"}
+
+
 def build(scenario: Scenario, built_index_dir, settings, tmp_path, answer_mode="insufficient"):
     parser = make_confirm_parser(settings, builder=lambda m, c: MockConfirmModel())
+    seeded = any(t.expect.step in STATUS_STEPS for t in scenario.turns)  # the demo tickets of the seed script
     return assemble(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM(answer_mode), routed=True,
-                    drafter_llm=MockDraftModel(), parse_confirm=parser)
+                    drafter_llm=MockDraftModel(), parse_confirm=parser, seeded=seeded)
 
 
 def check_step(step: str, state, expect: Expect, issues_before: int, issues_after: int) -> None:
@@ -40,6 +44,12 @@ def check_step(step: str, state, expect: Expect, issues_before: int, issues_afte
         assert issues_after == issues_before + 1, "exactly one ticket must be created"
     elif step == "ticket_cancelled":
         assert "won't create" in reply and issues_after == issues_before, reply
+    elif step == "tickets_none":
+        assert "no tickets" in reply.lower() and not re.search(r"#\d+|https?://", reply), reply
+    elif step == "ticket_list":
+        assert state.awaiting == "ticket_pick" and len(re.findall(r"^\d+\. #\d+ ", reply, re.M)) >= 2, reply
+    elif step == "ticket_status_single":
+        assert len(re.findall(r"#\d+", reply)) == 1, reply
     elif step == "ticket_unavailable":
         assert "try again later" in reply.lower(), reply
     else:
@@ -73,11 +83,16 @@ def run_scenario(scenario: Scenario, stack) -> list:
             assert len(stack.spy.calls) == searches_before and issues_after == issues_before
         if expect.awaiting_after is not None:
             assert state.awaiting == expect.awaiting_after, (state.awaiting, expect.awaiting_after)
-        if expect.ticket_id_in_reply or expect.ticket_link_in_reply:
-            ticket = list(stack.client._issues.values())[-1]
-            if expect.ticket_id_in_reply:
-                assert re.findall(r"#\d+", state.reply) == [f"#{ticket.number}"]
+        if (expect.ticket_id_in_reply or expect.ticket_link_in_reply or expect.status_in_reply
+                or expect.team_update_in_reply):
+            [number] = re.findall(r"#(\d+)", state.reply)  # exactly one ticket is shown
+            ticket = stack.client._issues[int(number)]
             if expect.ticket_link_in_reply:
                 assert ticket.url in state.reply
+            if expect.status_in_reply:
+                assert ticket.status.value in state.reply, (ticket.status, state.reply)
+            if expect.team_update_in_reply:
+                update = stack.client.latest_update(ticket.number)
+                assert update is not None and update.text in state.reply, state.reply
         states.append(state)
     return states

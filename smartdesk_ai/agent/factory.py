@@ -28,6 +28,7 @@ from smartdesk_ai.rag.index import IndexNotBuilt, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ROOT, ingest
 from smartdesk_ai.rag.rerank import load_reranker
 from smartdesk_ai.tickets import TicketConfigError, create_ticket_client
+from smartdesk_ai.tickets.seed import seed
 from smartdesk_ai.tickets.sqlite_map import TicketStore
 from smartdesk_ai.tools.executor import ToolExecutor
 from smartdesk_ai.tools.registry import ToolRegistry
@@ -105,6 +106,9 @@ def build_responder(
     Path(data_dir).mkdir(parents=True, exist_ok=True)
     # Mock tickets live in memory, so their numbers never reach the live map in app.db.
     store = TicketStore(Path(data_dir) / TICKET_MAP_DB if settings.modes.tickets == "live" else ":memory:")
+    if settings.modes.tickets == "mock":
+        # Demo data for the status flow with no keys: the seed script's tickets, in memory only.
+        seed(client, store)
     tools = ToolRegistry()
     tools.register("search_kb", make_search_kb(index, search_settings, reranker=reranker, health=registry))
     register_ticket_tools(tools, client, store)
@@ -120,5 +124,6 @@ def build_responder(
         make_checkpointer(Path(data_dir) / CHECKPOINT_DB, STATE_MODELS),
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,
+        status_max_listed=settings.status.max_listed,
     )
     return make_kb_responder(graph)

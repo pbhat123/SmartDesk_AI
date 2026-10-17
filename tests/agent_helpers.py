@@ -57,7 +57,8 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
             parse_confirm=parse_confirm or rule_parser,
             duplicate_threshold=settings.thresholds.duplicate_title,
         )
-    graph = build_kb_graph(KBDeps(executor=executor, answer=answer), saver, route=route, tickets=tickets)
+    graph = build_kb_graph(KBDeps(executor=executor, answer=answer), saver, route=route, tickets=tickets,
+                             status_max_listed=settings.status.max_listed)
     return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, executor=executor, saver=saver)
 
 

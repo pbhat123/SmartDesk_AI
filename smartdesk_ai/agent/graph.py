@@ -308,10 +308,18 @@ def after_t_draft(state: AgentState) -> str:
 
 
 def build_kb_graph(
-    deps: KBDeps, checkpointer: Any = None, *, route: Router | None = None, tickets: TicketDeps | None = None
+    deps: KBDeps,
+    checkpointer: Any = None,
+    *,
+    route: Router | None = None,
+    tickets: TicketDeps | None = None,
+    status_max_listed: int | None = None,
 ):
     """Compile the agent graph. Without a `route`, every new message goes to the KB path. Without
-    `tickets`, the ticket path stops after collecting the email."""
+    `tickets`, the ticket path stops after collecting the email. With a `route`, `status_max_listed`
+    (config: status.max_listed) caps the status list."""
+    if route is not None and status_max_listed is None:
+        raise ValueError("status_max_listed (config: status.max_listed) is required when routing is on")
     builder = StateGraph(AgentState)
     builder.add_node("entry", entry_node)
     builder.add_node("offer_reply", offer_reply_node)
@@ -332,7 +340,7 @@ def build_kb_graph(
     if route is not None:
         builder.add_node("route", make_route_node(route))
         builder.add_node("chitchat", chitchat_node)
-        builder.add_node("s_lookup", make_s_lookup_node(deps.executor))
+        builder.add_node("s_lookup", make_s_lookup_node(deps.executor, status_max_listed))
         builder.add_node("s_email_reply", s_email_reply)
         builder.add_node("s_pick", make_s_pick_node(deps.executor))
         builder.add_conditional_edges("s_pick", after_s_pick, ["route", END])

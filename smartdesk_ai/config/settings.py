@@ -137,6 +137,10 @@ class Compaction(_Strict):
     trigger_fraction: Unit
 
 
+class StatusList(_Strict):
+    max_listed: Annotated[int, Field(ge=1)]  # FR-C3: tickets listed before "and N older ones"
+
+
 class InputLimits(_Strict):
     max_chars: Annotated[int, Field(gt=0)]
 
@@ -201,6 +205,7 @@ class Settings(_Strict):
     budget: Budget
     rate_limits: RateLimits
     compaction: Compaction
+    status: StatusList
     input: InputLimits
     thresholds: Thresholds
     retrieval: Retrieval

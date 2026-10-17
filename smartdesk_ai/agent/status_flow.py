@@ -95,9 +95,16 @@ def pick_ticket(text: str, candidates: Sequence[TicketRef]) -> Pick:
     return Pick(kind="chosen", ref=hits[0]) if len(hits) == 1 else Pick(kind="none")
 
 
-def render_list(refs: Sequence[TicketRef]) -> str:
-    lines = [f"I found {len(refs)} tickets for you:"]
+def older_line(count: int) -> str:
+    return f"and {count} older {'one' if count == 1 else 'ones'}."
+
+
+def render_list(refs: Sequence[TicketRef], older: int = 0) -> str:
+    """The numbered list of the newest tickets, then how many older ones are not shown (FR-C3)."""
+    lines = [f"I found {len(refs) + older} tickets for you:"]
     lines += [f"{i}. #{r.number} {r.title} ({r.status})" for i, r in enumerate(refs, 1)]
+    if older:
+        lines.append(older_line(older))
     return "\n".join(lines + ["", PICK_QUESTION])
 
 
@@ -116,7 +123,7 @@ def _say(state: AgentState, step: str, reply: str, **update: Any) -> dict[str, A
     return {"steps": state.steps + [step], "reply": reply, "messages": [AIMessage(reply)], **update}
 
 
-def make_s_lookup_node(executor: Any) -> Callable[[AgentState], dict[str, Any]]:
+def make_s_lookup_node(executor: Any, max_listed: int) -> Callable[[AgentState], dict[str, Any]]:
     def s_lookup(state: AgentState) -> dict[str, Any]:
         if not state.email:  # reuse the session email, else ask (FR-C1)
             return _say(state, "s_lookup", ASK_EMAIL_FOR_STATUS, awaiting="email", status_pending_email=True,
@@ -124,9 +131,12 @@ def make_s_lookup_node(executor: Any) -> Callable[[AgentState], dict[str, Any]]:
         out = lookup_tickets(executor, state.email)
         if isinstance(out, StatusUnavailable):
             return _say(state, "s_lookup", out.message, status_candidates=[], awaiting="none")
-        refs = [ticket_ref(t) for t in sorted(out.tickets, key=lambda t: t.number, reverse=True)]  # newest first
+        newest_first = sorted(out.tickets, key=lambda t: t.number, reverse=True)
+        refs = [ticket_ref(t) for t in newest_first[:max_listed]]
+        older = len(newest_first) - len(refs)
         if len(refs) >= 2:  # list briefly and let them choose (FR-C3)
-            return _say(state, "s_lookup", render_list(refs), status_candidates=refs, awaiting="ticket_pick")
+            return _say(state, "s_lookup", render_list(refs, older), status_candidates=refs,
+                        awaiting="ticket_pick")
         if not refs:  # say so plainly, and invent nothing (FR-C4)
             return _say(state, "s_lookup", NO_TICKETS, status_candidates=[], awaiting="none")
         return _say(state, "s_lookup", render_ticket(out.tickets[0], out.latest_update), status_candidates=[],

@@ -11,6 +11,7 @@ from smartdesk_ai.agent.factory import LiveModeUnavailable, build_responder
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
+from smartdesk_ai.tickets.seed import EMAILS
 
 EXIT_WORDS = {"quit", "exit"}
 
@@ -68,6 +69,8 @@ def main(
     missing = load_env(environ=environ, dotenv_path=dotenv_path).missing_required()
     if missing:
         output(f"[notice] not set: {', '.join(missing)} (mock mode only)")
+    if responder is None and service.settings.modes.tickets == "mock":
+        output("[demo] Mock tickets are preloaded (in memory only) for: " + ", ".join(EMAILS))
     for health in registry.degraded_modes():
         output(f"[degraded] {health.component.value}: {health.mode} ({health.reason})")
 

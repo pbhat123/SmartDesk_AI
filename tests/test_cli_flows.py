@@ -28,7 +28,7 @@ def test_flow_b_from_a_gap_to_a_created_ticket(tmp_path):
     assert "don't know" in out and "work email" in out
     assert "Title: My monitor keeps flickering" in out and "Category: IT" in out
     assert "Shall I go ahead and create this?" in out
-    assert "Your ticket has been created. Ticket #1" in out and "ask me for updates" in out
+    assert "Your ticket has been created. Ticket #5" in out and "ask me for updates" in out
 
 
 def test_declining_at_the_gate_creates_nothing(tmp_path):

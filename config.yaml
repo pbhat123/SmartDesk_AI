@@ -78,6 +78,10 @@ rate_limits:
 compaction:
   trigger_fraction: 0.75
 
+# Status list (FR-C3): at most this many tickets are listed, newest first, then "and N older ones".
+status:
+  max_listed: 10
+
 input:
   max_chars: 4000            # FR-F4
 

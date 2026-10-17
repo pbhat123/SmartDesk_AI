@@ -417,8 +417,13 @@ def t_cancel(state: AgentState) -> dict[str, Any]:
             "messages": [AIMessage(reply)]}
 
 
+UPDATES_NOTE = "You can ask me for updates on it anytime."
+
+
 def created_reply(ticket: Any) -> str:
-    return f"Your ticket has been created: #{ticket.number} {ticket.url}"
+    """The reply after creation. The ID, link and status are copied from the response, never composed
+    (FR-B4, FR-B13)."""
+    return f"Your ticket has been created. {ticket.receipt()}\n\n{UPDATES_NOTE}"
 
 
 def make_t_create_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:

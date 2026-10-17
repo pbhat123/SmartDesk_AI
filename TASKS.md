@@ -118,7 +118,7 @@ Exit: flows A/B/C scripted; 0/1/2+ status; confirm yes/no/edit; routing set; CLI
 | [x] | T4.19 | Scripted ticket scenario | B2, B4 (AC) | `tests/test_ticket_scenarios.py` | Scenario creates exactly one issue after "yes" and none after "no" |
 | [x] | T4.20 | Duplicate ticket request check (near-identical open title for same email) | F4 | `sd/agent/ticket_agent.py`, `tests/test_duplicate_request.py` | Near-identical open ticket triggers a "open another?" question before the gate |
 | [x] | T4.21 | Edge cases: empty input, invalid email, over `input.max_chars` | F4 | `sd/agent/chat_service.py`, `tests/test_edge_cases.py` | Empty gets a prompt to type; over-length gets polite shorten request; invalid email re-asked |
-| [ ] | T4.22 | Status flow: trigger phrases route to status | C5 | `sd/agent/status_flow.py`, `tests/test_status_routing.py` | The three example phrases route to ticket_status via the intent set |
+| [x] | T4.22 | Status flow: trigger phrases route to status | C5 | `sd/agent/status_flow.py`, `tests/test_status_routing.py` | The three example phrases route to ticket_status via the intent set |
 | [ ] | T4.23 | Status lookup: map then live GitHub fetch | C2 | `sd/agent/status_flow.py`, `tests/test_status_lookup.py` | Seeded mock: lookup returns status and latest comment fetched live |
 | [ ] | T4.24 | Multiple tickets: list briefly, user picks | C3 | `sd/agent/status_flow.py`, `tests/test_status_multiple.py` | 2+ tickets produce a pick list (`awaiting=ticket_pick`); "the second one" selects it |
 | [ ] | T4.25 | No tickets: clear message | C4 | `sd/agent/status_flow.py`, `tests/test_status_none.py` | 0 tickets says so clearly and offers nothing invented |

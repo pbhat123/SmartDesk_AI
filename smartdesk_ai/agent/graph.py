@@ -40,6 +40,7 @@ from smartdesk_ai.agent.state import (
     RouteKind,
     thread_config,
 )
+from smartdesk_ai.agent.status_flow import status_stub_node
 from smartdesk_ai.agent.ticket_agent import (
     TicketDeps,
     escalation_offer,
@@ -63,8 +64,6 @@ from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
 OFFER_AGENT = "kb"
-# Placeholder until the status flow (T4.22 to T4.26).
-STATUS_PLACEHOLDER = "Ticket status checks are not available yet."
 
 
 class KBFirstViolation(RuntimeError):
@@ -186,11 +185,6 @@ def chitchat_node(state: AgentState) -> dict[str, Any]:
         state.route_kind or "", SMALLTALK_REPLY
     )
     return {"steps": state.steps + ["chitchat"], "reply": reply, "messages": [AIMessage(reply)]}
-
-
-def status_stub_node(state: AgentState) -> dict[str, Any]:
-    return {"steps": state.steps + ["status"], "reply": STATUS_PLACEHOLDER,
-            "messages": [AIMessage(STATUS_PLACEHOLDER)]}
 
 
 # --- KB path ---------------------------------------------------------------------------------

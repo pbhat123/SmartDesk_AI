@@ -36,9 +36,10 @@ class AnswerReply(BaseModel):
 class AnswerResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    text: str  # what the employee sees
+    text: str  # what the employee sees: the answer plus its sources
     answer: str  # the model's answer, empty when insufficient
     insufficient: bool  # escalation signal 3
+    citations: list[str] = Field(default_factory=list)  # retrieved entry ids the answer used (FR-A13)
 
 
 def format_context(chunks: Sequence[KBChunk]) -> str:
@@ -47,6 +48,17 @@ def format_context(chunks: Sequence[KBChunk]) -> str:
 
 def _insufficient() -> AnswerResult:
     return AnswerResult(text=INSUFFICIENT_REPLY, answer="", insufficient=True)
+
+
+def _retrieved_citations(cited: Sequence[str], chunks: Sequence[KBChunk]) -> list[str]:
+    """The cited ids that were actually retrieved, in the model's order, without repeats."""
+    retrieved = {c.entry_id for c in chunks}
+    return list(dict.fromkeys(i for i in cited if i in retrieved))
+
+
+def _sources_line(cited: Sequence[str], chunks: Sequence[KBChunk]) -> str:
+    titles = {c.entry_id: c.title for c in chunks}
+    return "Sources: " + "; ".join(f"{i} ({titles[i]})" for i in cited)
 
 
 def answer_from_context(llm: Any, prompt: str, question: str, chunks: Sequence[KBChunk]) -> AnswerResult:
@@ -64,7 +76,11 @@ def answer_from_context(llm: Any, prompt: str, question: str, chunks: Sequence[K
         raise AnswerError("answer reply is not valid") from error
     if reply.insufficient or not reply.answer.strip():
         return _insufficient()
-    return AnswerResult(text=reply.answer.strip(), answer=reply.answer.strip(), insufficient=False)
+    cited = _retrieved_citations(reply.citations, chunks)
+    if not cited:  # an answer that names no retrieved entry is never shown (FR-A13)
+        return _insufficient()
+    text = reply.answer.strip()
+    return AnswerResult(text=f"{text}\n\n{_sources_line(cited, chunks)}", answer=text, insufficient=False, citations=cited)
 
 
 def should_escalate(search: SearchKBResult, answer: AnswerResult | None) -> bool:

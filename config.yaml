@@ -77,6 +77,7 @@ rate_limits:
 # Compaction triggers at this share of the active model's context window (FR-H5).
 compaction:
   trigger_fraction: 0.75
+  keep_last_turns: 4         # the last few employee turns (and their replies) are never summarized
 
 # Status list (FR-C3): at most this many tickets are listed, newest first, then "and N older ones".
 status:

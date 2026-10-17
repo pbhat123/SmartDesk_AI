@@ -214,3 +214,16 @@ class MockGroundingModel:
         tokens = lambda text: _content_words(text) | set(re.findall(r"\d+", text))  # noqa: E731
         missing = sorted(tokens(answer) - tokens(context))
         return SimpleNamespace(content=json.dumps({"grounded": not missing, "unsupported": missing[:5]}))
+
+
+class MockCompactionModel:
+    """Stand-in for the COMPACTION task: names how many employee turns were summarized and what the first
+    one was about, from the transcript in the prompt."""
+
+    def invoke(self, messages):
+        human = str(messages[-1].content)
+        prior = human.split("Summary so far:\n", 1)[1].split("\n\nNext part", 1)[0]
+        turns = re.findall(r"^Employee: (.*)$", human, re.M)
+        first = " ".join(turns[0].split()[:8]) if turns else "nothing"
+        earlier = "" if prior == "(none)" else f"{prior} "
+        return SimpleNamespace(content=f"{earlier}Then the employee asked {len(turns)} more question(s), starting with: {first}.")

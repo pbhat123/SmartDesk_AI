@@ -16,6 +16,7 @@ from smartdesk_ai.agent.chitchat import make_chitchat
 from smartdesk_ai.agent.confirm import make_confirm_parser
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph, make_kb_responder
 from smartdesk_ai.agent.grounding import make_grounding_judge
+from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
@@ -26,6 +27,7 @@ from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.mock import (
     MockAnswerModel,
     MockChitchatModel,
+    MockCompactionModel,
     MockConfirmModel,
     MockDraftModel,
     MockGroundingModel,
@@ -34,6 +36,7 @@ from smartdesk_ai.llm.mock import (
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.guardrails.pii import PiiRedactor
+from smartdesk_ai.ops.compaction import Compactor, make_summarizer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.metrics import MetricsRecorder
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
@@ -97,7 +100,7 @@ def build_responder(
             )
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
-        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = judge_b = openai_builder
+        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = judge_b = compact_b = openai_builder
     else:
         embeddings = HashingEmbeddings()
         index_dir = Path(data_dir) / "index_mock"
@@ -110,6 +113,7 @@ def build_responder(
         chat_b = _builder_for(MockChitchatModel())
         inject_b = _builder_for(MockInjectionModel())
         judge_b = _builder_for(MockGroundingModel())
+        compact_b = _builder_for(MockCompactionModel())
     try:
         index = open_index(index_dir, embeddings)
     except IndexNotBuilt:
@@ -145,6 +149,7 @@ def build_responder(
         parse_confirm=make_confirm_parser(settings, builder=confirm_b),
         duplicate_threshold=settings.thresholds.duplicate_title,
     )
+    prompt_tokens = len(load_prompt("compaction", settings).text) // 3  # a generous size estimate
     answerer = make_answerer(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))
     graph = build_kb_graph(
         KBDeps(executor=executor, answer=answerer),
@@ -153,5 +158,6 @@ def build_responder(
         tickets=ticket_deps,
         status_max_listed=settings.status.max_listed,
         chitchat=make_chitchat(settings, builder=chat_b),
+        compactor=Compactor(settings, make_summarizer(settings, builder=compact_b), overhead_tokens=prompt_tokens),
     )
     return make_kb_responder(graph)

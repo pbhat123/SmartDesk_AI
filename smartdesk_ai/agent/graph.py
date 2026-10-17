@@ -10,7 +10,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
@@ -62,6 +62,7 @@ from smartdesk_ai.agent.ticket_agent import (
     t_dup_reask,
     t_reask,
 )
+from smartdesk_ai.ops.compaction import Compactor
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
@@ -110,6 +111,26 @@ def _chunk_refs(found: SearchKBResult) -> list[ChunkRef]:
 def entry_node(state: AgentState) -> dict[str, Any]:
     """Start of every turn: a fresh trace and no leftovers from the previous turn."""
     return {"steps": ["start"], "part_result": None, "reply": ""}
+
+
+def make_compact_node(compactor: Compactor, budget_level: Callable[[], int]) -> Callable[[AgentState], dict[str, Any]]:
+    """Before each turn: when the messages fill the trigger share of the active window, replace the older
+    ones by a running summary (FR-H5). The summary takes the first message's id, so it is swapped in place;
+    the rest are removed. An open ticket conversation, the email and the draft stay as they are."""
+
+    def compact(state: AgentState) -> dict[str, Any]:
+        ticket_open = state.ticket is not None or state.awaiting != "none"
+        result = compactor.compact(
+            state.messages, budget_level=budget_level(), protect_from=state.ticket_context_start if ticket_open else None)
+        if result is None:
+            return {}
+        removed = [RemoveMessage(id=m.id) for m in state.messages[1:result.cut]]
+        return {
+            "messages": [result.messages[0], *removed],
+            "ticket_context_start": max(state.ticket_context_start - (result.cut - 1), 0),
+        }
+
+    return compact
 
 
 def make_after_entry(has_router: bool) -> Callable[[AgentState], str]:
@@ -316,11 +337,13 @@ def build_kb_graph(
     tickets: TicketDeps | None = None,
     status_max_listed: int | None = None,
     chitchat: Chitchat | None = None,
+    compactor: Compactor | None = None,
+    budget_level: Callable[[], int] = lambda: 0,
 ):
     """Compile the agent graph. Without a `route`, every new message goes to the KB path. Without
     `tickets`, the ticket path stops after collecting the email. With a `route`, `status_max_listed`
     (config: status.max_listed) caps the status list. Without `chitchat`, small talk gets the fixed
-    replies (FR-F7)."""
+    replies (FR-F7). With a `compactor`, each turn starts by compacting long histories (FR-H5)."""
     if route is not None and status_max_listed is None:
         raise ValueError("status_max_listed (config: status.max_listed) is required when routing is on")
     builder = StateGraph(AgentState)
@@ -331,7 +354,12 @@ def build_kb_graph(
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
     builder.add_node("t_collect", make_t_collect_node(drafting=tickets is not None))
-    builder.add_edge(START, "entry")
+    if compactor is not None:
+        builder.add_node("compact", make_compact_node(compactor, budget_level))
+        builder.add_edge(START, "compact")
+        builder.add_edge("compact", "entry")
+    else:
+        builder.add_edge(START, "entry")
     builder.add_conditional_edges(
         "entry", make_after_entry(route is not None),
         ["offer_reply", "route", "kb_search", "s_email_reply", "s_pick"] if route else ["offer_reply", "kb_search"],

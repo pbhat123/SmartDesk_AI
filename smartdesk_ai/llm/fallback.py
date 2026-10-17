@@ -66,11 +66,14 @@ def invoke_with_fallback(
     builder: ModelBuilder = openai_builder,
     sleep: Callable[[float], None] = time.sleep,
     schema: type[BaseModel] | None = None,
+    tier: Tier | None = None,
 ) -> LLMResult:
     """Run `prompt` with retry and the Main/Light fallback. With `schema`, the model's
     structured-output mode is used and the parsed reply comes back as JSON text. A reply that
     fails the schema is not an outage: its raw text is returned for the caller to reject."""
     primary = resolve_tier(task, settings, budget_level)
+    if tier is not None and budget_level < 1:  # an explicit tier, never above what the budget allows
+        primary = tier
     candidates: list[Tier] = [primary]
     fallback = _fallback_tier(primary, budget_level)
     if fallback is not None:
@@ -120,9 +123,11 @@ class FallbackChat:
         budget_level: int = 0,
         schema: type[BaseModel] | None = None,
         sleep: Callable[[float], None] = time.sleep,
+        tier: Tier | None = None,
     ) -> None:
         self._args = (task, settings)
-        self._kwargs = {"budget_level": budget_level, "builder": builder, "sleep": sleep, "schema": schema}
+        self._kwargs = {"budget_level": budget_level, "builder": builder, "sleep": sleep, "schema": schema,
+                        "tier": tier}
 
     def invoke(self, messages: Any) -> SimpleNamespace:
         result = invoke_with_fallback(self._args[0], messages, self._args[1], **self._kwargs)

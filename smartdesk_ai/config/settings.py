@@ -135,6 +135,7 @@ class RateLimits(_Strict):
 
 class Compaction(_Strict):
     trigger_fraction: Unit
+    keep_last_turns: Annotated[int, Field(ge=1)]  # employee turns kept as they are (FR-H5)
 
 
 class StatusList(_Strict):

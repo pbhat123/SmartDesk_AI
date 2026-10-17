@@ -221,7 +221,7 @@ class FallbackChat:
         level, observer = self._budget_level, None
         if scope is not None:
             ctx, services = scope
-            level = max(level, services.budget_level())
+            level = max(level, services.budget_level(ctx))
             if level >= 2:  # cutoff 2: no LLM calls at all (FR-H8)
                 raise LLMUnavailableError(SERVICE_UNAVAILABLE_MESSAGE)
             observer = lambda call: services.on_llm_call(ctx, self.agent, call)  # noqa: E731

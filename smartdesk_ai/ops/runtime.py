@@ -56,8 +56,8 @@ class Services:
     ) -> None:
         self.cost, self.budget, self.limiter, self.trace = cost, budget, limiter, trace
 
-    def budget_level(self) -> int:
-        return self.budget.level() if self.budget is not None else 0
+    def budget_level(self, ctx: "RequestContext | None" = None) -> int:
+        return self.budget.level(ctx.task if ctx else None) if self.budget is not None else 0
 
     def on_llm_call(self, ctx: RequestContext | None, agent: str, call: "LLMCall") -> None:
         if self.cost is not None and call.ok:
@@ -93,6 +93,12 @@ def request_scope(ctx: RequestContext, services: Services) -> Iterator[RequestCo
 
 def current_scope() -> tuple[RequestContext, Services] | None:
     return _scope.get()
+
+
+def current_budget_level() -> int:
+    """The budget level for the request in progress; 0 outside a request scope."""
+    scope = _scope.get()
+    return scope[1].budget_level(scope[0]) if scope is not None else 0
 
 
 @contextmanager

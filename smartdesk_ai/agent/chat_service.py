@@ -18,6 +18,7 @@ from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
 from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.guardrails.input_guard import build_input_guard
 from smartdesk_ai.guardrails.output_guard import build_output_guard
+from smartdesk_ai.llm.fallback import SERVICE_UNAVAILABLE_MESSAGE
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.runtime import RequestContext, Services, goal_from_steps, request_scope
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR
@@ -97,7 +98,10 @@ class ChatService:
             return edge
         ctx = RequestContext(session_id=session_id, request_id=uuid.uuid4().hex)
         with request_scope(ctx, self._services):
-            reply = self._handle(session_id, text)
+            if self._services.budget_level(ctx) >= 2:  # cutoff 2: no guard, model or tool runs (FR-H8)
+                reply = ChatReply(text=SERVICE_UNAVAILABLE_MESSAGE, debug={"edge": "budget_cutoff_2"})
+            else:
+                reply = self._handle(session_id, text)
         cost = self._services.finish_request(ctx, goal_from_steps(reply.debug.get("steps", [])))
         if self._services.cost is not None:
             reply.debug["cost_usd"] = cost

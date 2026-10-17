@@ -81,11 +81,15 @@ def _sources_line(cited: Sequence[str], chunks: Sequence[KBChunk]) -> str:
 
 
 def _grounded(judge: Judge, question: str, answer: str, chunks: Sequence[KBChunk]) -> bool:
+    """Only a malformed or schema-invalid judge reply counts as ungrounded. A judge call that fails
+    because every tier is down is an outage, like the answer call (FR-F2): no ticket offer."""
     try:
         return judge(question, answer, chunks)
-    except Exception as error:  # a judge that cannot decide never lets an unchecked answer through
-        logger.warning("grounding judge failed (%s); answer treated as ungrounded", type(error).__name__)
+    except ReplyError:
+        logger.warning("grounding judge reply is not valid; answer treated as ungrounded")
         return False
+    except Exception as error:
+        raise AnswerUnavailable(getattr(error, "message", GRACEFUL_MESSAGE)) from error
 
 
 def answer_from_context(

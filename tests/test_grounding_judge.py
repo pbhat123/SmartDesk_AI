@@ -6,10 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY, answer_from_context, make_answerer
+from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY, AnswerUnavailable, answer_from_context, make_answerer
 from smartdesk_ai.agent.graph import run_turn
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.state import new_thread_id
+from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, LLMUnavailableError
+from smartdesk_ai.llm.structured import ReplyError
 from smartdesk_ai.llm.mock import MockAnswerModel, MockGroundingModel
 from smartdesk_ai.agent.grounding import GroundingReply, make_grounding_judge
 from smartdesk_ai.tools.search_kb import KBChunk
@@ -56,11 +58,36 @@ def test_no_judge_call_when_there_is_nothing_to_judge(prompt):
     assert judge.calls == []
 
 
-def test_a_judge_that_fails_counts_as_ungrounded(prompt):
-    def broken(question, answer, chunks):
-        raise ConnectionError("down")
+def test_a_malformed_judge_reply_counts_as_ungrounded(prompt):
+    def malformed(question, answer, chunks):
+        raise ReplyError("not json")
 
-    assert answer_from_context(FakeAnswerLLM(), prompt, Q, CHUNKS, judge=broken).insufficient
+    assert answer_from_context(FakeAnswerLLM(), prompt, Q, CHUNKS, judge=malformed).insufficient
+
+
+def test_a_judge_outage_is_an_outage_not_an_ungrounded_answer(prompt):
+    def down(question, answer, chunks):
+        raise LLMUnavailableError()
+
+    with pytest.raises(AnswerUnavailable) as caught:
+        answer_from_context(FakeAnswerLLM(), prompt, Q, CHUNKS, judge=down)
+    assert caught.value.message == GRACEFUL_MESSAGE
+
+
+def test_a_judge_outage_replies_politely_with_no_ticket_offer(built_index_dir, settings, tmp_path):
+    def down(question, answer, chunks):
+        raise LLMUnavailableError()
+
+    stack = assemble(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM("cite_top"), judge=down)
+    state = run_turn(stack.graph, new_thread_id(), Q, search_domain="IT")
+    assert state.reply == GRACEFUL_MESSAGE and state.pending_offer is None
+    assert [d for _, d in stack.spy.calls] == ["IT"]  # no whole-KB retry either
+
+
+def test_both_tiers_failing_inside_the_real_judge_is_an_outage(settings):
+    judge = judge_with(settings, FakeJudgeLLM(error=ConnectionError("down")))
+    with pytest.raises(LLMUnavailableError):
+        judge(Q, "x", CHUNKS)
 
 
 def test_unsupported_draft_goes_to_the_whole_kb_retry_then_the_ticket_offer(built_index_dir, settings, tmp_path):
@@ -109,8 +136,8 @@ def test_judge_false_verdict(settings):
     assert judge_with(settings, FakeJudgeLLM({"grounded": False, "unsupported": ["a number"]}))(Q, "x", CHUNKS) is False
 
 
-def test_malformed_judge_reply_raises_so_the_answer_step_treats_it_as_ungrounded(settings):
-    with pytest.raises(Exception):
+def test_malformed_judge_reply_raises_a_reply_error(settings):
+    with pytest.raises(ReplyError):
         judge_with(settings, FakeJudgeLLM(raw="looks fine"))(Q, "x", CHUNKS)
 
 

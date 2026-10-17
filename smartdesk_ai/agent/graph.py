@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
+from smartdesk_ai.agent.chat_service import Turn
 from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY, AnswerError, AnswerResult, should_escalate
 from smartdesk_ai.agent.ticket_agent import escalation_offer
 from smartdesk_ai.agent.state import AgentState, ChunkRef, Domain, PartResult, PendingOffer, thread_config
@@ -155,3 +156,19 @@ def run_turn(
         turn_input["email"] = email
     graph.invoke(turn_input, config)
     return AgentState(**graph.get_state(config).values)
+
+
+def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
+    """A ChatService responder over the KB graph. The session ID is the thread ID. The debug
+    details are the last search's chunks with scores and the generated answer (FR-A12)."""
+
+    def kb_responder(session_id: str, text: str) -> Turn:
+        state = run_turn(graph, session_id, text)
+        part = state.part_result
+        debug: dict[str, Any] = {"steps": state.steps}
+        if part is not None:
+            debug["chunks"] = [c.model_dump() for c in part.chunks]
+            debug["answer"] = part.answer
+        return Turn(text=state.reply, debug=debug)
+
+    return kb_responder

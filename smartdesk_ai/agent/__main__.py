@@ -4,12 +4,28 @@ import logging
 import uuid
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
+from typing import Any
 
-from smartdesk_ai.agent.chat_service import build_service
+from smartdesk_ai.agent.chat_service import Responder, build_service, stub_responder
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 
 EXIT_WORDS = {"quit", "exit"}
+
+
+def format_debug(debug: dict[str, Any]) -> list[str]:
+    """Debug lines for one reply. Retrieved chunks are ranked with their scores, then the answer."""
+    lines = []
+    if "chunks" in debug:
+        chunks = debug["chunks"]
+        if not chunks:
+            lines.append("[debug] no chunks retrieved")
+        for rank, chunk in enumerate(chunks, 1):
+            lines.append(f"[debug] {rank}. {chunk['entry_id']} score={chunk['score']:.3f} {chunk['title']}")
+    if "answer" in debug:
+        lines.append(f"[debug] answer: {debug['answer']}")
+    lines.extend(f"[debug] {key}={value}" for key, value in debug.items() if key not in ("chunks", "answer"))
+    return lines
 
 
 def main(
@@ -19,13 +35,16 @@ def main(
     environ: Mapping[str, str] | None = None,
     dotenv_path: Path | None = DEFAULT_DOTENV,
     registry: HealthRegistry | None = None,
+    responder: Responder | None = None,
 ) -> int:
     parser = argparse.ArgumentParser(prog="python -m smartdesk_ai.agent", description="SmartDesk AI CLI chat")
     parser.add_argument("--debug", action="store_true", help="show debug details for each reply")
     args = parser.parse_args(argv)
 
     registry = registry if registry is not None else get_registry()
-    service = build_service(environ=environ, dotenv_path=dotenv_path, registry=registry)
+    service = build_service(
+        environ=environ, dotenv_path=dotenv_path, registry=registry, responder=responder or stub_responder
+    )
 
     output("SmartDesk AI. Type 'quit' to leave.")
     missing = load_env(environ=environ, dotenv_path=dotenv_path).missing_required()
@@ -48,8 +67,8 @@ def main(
         reply = service.handle(session_id, line)
         output(reply.text)
         if args.debug:
-            for key, value in reply.debug.items():
-                output(f"[debug] {key}={value}")
+            for debug_line in format_debug(reply.debug):
+                output(debug_line)
     return 0
 
 

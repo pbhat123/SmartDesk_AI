@@ -40,9 +40,18 @@ class GuardDecision(BaseModel):
     reason: str | None = None
 
 
+class Turn(BaseModel):
+    """A responder's result when it has debug details to show (FR-A12)."""
+
+    model_config = ConfigDict(frozen=True)
+
+    text: str
+    debug: dict[str, Any] = Field(default_factory=dict)
+
+
 InputGuard = Callable[[str], GuardDecision]
 OutputGuard = Callable[[str], str]
-Responder = Callable[[str, str], str]  # (session_id, guarded text) -> reply text
+Responder = Callable[[str, str], str | Turn]  # (session_id, guarded text) -> reply text or Turn
 
 
 def no_input_guard(text: str) -> GuardDecision:
@@ -79,8 +88,11 @@ class ChatService:
             reply_text = decision.refusal or ""
             debug["blocked_reason"] = decision.reason
         else:
-            reply_text = self._responder(session_id, decision.text)
+            produced = self._responder(session_id, decision.text)
+            reply_text = produced.text if isinstance(produced, Turn) else produced
             debug["responder"] = getattr(self._responder, "__name__", "custom")
+            if isinstance(produced, Turn):
+                debug.update(produced.debug)
         reply_text = self._output_guard(reply_text)
         logger.debug("turn done session=%s blocked=%s", session_id, decision.blocked)
         return ChatReply(text=reply_text, debug=debug)
@@ -91,6 +103,7 @@ def build_service(
     dotenv_path: Path | None = DEFAULT_DOTENV,
     registry: HealthRegistry | None = None,
     config_path: Path = DEFAULT_CONFIG,
+    responder: Responder = stub_responder,
 ) -> ChatService:
     """Assemble the service. Missing keys or optional components never raise (FR-F7).
 
@@ -98,4 +111,4 @@ def build_service(
     """
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     (registry if registry is not None else get_registry()).register_env(env)
-    return ChatService(load_settings(config_path))
+    return ChatService(load_settings(config_path), responder=responder)

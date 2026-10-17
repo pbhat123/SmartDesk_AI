@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from smartdesk_ai.agent.chat_service import Responder, build_service
-from smartdesk_ai.agent.factory import DEFAULT_DATA_DIR, LiveModeUnavailable, build_responder
+from smartdesk_ai.agent.factory import LiveModeUnavailable, build_responder
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
@@ -38,7 +38,7 @@ def main(
     dotenv_path: Path | None = DEFAULT_DOTENV,
     registry: HealthRegistry | None = None,
     responder: Responder | None = None,
-    data_dir: Path = DEFAULT_DATA_DIR,
+    data_dir: Path | None = None,
     config_path: Path = DEFAULT_CONFIG,
 ) -> int:
     parser = argparse.ArgumentParser(prog="python -m smartdesk_ai.agent", description="SmartDesk AI CLI chat")
@@ -46,29 +46,28 @@ def main(
     args = parser.parse_args(argv)
 
     registry = registry if registry is not None else get_registry()
-    notices: list[str] = []
 
     def make_responder(settings: Settings) -> Responder:
         if responder is not None:
             return responder
-        common = {"environ": environ, "dotenv_path": dotenv_path, "data_dir": data_dir, "registry": registry}
-        try:
-            return build_responder(settings, **common)
-        except LiveModeUnavailable as error:  # never crash startup (FR-F7)
-            notices.append(f"[notice] live LLM mode unavailable ({error}); using mock mode")
-            return build_responder(settings, force_mock=True, **common)
+        return build_responder(
+            settings, environ=environ, dotenv_path=dotenv_path, data_dir=data_dir, registry=registry
+        )
 
-    service = build_service(
-        environ=environ, dotenv_path=dotenv_path, registry=registry, config_path=config_path,
-        responder_factory=make_responder,
-    )
+    try:
+        service = build_service(
+            environ=environ, dotenv_path=dotenv_path, registry=registry, config_path=config_path,
+            responder_factory=make_responder,
+        )
+    except LiveModeUnavailable as error:  # live was asked for: never quietly run as mock instead
+        output(f"[error] Cannot start in live mode: {error}")
+        output("Fix that, or set modes.llm and modes.tickets to mock in config.yaml.")
+        return 2
 
     output("SmartDesk AI. Type 'quit' to leave.")
     missing = load_env(environ=environ, dotenv_path=dotenv_path).missing_required()
     if missing:
         output(f"[notice] not set: {', '.join(missing)} (mock mode only)")
-    for notice in notices:
-        output(notice)
     for health in registry.degraded_modes():
         output(f"[degraded] {health.component.value}: {health.mode} ({health.reason})")
 

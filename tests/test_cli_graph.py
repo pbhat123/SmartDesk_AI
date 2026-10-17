@@ -65,14 +65,54 @@ def test_the_mock_index_is_separate_from_the_live_index(tmp_path):
     assert (tmp_path / "index_mock").is_dir() and not (tmp_path / "index").exists()
 
 
-def test_live_mode_without_keys_degrades_to_mock_with_a_notice(tmp_path):
+def live_config(tmp_path, tickets="mock"):
     data = yaml.safe_load((ROOT / "config.yaml").read_text())
     data["modes"]["llm"] = "live"
+    data["modes"]["tickets"] = tickets
     path = tmp_path / "config.yaml"
     path.write_text(yaml.safe_dump(data))
-    out = run_cli([], ["How do I reset my forgotten password?", "quit"], tmp_path, config_path=path)
-    assert any(line.startswith("[notice] live LLM mode unavailable") for line in out)
-    assert any("Sources:" in line for line in out)
+    return path
+
+
+def run_live(tmp_path, environ, lines=("How do I reset my forgotten password?", "quit"), tickets="mock"):
+    feed = iter(lines)
+    out: list[str] = []
+    code = main([], input_fn=lambda _: next(feed), output=out.append, environ=environ, dotenv_path=NO_FILE,
+                data_dir=tmp_path / "data", registry=HealthRegistry(), config_path=live_config(tmp_path, tickets))
+    return code, "\n".join(out)
+
+
+def test_live_mode_without_the_openai_key_exits_with_a_clear_error_and_does_not_run_as_mock(tmp_path):
+    code, out = run_live(tmp_path, {})
+    assert code == 2
+    assert "OPENAI_API_KEY" in out and ".env" in out and "Cannot start in live mode" in out
+    assert "Sources:" not in out and "SmartDesk AI. Type" not in out
+    assert not (tmp_path / "data" / "index_mock").exists(), "mock mode must not have been started"
+
+
+def test_live_mode_without_an_index_exits_naming_the_ingest_command(tmp_path):
+    code, out = run_live(tmp_path, {"OPENAI_API_KEY": "sk-test-not-real"})
+    assert code == 2
+    assert "python -m smartdesk_ai.rag.ingest" in out and "index" in out
+    assert "Sources:" not in out and not (tmp_path / "data" / "index_mock").exists()
+
+
+def test_live_tickets_without_a_token_exits_naming_what_is_missing(tmp_path, built_index_dir):
+    import shutil
+
+    shutil.copytree(built_index_dir, tmp_path / "data" / "index")  # a (hashing) index is enough to get that far
+    code, out = run_live(tmp_path, {"OPENAI_API_KEY": "sk-test-not-real"}, tickets="live")
+    assert code == 2 and "GITHUB_TOKEN" in out and "TICKETS_REPO" in out and ".env" in out
+    assert "Sources:" not in out
+
+
+def test_the_error_is_printed_before_any_chat_prompt(tmp_path):
+    feed = iter(["hello", "quit"])
+    asked = []
+    out: list[str] = []
+    main([], input_fn=lambda p: asked.append(p) or next(feed), output=out.append, environ={}, dotenv_path=NO_FILE,
+         data_dir=tmp_path / "data", registry=HealthRegistry(), config_path=live_config(tmp_path))
+    assert asked == []
 
 
 def test_build_responder_live_raises_a_clear_error_without_the_key(settings, tmp_path):

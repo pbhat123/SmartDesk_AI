@@ -160,7 +160,8 @@ def test_cli_debug_flag_shows_debug_info():
 
 def test_module_entry_point_runs_with_a_bare_environment(tmp_path):
     """python -m smartdesk_ai.agent: no keys, no Redis, no tracing, no .env."""
-    env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(ROOT)}
+    env = {"PATH": os.environ.get("PATH", ""), "PYTHONPATH": str(ROOT),
+           "SMARTDESK_DATA_DIR": str(tmp_path / "data")}  # never the repo's data/ folder
     result = subprocess.run(
         [sys.executable, "-m", "smartdesk_ai.agent"],
         input="zzqx wvvk plorf\nquit\n",

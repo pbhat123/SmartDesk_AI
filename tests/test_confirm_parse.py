@@ -143,7 +143,7 @@ def test_a_title_in_the_employees_words_is_kept():
 
 
 def test_invented_details_are_replaced_by_the_employees_own_words():
-    out = ground_edit(ConfirmDecision(decision="edit", details="Employee already tried a firmware update"),
+    out = ground_edit(ConfirmDecision(decision="edit", details="Employee already tried firmware 3.2.1 from Dell"),
                       "it is on the second floor", DRAFT)
     assert out.details == "it is on the second floor"
 

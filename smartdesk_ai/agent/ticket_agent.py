@@ -313,14 +313,9 @@ def make_t_draft_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]
 # --- drafting the ticket (FR-B6, FR-B13) --------------------------------------------------------------
 
 TITLE_MAX = 80
-# Words a faithful summary may add without inventing anything.
-_CONNECTIVE = frozenset(
-    "employee employees reported reports reporting issue problem ticket which would there their these those "
-    "while after before about being because other again since could started still having mentioned also "
-    "stated said unable cannot between during through where whether without within".split()
-)
-_WORD = re.compile(r"[A-Za-z]{5,}")
-_SPECIFIC = re.compile(r"\S*\d\S*|https?://\S+|\S+@\S+")
+# Facts that must come from the employee: numbers and codes, URLs, emails, IDs (#123, req-abc), names.
+_SPECIFIC = re.compile(r"\S*\d\S*|https?://\S+|\S+@\S+|#\w+|\breq-\w+", re.I)
+_TOKEN_EDGE = "\"'()[]{}<>,;:.!?"
 
 
 class DraftUnavailable(Exception):
@@ -364,15 +359,26 @@ def _strip_emails(text: str) -> str:
 
 
 def is_grounded(text: str, said: Sequence[str]) -> bool:
-    """True when `text` adds nothing the employee did not say: every number, URL and email in it, and
-    every longer word, appears in `said` (words are matched by their first five letters, so
-    "flickers" backs "flickering"). A conservative guard against invented details (FR-B13)."""
+    """True when `text` invents no fact (FR-B13). Numbers and codes, URLs, emails, ticket or request
+    IDs, and capitalised names (a capital that does not start a sentence) must appear in what the
+    employee said. Ordinary paraphrase is allowed: a summary may use its own words."""
     said_text = " ".join(said).lower()
     for token in _SPECIFIC.findall(text):
-        if token.strip(".,;:!?()\"'").lower() not in said_text:
+        if token.strip(_TOKEN_EDGE).lower() not in said_text:
             return False
-    stems = {w.lower()[:5] for w in _WORD.findall(said_text)}
-    return all(w.lower()[:5] in stems or w.lower() in _CONNECTIVE for w in _WORD.findall(_SPECIFIC.sub(" ", text)))
+    said_words = set(re.findall(r"[a-z0-9]+", said_text))
+    sentence_start = True
+    for match in re.finditer(r"\S+", text):
+        raw = match.group()
+        word = re.sub(r"['’]s$", "", raw.strip(_TOKEN_EDGE))
+        starts, sentence_start = sentence_start, bool(re.search(r"[.!?:]$", raw))
+        if match.start() > 0 and text[match.start() - 1] == "\n":
+            starts = True
+        if starts or len(word) < 2 or not word[0].isupper() or any(c.isdigit() for c in word):
+            continue
+        if word.lower() not in said_words:
+            return False
+    return True
 
 
 def _short_title(text: str) -> str:
@@ -403,11 +409,10 @@ def draft_from_statements(llm: Any, prompt: str, statements: Sequence[str]) -> T
         reply = parse_model_reply(DraftReply, getattr(response, "content", response))
     except ReplyError:
         return plain
-    description = _strip_emails(reply.description)
-    title = _strip_emails(reply.title)
+    # Judge the raw text: the statements carry no email, so any email in a draft is an invented fact.
     return TicketDraft(
-        title=title if title and is_grounded(title, statements) else plain.title,
-        description=description if description and is_grounded(description, statements) else plain.description,
+        title=reply.title if is_grounded(reply.title, statements) else plain.title,
+        description=reply.description if is_grounded(reply.description, statements) else plain.description,
         category=reply.category,
         priority=reply.priority,
     )

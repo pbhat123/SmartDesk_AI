@@ -12,11 +12,11 @@ NO_FILE = Path("/nonexistent/.env")
 QUESTION = "How do I reset my forgotten password?"
 
 
-def run_cli(argv, responder, lines=(QUESTION, "quit")):
+def run_cli(argv, responder, lines=(QUESTION, "quit"), data_dir=None):
     feed = iter(lines)
     out: list[str] = []
     code = main(argv, input_fn=lambda _: next(feed), output=out.append, environ={}, dotenv_path=NO_FILE,
-                responder=responder)
+                responder=responder, data_dir=data_dir)
     assert code == 0
     return out
 
@@ -58,9 +58,9 @@ def test_a_gap_question_shows_the_chunks_and_the_i_dont_know_answer(built_index_
     assert any("score=" in line for line in out)
 
 
-def test_the_default_stub_path_still_works_with_debug():
-    out = run_cli(["--debug"], None)
-    assert any("responder=" in line for line in out)
+def test_the_default_graph_path_works_with_debug(tmp_path):
+    out = run_cli(["--debug"], None, data_dir=tmp_path)  # a temp data dir: never the repo's data/ folder
+    assert any(line.startswith("[debug] answer:") for line in out)
 
 
 def test_service_merges_turn_debug_into_the_reply(settings):

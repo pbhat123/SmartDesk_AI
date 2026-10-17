@@ -59,34 +59,56 @@ def test_every_statement_is_sent_to_the_model_and_nothing_else():
 @pytest.mark.parametrize(
     "invented",
     [
-        "The monitor keeps flickering. The employee already tried rebooting twice.",  # a step they never mentioned
         "The monitor keeps flickering. Error code 0x80070005 is shown.",  # an invented code
         "The monitor keeps flickering since 14 March.",  # an invented date
         "Priya from Finance reports the monitor keeps flickering.",  # an invented name
+        "The monitor keeps flickering. See https://status.example.com for details.",  # an invented URL
+        "The monitor keeps flickering. This duplicates ticket #4821.",  # an invented ticket number
+        "The monitor keeps flickering. Contact priya@example.com.",  # an invented email
+        "The monitor keeps flickering. It happens with the Dell panel.",  # an invented capitalised name
     ],
 )
-def test_an_invented_detail_falls_back_to_the_employees_own_words(invented):
+def test_an_invented_fact_falls_back_to_the_employees_own_words(invented):
     out = draft(FakeDrafter(reply(description=invented)))
     assert out.description == "\n".join(STATEMENTS)
 
 
-def test_an_invented_title_detail_falls_back_to_a_title_from_their_words():
+def test_an_invented_title_fact_falls_back_to_a_title_from_their_words():
     out = draft(FakeDrafter(reply(title="Replace broken Dell U2720Q monitor")))
     assert out.title == "My monitor keeps flickering"
 
 
-def test_a_faithful_paraphrase_is_kept():
-    out = draft(FakeDrafter(reply(description="The employee reports that the monitor keeps flickering, "
-                                              "which started after the Windows update on Monday.")))
+def test_ordinary_paraphrase_is_allowed_even_with_new_words():
+    out = draft(FakeDrafter(reply(
+        description="The employee reports that the screen flickers constantly, starting after the latest "
+                    "Windows update on Monday.")))
     assert out.description.startswith("The employee reports")
 
 
-def test_is_grounded_checks_words_numbers_and_urls():
-    said = ["My VPN drops every 10 minutes at home"]
+def test_a_short_title_in_other_words_survives():
+    said = ["I can't connect to the VPN at home, it just times out"]
+    out = draft_from_statements(
+        FakeDrafter(reply(title="Unable to connect to VPN from home",
+                          description="Cannot reach the VPN from home; it times out.")),
+        "prompt", said)
+    assert out.title == "Unable to connect to VPN from home"
+    assert out.description.startswith("Cannot reach the VPN")
+
+
+def test_is_grounded_checks_facts_only():
+    said = ["My VPN drops every 10 minutes at home. Priya in IT said to restart"]
     assert is_grounded("The VPN drops every 10 minutes when the employee is at home.", said)
-    assert not is_grounded("The VPN drops every 15 minutes.", said)
-    assert not is_grounded("See https://vpn.example.com for details", said)
-    assert not is_grounded("The router firmware is outdated", said)
+    assert is_grounded("Connection keeps failing and the router seems outdated.", said)  # paraphrase, no facts
+    assert not is_grounded("The VPN drops every 15 minutes.", said)  # a number
+    assert not is_grounded("See https://vpn.example.com for details", said)  # a URL
+    assert not is_grounded("Reported to jo@example.com", said)  # an email
+    assert not is_grounded("Linked to ticket #4821", said)  # an ID
+    assert not is_grounded("It started with Amit's laptop", said)  # a capitalised name
+    assert is_grounded("Priya in IT suggested a restart.", said)  # the same name, said by the employee
+
+
+def test_sentence_starts_and_the_word_i_are_not_names():
+    assert is_grounded("Unable to connect. Then I tried again. Nothing works", ["cannot connect"])
 
 
 def test_a_malformed_reply_falls_back_to_a_draft_from_their_words():

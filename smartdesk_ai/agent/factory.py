@@ -5,6 +5,7 @@ no network. llm live: the real models, embeddings and index (needs OPENAI_API_KE
 tickets mock: an in-memory client, no GitHub calls. Anything that makes live mode unusable raises
 `LiveModeUnavailable`, and the caller falls back to mock with a notice (FR-F7).
 """
+import os
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -34,12 +35,21 @@ from smartdesk_ai.tools.search_kb import make_search_kb
 from smartdesk_ai.tools.ticket_tools import register_ticket_tools
 
 DEFAULT_DATA_DIR = ROOT / "data"  # gitignored
+DATA_DIR_ENV = "SMARTDESK_DATA_DIR"  # lets tests and deployments move every runtime file
 CHECKPOINT_DB = "checkpoints.db"
-TICKETS_DB = "tickets.db"
+TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
 
 class LiveModeUnavailable(RuntimeError):
-    """modes.llm or modes.tickets is `live` but something it needs is missing."""
+    """modes.llm or modes.tickets is `live` but something it needs is missing. The message names
+    what is missing and how to fix it; there is no silent fallback to mock."""
+
+
+def resolve_data_dir(data_dir: Path | None, environ: Mapping[str, str] | None) -> Path:
+    if data_dir is not None:
+        return Path(data_dir)
+    override = (environ if environ is not None else os.environ).get(DATA_DIR_ENV)
+    return Path(override) if override else DEFAULT_DATA_DIR
 
 
 def _builder_for(model: Any) -> ModelBuilder:
@@ -51,23 +61,24 @@ def build_responder(
     *,
     environ: Mapping[str, str] | None = None,
     dotenv_path: Path | None = DEFAULT_DOTENV,
-    data_dir: Path = DEFAULT_DATA_DIR,
+    data_dir: Path | None = None,
     kb_dir: Path = DEFAULT_KB_DIR,
     registry: HealthRegistry | None = None,
-    force_mock: bool = False,
 ) -> Responder:
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
-    live = settings.modes.llm == "live" and not force_mock
+    data_dir = resolve_data_dir(data_dir, environ)
+    live = settings.modes.llm == "live"
     reranker = None
     embeddings: Embeddings
     search_settings = settings
     if live:
         if env.openai_api_key is None:
-            raise LiveModeUnavailable("OPENAI_API_KEY is not set (see .env.example)")
+            raise LiveModeUnavailable(
+                "OPENAI_API_KEY is not set. Add it to .env (see .env.example) or export it."
+            )
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
-        reranker = load_reranker(settings, registry)
         answer_b = route_b = draft_b = confirm_b = openai_builder
     else:
         embeddings = HashingEmbeddings()
@@ -80,15 +91,20 @@ def build_responder(
         draft_b, confirm_b = _builder_for(MockDraftModel()), _builder_for(MockConfirmModel())
     try:
         index = open_index(index_dir, embeddings)
-    except IndexNotBuilt as error:
-        raise LiveModeUnavailable(str(error)) from error
+    except IndexNotBuilt:
+        raise LiveModeUnavailable(
+            f"the KB index is missing in {index_dir}. Build it with: python -m smartdesk_ai.rag.ingest"
+        ) from None
+    if live:
+        reranker = load_reranker(settings, registry)  # degrades to RRF order, never fails (FR-F7)
     try:
         client = create_ticket_client(settings, env)
     except TicketConfigError as error:
-        raise LiveModeUnavailable(str(error)) from error
+        raise LiveModeUnavailable(f"{error}. Set it in .env (see .env.example).") from error
 
     Path(data_dir).mkdir(parents=True, exist_ok=True)
-    store = TicketStore(Path(data_dir) / TICKETS_DB)
+    # Mock tickets live in memory, so their numbers never reach the live map in app.db.
+    store = TicketStore(Path(data_dir) / TICKET_MAP_DB if settings.modes.tickets == "live" else ":memory:")
     tools = ToolRegistry()
     tools.register("search_kb", make_search_kb(index, search_settings, reranker=reranker, health=registry))
     register_ticket_tools(tools, client, store)

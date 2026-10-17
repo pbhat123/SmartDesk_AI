@@ -43,6 +43,18 @@ tools:
   max_attempts: 3
   backoff_seconds: 0.2
 
+# Which implementation sits behind each external interface (FR-B10). tickets: mock keeps
+# everything in memory and never calls GitHub; live needs GITHUB_TOKEN and TICKETS_REPO.
+modes:
+  tickets: mock
+
+# GitHub REST client for the tickets repo (FR-B12). Pagination size is capped at 100 by GitHub.
+github:
+  api_base_url: https://api.github.com
+  api_version: "2022-11-28"
+  timeout_seconds: 10
+  per_page: 100
+
 # Daily spend (FR-H8). cutoff_1: everything moves to Light-Model.
 # cutoff_2: total daily spend at which service stops (a further $5 after cutoff_1).
 budget:

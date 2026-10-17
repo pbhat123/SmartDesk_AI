@@ -89,6 +89,17 @@ class ToolRetry(_Strict):
     backoff_seconds: NonNegative  # first wait; doubles each retry
 
 
+class Modes(_Strict):
+    tickets: Literal["mock", "live"]  # mock: in-memory tickets client, no GitHub calls (FR-B10)
+
+
+class GitHub(_Strict):
+    api_base_url: str
+    api_version: str
+    timeout_seconds: Annotated[float, Field(gt=0)]
+    per_page: Annotated[int, Field(ge=1, le=100)]  # GitHub caps a page at 100
+
+
 class Budget(_Strict):
     timezone: str
     cutoff_1_usd: NonNegative
@@ -182,6 +193,8 @@ class Settings(_Strict):
     tiers: dict[str, Tier]
     llm: LLMRetry
     tools: ToolRetry
+    modes: Modes
+    github: GitHub
     budget: Budget
     rate_limits: RateLimits
     compaction: Compaction

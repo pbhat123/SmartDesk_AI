@@ -8,9 +8,11 @@ If nothing can answer, the result carries a graceful message and `ok` is False.
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import Any
 
 import tiktoken
+from pydantic import BaseModel
 
 from smartdesk_ai.config.settings import Settings, Tier
 from smartdesk_ai.llm.factory import ModelBuilder, get_llm_for_tier, openai_builder
@@ -46,6 +48,15 @@ def _fallback_tier(primary: Tier, budget_level: int) -> Tier | None:
     return other
 
 
+def _reply_text(reply: Any, schema: type[BaseModel] | None) -> str:
+    if schema is None:
+        return str(reply.content)
+    parsed = reply.get("parsed")
+    if isinstance(parsed, BaseModel):
+        return parsed.model_dump_json()
+    return str(getattr(reply.get("raw"), "content", ""))
+
+
 def invoke_with_fallback(
     task: str,
     prompt: Any,
@@ -54,7 +65,11 @@ def invoke_with_fallback(
     budget_level: int = 0,
     builder: ModelBuilder = openai_builder,
     sleep: Callable[[float], None] = time.sleep,
+    schema: type[BaseModel] | None = None,
 ) -> LLMResult:
+    """Run `prompt` with retry and the Main/Light fallback. With `schema`, the model's
+    structured-output mode is used and the parsed reply comes back as JSON text. A reply that
+    fails the schema is not an outage: its raw text is returned for the caller to reject."""
     primary = resolve_tier(task, settings, budget_level)
     candidates: list[Tier] = [primary]
     fallback = _fallback_tier(primary, budget_level)
@@ -69,13 +84,48 @@ def invoke_with_fallback(
                 continue  # oversize prompt is never sent to Light-Model
         try:
             handle = get_llm_for_tier(task, tier, settings, builder=builder)
+            model = handle.model.with_structured_output(schema, include_raw=True) if schema else handle.model
             reply = call_with_retry(
-                lambda: handle.model.invoke(prompt),
+                lambda: model.invoke(prompt),
                 attempts=settings.llm.retry_attempts,
                 backoff=settings.llm.backoff_seconds,
                 sleep=sleep,
             )
         except Exception:
             continue  # message deliberately not kept: it could echo prompt text (FR-G11)
-        return LLMResult(True, str(reply.content), tier, is_fallback)
+        return LLMResult(True, _reply_text(reply, schema), tier, is_fallback)
     return LLMResult(False, GRACEFUL_MESSAGE, None, False)
+
+
+class LLMUnavailableError(Exception):
+    """Both tiers failed (FR-F2). `message` is the graceful text for the employee."""
+
+    def __init__(self, message: str = GRACEFUL_MESSAGE) -> None:
+        super().__init__(message)
+        self.message = message
+
+
+class FallbackChat:
+    """A chat model for one task that goes through the outage fallback on every call.
+
+    `invoke` returns an object with `.content`, or raises `LLMUnavailableError` when nothing
+    can answer. Pass `schema` to use structured-output mode (the live client)."""
+
+    def __init__(
+        self,
+        task: str,
+        settings: Settings,
+        *,
+        builder: ModelBuilder = openai_builder,
+        budget_level: int = 0,
+        schema: type[BaseModel] | None = None,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        self._args = (task, settings)
+        self._kwargs = {"budget_level": budget_level, "builder": builder, "sleep": sleep, "schema": schema}
+
+    def invoke(self, messages: Any) -> SimpleNamespace:
+        result = invoke_with_fallback(self._args[0], messages, self._args[1], **self._kwargs)
+        if not result.ok:
+            raise LLMUnavailableError(result.text)
+        return SimpleNamespace(content=result.text)

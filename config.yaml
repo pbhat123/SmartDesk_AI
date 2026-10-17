@@ -45,8 +45,11 @@ tools:
 
 # Which implementation sits behind each external interface (FR-B10). tickets: mock keeps
 # everything in memory and never calls GitHub; live needs GITHUB_TOKEN and TICKETS_REPO.
+# llm: mock uses scripted offline models and hashing embeddings (CLI and tests run with no keys);
+# live uses OpenAI and needs OPENAI_API_KEY and an index built by the ingest script.
 modes:
   tickets: mock
+  llm: mock
 
 # GitHub REST client for the tickets repo (FR-B12). Pagination size is capped at 100 by GitHub.
 github:

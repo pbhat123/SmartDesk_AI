@@ -104,6 +104,7 @@ def build_service(
     registry: HealthRegistry | None = None,
     config_path: Path = DEFAULT_CONFIG,
     responder: Responder = stub_responder,
+    responder_factory: Callable[[Settings], Responder] | None = None,
 ) -> ChatService:
     """Assemble the service. Missing keys or optional components never raise (FR-F7).
 
@@ -111,4 +112,7 @@ def build_service(
     """
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     (registry if registry is not None else get_registry()).register_env(env)
-    return ChatService(load_settings(config_path), responder=responder)
+    settings = load_settings(config_path)
+    if responder_factory is not None:
+        responder = responder_factory(settings)
+    return ChatService(settings, responder=responder)

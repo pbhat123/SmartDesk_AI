@@ -1,9 +1,12 @@
 """Answer step: answer from the retrieved context only, or say "I don't know" (FR-A4, FR-A15).
 
-One WORKER_ANSWER call returns an `AnswerReply`. If it reports insufficient context (escalation
-signal 3), or returns nothing usable, the reply is the fixed "I don't know" text and the flow
-escalates even when retrieval scores passed (`should_escalate`).
+One WORKER_ANSWER call returns an `AnswerReply`. If it reports insufficient context, or its reply
+is malformed or fails the schema (escalation signal 3), the reply is the fixed "I don't know" text
+and the flow escalates even when retrieval scores passed (`should_escalate`). If the call itself
+fails because every model tier is down, `AnswerUnavailable` is raised instead: that is an outage
+to tell the employee about, never a ticket offer (FR-F2, FR-F1).
 """
+import time
 from collections.abc import Callable, Sequence
 from typing import Any
 
@@ -12,7 +15,8 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.config.settings import Settings
-from smartdesk_ai.llm.factory import ModelBuilder, get_llm, openai_builder
+from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, FallbackChat
+from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
@@ -20,7 +24,16 @@ INSUFFICIENT_REPLY = "I don't know the answer to that from our knowledge base."
 
 
 class AnswerError(Exception):
-    """The model call failed or its reply was not a valid answer."""
+    """The model replied, but not with a valid answer. This is escalation signal 3."""
+
+
+class AnswerUnavailable(Exception):
+    """The model call failed: every tier is down (FR-F2). Not a reason to offer a ticket;
+    `message` is the polite try-again-later text for the employee (FR-F1)."""
+
+    def __init__(self, message: str = GRACEFUL_MESSAGE) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 class AnswerReply(BaseModel):
@@ -68,8 +81,8 @@ def answer_from_context(llm: Any, prompt: str, question: str, chunks: Sequence[K
     human = f"Question: {question}\n\nContext:\n{format_context(chunks)}"
     try:
         response = llm.invoke([SystemMessage(prompt), HumanMessage(human)])
-    except Exception as error:
-        raise AnswerError(f"answer call failed: {type(error).__name__}") from error
+    except Exception as error:  # the message is not kept: it could echo prompt text (FR-G11)
+        raise AnswerUnavailable(getattr(error, "message", GRACEFUL_MESSAGE)) from error
     try:
         reply = parse_model_reply(AnswerReply, getattr(response, "content", response))
     except ReplyError as error:
@@ -95,12 +108,16 @@ def make_answerer(
     builder: ModelBuilder = openai_builder,
     budget_level: int = 0,
     structured: bool | None = None,
+    sleep: Callable[[float], None] = time.sleep,
 ) -> Callable[[str, Sequence[KBChunk]], AnswerResult]:
-    """An answerer bound to the WORKER_ANSWER model and the active answer prompt. The live
-    client uses structured-output mode; a custom builder (the mock path) gets plain JSON."""
-    llm = get_llm("WORKER_ANSWER", settings, budget_level=budget_level, builder=builder).model
-    if structured if structured is not None else builder is openai_builder:
-        llm = llm.with_structured_output(AnswerReply)
+    """An answerer for the WORKER_ANSWER task and the active answer prompt. Every call goes
+    through the Main/Light outage fallback. The live client uses structured-output mode; a custom
+    builder (the mock path) gets plain JSON unless `structured=True`."""
+    use_schema = structured if structured is not None else builder is openai_builder
+    llm = FallbackChat(
+        "WORKER_ANSWER", settings, builder=builder, budget_level=budget_level,
+        schema=AnswerReply if use_schema else None, sleep=sleep,
+    )
     prompt = load_prompt("answer", settings).text
 
     def answer(question: str, chunks: Sequence[KBChunk]) -> AnswerResult:

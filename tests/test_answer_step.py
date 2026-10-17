@@ -1,11 +1,14 @@
 """T4.6: answer from retrieved context only; "I don't know" when it is insufficient (FR-A4,
 FR-A15 signal 3). Mock LLM, no network."""
+from types import SimpleNamespace
+
 import pytest
 
 from smartdesk_ai.agent.answer import (
     INSUFFICIENT_REPLY,
     AnswerError,
     AnswerReply,
+    AnswerUnavailable,
     answer_from_context,
     make_answerer,
     should_escalate,
@@ -78,12 +81,12 @@ def test_malformed_reply_raises_answer_error(prompt, raw):
         answer_from_context(FakeAnswerLLM("raw", raw=raw), prompt, "q", CHUNKS)
 
 
-def test_a_failing_model_call_raises_answer_error(prompt):
+def test_a_failing_model_call_raises_answer_unavailable_not_signal_3(prompt):
     class Boom:
         def invoke(self, messages):
             raise TimeoutError("down")
 
-    with pytest.raises(AnswerError):
+    with pytest.raises(AnswerUnavailable):
         answer_from_context(Boom(), prompt, "q", CHUNKS)
 
 
@@ -122,20 +125,25 @@ def test_make_answerer_uses_the_worker_answer_task_and_active_prompt(settings):
         return FakeAnswerLLM()
 
     answer = make_answerer(settings, builder=builder)
-    assert built == [getattr(settings.models, settings.tiers["WORKER_ANSWER"]).id]
     assert answer("q", CHUNKS).insufficient is False
+    assert built == [getattr(settings.models, settings.tiers["WORKER_ANSWER"]).id]
 
 
 def test_live_client_uses_structured_output(settings):
     seen = {}
 
     class Live(FakeAnswerLLM):
-        def with_structured_output(self, schema):
-            seen["schema"] = schema
-            return self
+        def with_structured_output(self, schema, include_raw=False):
+            seen["schema"], seen["include_raw"] = schema, include_raw
+            return SimpleNamespace(invoke=lambda prompt: {
+                "raw": None,
+                "parsed": AnswerReply(answer="a", insufficient=False, citations=["IT-PWD-01"]),
+                "parsing_error": None,
+            })
 
-    make_answerer(settings, builder=lambda m, c: Live(), structured=True)
-    assert seen["schema"] is AnswerReply
+    answer = make_answerer(settings, builder=lambda m, c: Live(), structured=True)
+    assert answer("q", CHUNKS).citations == ["IT-PWD-01"]
+    assert seen == {"schema": AnswerReply, "include_raw": True}
 
 
 def test_the_answer_prompt_forbids_outside_knowledge(prompt):

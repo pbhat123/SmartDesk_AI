@@ -91,6 +91,7 @@ class ToolRetry(_Strict):
 
 class Modes(_Strict):
     tickets: Literal["mock", "live"]  # mock: in-memory tickets client, no GitHub calls (FR-B10)
+    llm: Literal["mock", "live"]  # mock: scripted offline models, no OpenAI calls; live needs OPENAI_API_KEY
 
 
 class GitHub(_Strict):

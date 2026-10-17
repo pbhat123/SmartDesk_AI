@@ -12,7 +12,13 @@ from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
 
 from smartdesk_ai.agent.chat_service import Turn
-from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY, AnswerError, AnswerResult, should_escalate
+from smartdesk_ai.agent.answer import (
+    INSUFFICIENT_REPLY,
+    AnswerError,
+    AnswerResult,
+    AnswerUnavailable,
+    should_escalate,
+)
 from smartdesk_ai.agent.ticket_agent import escalation_offer
 from smartdesk_ai.agent.state import AgentState, ChunkRef, Domain, PartResult, PendingOffer, thread_config
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
@@ -23,6 +29,14 @@ OFFER_AGENT = "kb"
 
 class KBFirstViolation(RuntimeError):
     """A ticket offer was attempted without a prior search_kb call (FR-A14)."""
+
+
+@dataclass(frozen=True)
+class Unavailable:
+    """A search or the answer model could not be reached; `step` names it in the trace."""
+
+    message: str
+    step: str
 
 
 @dataclass(frozen=True)
@@ -42,17 +56,20 @@ def _chunk_refs(found: SearchKBResult) -> list[ChunkRef]:
     return [ChunkRef(entry_id=c.entry_id, title=c.title, score=c.score) for c in found.chunks]
 
 
-def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> PartResult | str:
-    """One search plus one answer. Returns the result, or a polite message after an outage."""
+def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> PartResult | Unavailable:
+    """One search plus one answer. Returns the result, or `Unavailable` after an outage."""
     args: dict[str, Any] = {"query": question}
     if domain is not None:
         args["domain"] = domain
     result = deps.executor.execute("search_kb", args, agent=OFFER_AGENT)
     if result.outcome is not Outcome.SUCCESS:
-        return result.reply or "Sorry, I can't look that up right now. Please try again later."
+        return Unavailable(result.reply or "Sorry, I can't look that up right now. Please try again later.",
+                           "search_failed")
     found: SearchKBResult = result.data
     try:
         answer = deps.answer(question, found.chunks)
+    except AnswerUnavailable as outage:  # every model tier is down: tell them, never offer a ticket
+        return Unavailable(outage.message, "llm_unavailable")
     except AnswerError:
         answer = AnswerResult(text=INSUFFICIENT_REPLY, answer="", insufficient=True)  # signal 3
     if should_escalate(found, answer):  # never show an answer that a signal rejected
@@ -70,9 +87,9 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
 def make_kb_search_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
     def kb_search(state: AgentState) -> dict[str, Any]:
         outcome = _search_and_answer(deps, _question(state), state.search_domain)
-        if isinstance(outcome, str):
-            return {"steps": ["start", "search_kb", "search_failed"], "part_result": None, "reply": outcome,
-                    "messages": [AIMessage(outcome)]}
+        if isinstance(outcome, Unavailable):
+            return {"steps": ["start", "search_kb", outcome.step], "part_result": None, "reply": outcome.message,
+                    "messages": [AIMessage(outcome.message)]}
         return {"steps": ["start", "search_kb", "answer"], "part_result": outcome, "reply": outcome.answer}
 
     return kb_search
@@ -88,9 +105,9 @@ def make_kb_retry_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
 
     def kb_retry(state: AgentState) -> dict[str, Any]:
         outcome = _search_and_answer(deps, _question(state), None)
-        if isinstance(outcome, str):
-            return {"steps": state.steps + ["search_kb", "search_failed"], "part_result": None, "reply": outcome,
-                    "messages": [AIMessage(outcome)]}
+        if isinstance(outcome, Unavailable):
+            return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
+                    "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
         part = outcome.model_copy(update={"retried": True})
         return {"steps": state.steps + ["search_kb", "answer"], "part_result": part, "reply": part.answer}
 

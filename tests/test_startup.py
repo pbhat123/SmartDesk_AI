@@ -19,6 +19,7 @@ from smartdesk_ai.agent.chat_service import (
     ChatService,
     GuardDecision,
     build_service,
+    stub_responder,
 )
 from smartdesk_ai.config.settings import load_settings
 from smartdesk_ai.ops.health import Component, HealthRegistry
@@ -125,6 +126,7 @@ def run_cli(lines, argv=()):
         environ={},
         dotenv_path=NO_FILE,
         registry=HealthRegistry(),
+        responder=stub_responder,  # these tests are about startup; the graph has its own tests
     )
     return code, out
 
@@ -168,5 +170,6 @@ def test_module_entry_point_runs_with_a_bare_environment(tmp_path):
         timeout=60,
     )
     assert result.returncode == 0, result.stderr
-    assert STUB_REPLY in result.stdout
-    assert "Traceback" not in result.stderr
+    assert "[debug]" not in result.stdout and "Traceback" not in result.stderr
+    # the real graph answers in mock mode: an unknown topic gets "I don't know" and a ticket offer
+    assert "I don't know" in result.stdout and "ticket" in result.stdout

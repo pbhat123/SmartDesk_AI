@@ -4,7 +4,7 @@ The agent graph and the tools see `TicketClient` only. Whether tickets live in m
 FR-B10), behind REST, or one day behind an MCP server is chosen in `create_ticket_client`.
 Error messages carry a status code and a path template, never response text or the token (FR-G11).
 """
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from typing import Any, Protocol
 
 import httpx
@@ -13,6 +13,7 @@ from pydantic import BaseModel, SecretStr, ValidationError
 from smartdesk_ai.config.env import EnvSettings
 from smartdesk_ai.config.settings import GitHub, Settings
 from smartdesk_ai.tickets.schemas import (
+    LabelSpec,
     Ticket,
     TicketConfigError,
     TicketCreate,
@@ -30,18 +31,51 @@ class IssuePayload(BaseModel):
     labels: list[str]
 
 
+EMPLOYEE_PREFIX = "Employee: "
+REQUEST_ID_PREFIX = "Request-ID: "
+
+
 def build_issue(draft: TicketCreate) -> IssuePayload:
-    """Turn a ticket draft into the issue to create. Mock and REST share this, so they agree."""
+    """Turn a ticket draft into the issue to create (FR-B11). Mock and REST share this, so they agree.
+
+    The body is the description, then the `Employee:` and `Request-ID:` lines last, so a lookalike
+    line typed inside the description is never the one that is read back.
+    """
+    body = f"{draft.description.rstrip()}\n\n{EMPLOYEE_PREFIX}{draft.email}\n{REQUEST_ID_PREFIX}{draft.request_id}\n"
     labels = [draft.category.value]
     if draft.priority is not None:
         labels.append(draft.priority.value)
-    return IssuePayload(title=draft.title, body=draft.description, labels=labels)
+    return IssuePayload(title=draft.title, body=body, labels=labels)
+
+
+def _last_value(body: str, prefix: str) -> str | None:
+    for line in reversed(body.splitlines()):
+        if line.startswith(prefix):
+            return line[len(prefix):].strip() or None
+    return None
+
+
+def employee_email_of(body: str) -> str | None:
+    """The email on the last `Employee:` line of an issue body (FR-B11, FR-C11)."""
+    return _last_value(body, EMPLOYEE_PREFIX)
+
+
+def request_id_of(body: str) -> str | None:
+    return _last_value(body, REQUEST_ID_PREFIX)
 
 
 class TicketClient(Protocol):
     def create(self, draft: TicketCreate) -> Ticket: ...
 
     def get(self, number: int) -> Ticket: ...
+
+    def find_by_request_id(self, request_id: str) -> Ticket | None:
+        """Look through the repo's issues (a list call, not search) for this request ID (FR-G6)."""
+        ...
+
+    def ensure_labels(self, labels: Sequence[LabelSpec]) -> list[str]:
+        """Create the labels that do not exist yet; return the names created (FR-B11)."""
+        ...
 
 
 # --- mock mode ---------------------------------------------------------------
@@ -58,6 +92,7 @@ class MockTicketClient:
         self.fail_before_create = 0
         self.lose_responses = 0
         self._issues: dict[int, Ticket] = {}
+        self._labels: set[str] = set()
 
     def create(self, draft: TicketCreate) -> Ticket:
         if self.fail_before_create:
@@ -80,6 +115,14 @@ class MockTicketClient:
             return self._issues[number]
         except KeyError:
             raise TicketNotFound(f"issue {number}") from None
+
+    def find_by_request_id(self, request_id: str) -> Ticket | None:
+        return next((t for t in reversed(self._issues.values()) if request_id_of(t.body) == request_id), None)
+
+    def ensure_labels(self, labels: Sequence[LabelSpec]) -> list[str]:
+        created = [spec.name for spec in labels if spec.name.lower() not in self._labels]
+        self._labels.update(name.lower() for name in created)
+        return created
 
 
 # --- REST --------------------------------------------------------------------
@@ -133,7 +176,7 @@ class GitHubRestClient:
         if code == 404:
             raise TicketNotFound("not found")
         if code >= 400:
-            raise TicketError(f"GitHub answered {code}")
+            raise TicketError(f"GitHub answered {code}", status=code)
         return response
 
     def _json(self, response: httpx.Response) -> Any:
@@ -161,6 +204,34 @@ class GitHubRestClient:
 
     def get(self, number: int) -> Ticket:
         return _to_ticket(self._json(self._send("GET", f"/repos/{self._repo}/issues/{number}")))
+
+    def find_by_request_id(self, request_id: str) -> Ticket | None:
+        # Newest first, so a ticket created a moment ago is on page one. GitHub search can lag.
+        params = {"state": "all", "sort": "created", "direction": "desc"}
+        for page in self._pages(f"/repos/{self._repo}/issues", params):
+            for item in page:
+                try:
+                    ticket = _to_ticket(item)
+                except TicketNotFound:  # pull requests share this endpoint
+                    continue
+                if request_id_of(ticket.body) == request_id:
+                    return ticket
+        return None
+
+    def ensure_labels(self, labels: Sequence[LabelSpec]) -> list[str]:
+        have = {item["name"].lower() for page in self._pages(f"/repos/{self._repo}/labels", {}) for item in page}
+        created = []
+        for spec in labels:
+            if spec.name.lower() in have:
+                continue
+            try:
+                self._send("POST", f"/repos/{self._repo}/labels", json=spec.model_dump())
+            except TicketError as exc:
+                if exc.status != 422:  # 422: another run created it first
+                    raise
+                continue
+            created.append(spec.name)
+        return created
 
 
 # --- factory -------------------------------------------------------------------

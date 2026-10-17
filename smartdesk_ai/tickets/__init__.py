@@ -3,9 +3,13 @@ from smartdesk_ai.tickets.github_client import (
     GitHubRestClient,
     MockTicketClient,
     TicketClient,
+    build_issue,
     create_ticket_client,
+    employee_email_of,
+    request_id_of,
 )
 from smartdesk_ai.tickets.schemas import (
+    ALL_LABELS,
     Category,
     Priority,
     Ticket,
@@ -17,7 +21,7 @@ from smartdesk_ai.tickets.schemas import (
 )
 
 __all__ = [
-    "Category", "GitHubRestClient", "MockTicketClient", "Priority", "Ticket", "TicketClient",
+    "ALL_LABELS", "Category", "GitHubRestClient", "MockTicketClient", "Priority", "Ticket", "TicketClient",
     "TicketConfigError", "TicketCreate", "TicketError", "TicketNotFound", "TransientTicketError",
-    "create_ticket_client",
+    "build_issue", "create_ticket_client", "employee_email_of", "request_id_of",
 ]

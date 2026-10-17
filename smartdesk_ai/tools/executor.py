@@ -3,7 +3,6 @@
 Every tool call goes through `ToolExecutor.execute`: lookup in the registry, argument validation,
 then at most `tools.max_attempts` attempts with backoff, retrying transient failures only.
 """
-import re
 import time
 import uuid
 from collections.abc import Callable
@@ -14,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.ops.metrics import MetricsRecorder, ToolCallRecord
+from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
 from smartdesk_ai.tickets.sqlite_map import TicketStore
 from smartdesk_ai.tools.definitions import get_definition
 from smartdesk_ai.tools.errors import TRANSIENT
@@ -38,7 +38,6 @@ class ErrorCode(StrEnum):
 EMAIL_TOOLS = frozenset({"create_ticket", "get_tickets"})
 CONFIRMED_TOOLS = frozenset({"create_ticket"})
 ASK_FOR_EMAIL = "Ask the employee for their work email address before trying again."
-_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class ToolResult(BaseModel):
@@ -113,7 +112,7 @@ class ToolExecutor:
             email = getattr(args, "email", None)
             if not email:
                 return _rejected(name, ErrorCode.EMAIL_REQUIRED, ASK_FOR_EMAIL)
-            if not _EMAIL.match(email):
+            if not EMAIL_PATTERN.fullmatch(email):
                 return _rejected(name, ErrorCode.EMAIL_INVALID, f"The email address is not valid. {ASK_FOR_EMAIL}")
         if name in CONFIRMED_TOOLS and not confirmed:
             return _rejected(

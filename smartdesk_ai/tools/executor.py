@@ -130,6 +130,7 @@ class ToolExecutor:
             number = _issue_number(result.data)
             if number is not None:
                 self._store.complete(request_id, number)
+                self._store.link_email(args.email, number)  # FR-B3, FR-C10
         return result
 
     def _run_with_retry(

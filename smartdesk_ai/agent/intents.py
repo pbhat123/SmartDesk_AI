@@ -11,10 +11,10 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from smartdesk_ai.agent.prompt_loader import load_prompt
-from smartdesk_ai.agent.state import AgentState, Awaiting, IntentResult
+from smartdesk_ai.agent.state import AgentState, Awaiting, Category, Intent, IntentResult
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.factory import ModelBuilder, get_llm, openai_builder
 
@@ -38,31 +38,32 @@ def build_messages(prompt: str, text: str, awaiting: Awaiting, last_topic: str |
     return [SystemMessage(prompt), HumanMessage(human)]
 
 
+class ClassifierReply(BaseModel):
+    """The exact shape the classifier must return (FR-H2). Anything else is invalid output."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    intent: Intent
+    confidence: float = Field(ge=0.0, le=1.0)
+    domain: Category | None = None
+
+
+def _to_result(reply: ClassifierReply) -> IntentResult:
+    domain = reply.domain if reply.intent == "kb_query" else None
+    return IntentResult(intent=reply.intent, confidence=reply.confidence, domain=domain)
+
+
 def _parse(content: Any) -> IntentResult:
-    raw = content if isinstance(content, str) else str(content)
-    raw = raw.strip()
+    if isinstance(content, ClassifierReply):  # structured-output mode (live client)
+        return _to_result(content)
+    raw = (content if isinstance(content, str) else str(content)).strip()
     fenced = _FENCE.match(raw)
     if fenced:
         raw = fenced.group(1)
     try:
-        data = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise ClassifierError("classifier did not return JSON") from error
-    if not isinstance(data, dict):
-        raise ClassifierError("classifier JSON is not an object")
-    if isinstance(data.get("confidence"), bool) or not isinstance(data.get("confidence"), int | float):
-        raise ClassifierError("classifier confidence is missing or not a number")
-    try:
-        result = IntentResult(
-            intent=data.get("intent"),
-            confidence=data["confidence"],
-            domain=data.get("domain"),
-        )
+        return _to_result(ClassifierReply.model_validate_json(raw))
     except ValidationError as error:
-        raise ClassifierError("classifier returned an invalid intent, confidence or domain") from error
-    if result.intent != "kb_query" and result.domain is not None:
-        result = result.model_copy(update={"domain": None})
-    return result
+        raise ClassifierError("classifier reply is not a valid classification") from error
 
 
 def classify_intent(
@@ -92,20 +93,32 @@ def route_for(result: IntentResult) -> Route:
 def dialog_update(state: AgentState, result: IntentResult) -> dict[str, Any]:
     """State changes after classifying: a new topic mid-flow clears the pending offer (FR-D2).
 
-    Continuing the flow, or an unclear reply, keeps the state as it is.
+    A partly built ticket draft goes with it; the session email stays. Continuing the flow,
+    or an unclear reply, keeps the state as it is.
     """
     if state.awaiting == "none" or result.intent == "ambiguous":
         return {}
     if result.intent == _CONTINUES[state.awaiting]:
         return {}
-    return {"awaiting": "none", "pending_offer": None}
+    return {"awaiting": "none", "pending_offer": None, "ticket": None}
 
 
 def make_classifier(
-    settings: Settings, *, builder: ModelBuilder = openai_builder, budget_level: int = 0
+    settings: Settings,
+    *,
+    builder: ModelBuilder = openai_builder,
+    budget_level: int = 0,
+    structured: bool | None = None,
 ) -> Callable[..., IntentResult]:
-    """A classifier bound to the ORCHESTRATOR model and the active orchestrator prompt."""
+    """A classifier bound to the ORCHESTRATOR model and the active orchestrator prompt.
+
+    The live client (the default builder) uses the model's structured-output mode with
+    `ClassifierReply`; a custom builder, i.e. the mock path, gets plain JSON unless
+    `structured=True` is passed.
+    """
     llm = get_llm("ORCHESTRATOR", settings, budget_level=budget_level, builder=builder).model
+    if structured if structured is not None else builder is openai_builder:
+        llm = llm.with_structured_output(ClassifierReply)
     prompt = load_prompt("orchestrator", settings).text
 
     def classify(text: str, awaiting: Awaiting = "none", last_topic: str | None = None) -> IntentResult:

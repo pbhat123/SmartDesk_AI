@@ -9,18 +9,20 @@ import re
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
 
 from evals.common import EVALS_DIR, load_jsonl
 from evals.schemas import IntentRow
 from smartdesk_ai.agent.intents import (
     ClassifierError,
+    ClassifierReply,
     classify_intent,
     dialog_update,
     make_classifier,
     route_for,
 )
 from smartdesk_ai.agent.prompt_loader import load_prompt
-from smartdesk_ai.agent.state import AgentState, IntentResult, PendingOffer
+from smartdesk_ai.agent.state import AgentState, IntentResult, PendingOffer, TicketDraft
 
 ROWS = [IntentRow(**r) for r in load_jsonl(EVALS_DIR / "intents.jsonl")]
 
@@ -112,6 +114,53 @@ def test_invalid_output_raises_classifier_error(prompt, raw):
         classify_intent(FakeLLM(raw=raw), prompt, "hello", "none")
 
 
+def test_extra_or_misspelled_fields_are_rejected_by_the_reply_model(prompt):
+    raw = '{"intent": "kb_query", "confidence": 0.9, "domian": "IT"}'
+    with pytest.raises(ClassifierError):
+        classify_intent(FakeLLM(raw=raw), prompt, "hello", "none")
+
+
+def test_reply_model_validates_the_json(prompt):
+    reply = ClassifierReply.model_validate_json('{"intent": "kb_query", "confidence": 0.8, "domain": "HR"}')
+    assert (reply.intent, reply.confidence, reply.domain) == ("kb_query", 0.8, "HR")
+    with pytest.raises(ValidationError):
+        ClassifierReply.model_validate_json('{"intent": "kb_query", "confidence": 2}')
+
+
+class StructuredLLM:
+    """Has `with_structured_output`, like a live chat model."""
+
+    def __init__(self, reply):
+        self.reply, self.schema = reply, None
+
+    def with_structured_output(self, schema):
+        self.schema = schema
+        return SimpleNamespace(invoke=lambda messages: self.reply)
+
+
+def test_live_client_uses_structured_output_mode(settings):
+    llm = StructuredLLM(ClassifierReply(intent="smalltalk", confidence=0.9))
+    classify = make_classifier(settings, builder=lambda model_id, cfg: llm, structured=True)
+    assert llm.schema is ClassifierReply
+    assert classify("hello").intent == "smalltalk"
+
+
+def test_structured_output_failure_is_a_classifier_error(settings):
+    def boom(messages):
+        raise ValueError("schema violation")
+
+    llm = StructuredLLM(None)
+    llm.with_structured_output = lambda schema: SimpleNamespace(invoke=boom)
+    classify = make_classifier(settings, builder=lambda model_id, cfg: llm, structured=True)
+    with pytest.raises(ClassifierError):
+        classify("hello")
+
+
+def test_mock_builder_path_stays_plain_json(settings):
+    llm = FakeLLM()  # no with_structured_output
+    assert make_classifier(settings, builder=lambda model_id, cfg: llm)("Hi there").intent == "smalltalk"
+
+
 def test_json_in_a_code_fence_is_accepted(prompt):
     raw = '```json\n{"intent": "smalltalk", "confidence": 0.8, "domain": null}\n```'
     assert classify_intent(FakeLLM(raw=raw), prompt, "hello", "none").intent == "smalltalk"
@@ -162,7 +211,23 @@ def _result(intent):
 @pytest.mark.parametrize("intent", ["kb_query", "ticket_status", "out_of_scope", "smalltalk"])
 def test_new_intent_mid_offer_clears_the_pending_offer(intent):
     update = dialog_update(_state("offer_reply"), _result(intent))
-    assert update == {"awaiting": "none", "pending_offer": None}
+    assert update == {"awaiting": "none", "pending_offer": None, "ticket": None}
+
+
+def test_topic_change_also_clears_a_partly_built_ticket_but_keeps_the_email():
+    state = AgentState(
+        awaiting="email",
+        email="priya.k@smartdesk.example",
+        ticket=TicketDraft(title="VPN", description="down", category="IT"),
+    )
+    update = dialog_update(state, _result("kb_query"))
+    assert update == {"awaiting": "none", "pending_offer": None, "ticket": None}
+    assert "email" not in update
+
+
+def test_continuing_the_flow_keeps_the_ticket_draft():
+    state = AgentState(awaiting="email", ticket=TicketDraft(title="VPN", description="down", category="IT"))
+    assert dialog_update(state, _result("create_ticket")) == {}
 
 
 def test_agreeing_keeps_the_pending_offer():

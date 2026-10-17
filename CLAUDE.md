@@ -37,7 +37,7 @@ python -m evals.run                      # Ragas + retrieval ablations
 
 ## Workflow rules
 - Core first: SPEC §3A to 3G, then bonus. Build the single-path agent before multi-agent fan-out (§3I).
-- Work through the tasks I name, in order. For each task: write its test first, implement, run pytest, tick the box, and commit it separately with its FR ids. Stop at the end of the named range, or at the first failure you can't fix, or at any [CONFIRM] step.
+- Work through the tasks I name, in order. For each task: write its test first, implement, run pytest, tick the box, and commit it separately with its FR ids. Stop at the end of the named range, or at the first failure you can't fix, or at any [CONFIRM] step. Tick and commit only when pytest passes (`pytest -q && git commit ...`); never commit on red, not even to amend later.
 - Write evals (SPEC §7) before the code they test. Eval questions must be paraphrased, never copied from indexed KB text (FR-A18).
 - Tests use mock mode for GitHub and LLM; no test may create real issues or spend API budget.
 - Never create a ticket without explicit confirmation (FR-B2, G12). Never invent ticket details (FR-B13).

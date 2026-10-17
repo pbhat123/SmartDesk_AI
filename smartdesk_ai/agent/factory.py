@@ -43,6 +43,7 @@ from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.metrics import MetricsRecorder
 from smartdesk_ai.ops.rate_limit import RateLimiter
 from smartdesk_ai.ops.runtime import Services, current_budget_level
+from smartdesk_ai.ops.tracing import TracingFactories, build_tracing
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
 from smartdesk_ai.rag.index import IndexNotBuilt, open_index
@@ -91,6 +92,7 @@ def build_responder(
     kb_dir: Path = DEFAULT_KB_DIR,
     registry: HealthRegistry | None = None,
     client: TicketClient | None = None,
+    tracing_factories: TracingFactories | None = None,
 ) -> Responder:
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
@@ -123,6 +125,7 @@ def build_responder(
     # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
     trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)),
                      prompt_versions=settings.prompts)
+    build_tracing(env, trace, registry, tracing_factories)  # optional Langfuse and LangSmith; the local log stays
     spend = SpendStore(Path(data_dir) / OPS_DB)
     budget = BudgetController(settings, spend)
     # Mock runs count tokens but price nothing, so they never touch the real daily budget.

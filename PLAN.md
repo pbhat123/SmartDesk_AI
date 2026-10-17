@@ -156,6 +156,8 @@ Built in T5.1 to T5.5: `names.py` exposes `NameReducer.reduce`; `moderation.py` 
 ### 3.7 `ops/`
 `budget.py` (`BudgetGuard.level() -> 0|1|2`, `record(cost)`; persisted per day in `app.db`), `cost.py` (price table, per-request/task/agent/tier/step cost), `rate_limit.py` (`RateLimiter.check(kind, key) -> Allowed | Denied(wait_minutes)`), `trace_log.py` (local sink + optional Langfuse/LangSmith sinks, masked), `tracing.py` (optional Langfuse/LangSmith sinks with masking), `metrics.py`, `hitl_counters.py`, `drift.py`, `compaction.py` (`maybe_compact(state) -> StatePatch`), `cache.py` (`AnswerCache` Protocol; `RedisCache`, `InMemoryCache`; `get/put/clear`), `health.py` (`register_degraded(component, reason)`).
 
+Built in T5.9 to T5.16: `runtime.py` holds a per-request scope (`ChatService` opens it; `FallbackChat`, the tool executor and `CostedEmbeddings` find it with `current_scope()`), so cost tracking (`cost.py`), the daily budget (`budget.py`, level read on every LLM call; level 2 stops the chat), rate limits (`rate_limit.py`, checked in `ChatService` and the executor) and the trace log need no plumbing through the makers. `compaction.py` runs as a graph node before `entry`. `trace_log.py` writes one masked JSON line per request, reply, agent step, tool attempt, tool call and LLM call, and forwards each masked record to the optional `tracing.py` sinks (Langfuse, LangSmith), which also keep the SDK masking hooks on. Runtime files in `data/`: `trace.jsonl`, `tool_metrics.jsonl`, `cost.jsonl`, `ops.db` (daily spend and rate-limit counters).
+
 ### 3.8 `memory/`
 `checkpointer.py` (`make_checkpointer(path)`), `long_term.py` (`LongTermStore.record_ticket(email, number, category)`, `.recall(email) -> list[int]`, `.last_category(email)`).
 

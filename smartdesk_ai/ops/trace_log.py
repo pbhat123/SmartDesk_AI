@@ -3,7 +3,9 @@ kept working with no tracing keys. Every string in an event passes through the m
 email, phone, card or ID never reaches the file. Callers pass facts (tool, outcome, latencies); they never
 pass prompt or reply text unmasked, because masking is applied here rather than left to each caller.
 """
+import copy
 import json
+import logging
 import threading
 from collections.abc import Callable, Mapping
 from datetime import datetime, timezone
@@ -15,6 +17,8 @@ from langchain_core.messages import BaseMessage
 from smartdesk_ai.guardrails.pii import PiiRedactor, mask_emails_in
 from smartdesk_ai.llm.fallback import LLMCall
 from smartdesk_ai.ops.runtime import RequestContext
+
+logger = logging.getLogger(__name__)
 
 Masker = Callable[[str], str]
 
@@ -43,6 +47,19 @@ def make_masker(redactor: PiiRedactor) -> Masker:
     return lambda text: mask_emails_in(redactor.redact(text).text)
 
 
+def mask_value(value: Any, masker: Masker) -> Any:
+    """`value` with every string (and every dict key) masked. The result is JSON-serializable."""
+    if isinstance(value, str):
+        return masker(value)
+    if isinstance(value, dict):
+        return {masker(str(k)): mask_value(v, masker) for k, v in value.items()}
+    if isinstance(value, list | tuple | set | frozenset):
+        return [mask_value(v, masker) for v in value]
+    if value is None or isinstance(value, bool | int | float):
+        return value
+    return masker(str(value))
+
+
 class TraceLog:
     def __init__(
         self, path: Path | str | None, masker: Masker, *, prompt_versions: Mapping[str, int] | None = None
@@ -51,27 +68,30 @@ class TraceLog:
         self._mask = masker
         self._prompt_versions = dict(prompt_versions or {})
         self._lock = threading.Lock()
+        self.sinks: list[Any] = []
         self.events: list[dict[str, Any]] = []  # masked copies, for the Monitoring tab and tests
 
-    def _clean(self, value: Any) -> Any:
-        if isinstance(value, str):
-            return self._mask(value)
-        if isinstance(value, dict):
-            return {self._mask(str(k)): self._clean(v) for k, v in value.items()}
-        if isinstance(value, list | tuple):
-            return [self._clean(v) for v in value]
-        if value is None or isinstance(value, bool | int | float):
-            return value
-        return self._mask(str(value))
+    @property
+    def mask(self) -> Masker:
+        return self._mask
+
+    def add_sink(self, sink: Any) -> None:
+        """Forward every masked record to `sink` as well (Langfuse, LangSmith). A failing sink is skipped."""
+        self.sinks.append(sink)
 
     def event(self, kind: str, **fields: Any) -> None:
-        record = {"ts": datetime.now(timezone.utc).isoformat(), "kind": kind, **self._clean(fields)}
+        record = {"ts": datetime.now(timezone.utc).isoformat(), "kind": kind, **mask_value(fields, self._mask)}
         with self._lock:
             self.events.append(record)
             if self.path is not None:
                 self.path.parent.mkdir(parents=True, exist_ok=True)
                 with self.path.open("a") as handle:
                     handle.write(json.dumps(record) + "\n")
+        for sink in self.sinks:
+            try:
+                sink.emit(copy.deepcopy(record))
+            except Exception as error:  # the local log is the record; a sink never breaks the app (FR-F7)
+                logger.warning("trace sink %s failed (%s)", type(sink).__name__, type(error).__name__)
 
     def request_fields(self, ctx: RequestContext | None) -> dict[str, Any]:
         """The IDs every event of a request carries: session, request and the masked user ID."""

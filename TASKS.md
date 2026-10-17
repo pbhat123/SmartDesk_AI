@@ -151,7 +151,7 @@ Exit: safety set leakage 0, breach 0; budget and rate-limit ACs; masked logs. Du
 | [x] | T5.13 | Budget cutoffs (day counter, timezone from config): level 1 $5 all-Light, level 2 $10 unavailable, eval bypass flag | H8, F2 | `sd/ops/budget.py`, `tests/test_budget.py` | Mocked spend: crossing $5 switches every task to Light and logs; crossing $10 returns unavailable message with no LLM call; counter resets on a new day; bypass flag works |
 | [x] | T5.14 | Rate limiting: three rolling 1-hour counters in SQLite, session and email keys, bypass flag | H13 | `sd/ops/rate_limit.py`, `tests/test_rate_limit.py` | 101st question, 41st creation, 41st lookup each give the usage-limit message with real wait time, independently; survives restart; bypass flag turns off |
 | [x] | T5.15 | Masked user ID and session ID in LLM call records | H9 | `sd/ops/trace_log.py`, `tests/test_llm_records.py` | Record has agent, prompt text+version, completion, model, tier, tokens, per-step latency, session ID; prompt/completion pass through redaction |
-| [ ] | T5.16 | Tracing integrations with masking hooks, optional (Langfuse/LangSmith) | H9, F6, G11 | `sd/ops/tracing.py`, `tests/test_tracing_optional.py` | No keys: local log only, app runs; with mock keys: spans carry masked data only |
+| [x] | T5.16 | Tracing integrations with masking hooks, optional (Langfuse/LangSmith) | H9, F6, G11 | `sd/ops/tracing.py`, `tests/test_tracing_optional.py` | No keys: local log only, app runs; with mock keys: spans carry masked data only |
 
 
 ---

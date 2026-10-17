@@ -16,6 +16,7 @@ Awaiting = Literal["none", "offer_reply", "email", "ticket_pick"]
 RouteSource = Literal["classifier", "tool_pick"]
 Category = Literal["IT", "HR", "MISC"]
 Priority = Literal["low", "medium", "high", "critical"]
+Domain = Literal["IT", "HR"]
 
 
 class IntentResult(BaseModel):
@@ -42,6 +43,26 @@ class TicketDraft(BaseModel):
     priority: Priority | None = None
 
 
+class ChunkRef(BaseModel):
+    """A retrieved KB entry as shown in the debug view: id, title and score, never the text."""
+
+    entry_id: str
+    title: str
+    score: float
+
+
+class PartResult(BaseModel):
+    """Outcome of answering one question from the KB (PLAN 4.1)."""
+
+    answer: str  # what the employee sees, with sources; the I-don't-know text when unanswered
+    citations: list[str] = []
+    chunks: list[ChunkRef] = []
+    answerable: bool  # retrieval signals 1 and 2 passed
+    llm_insufficient: bool = False  # signal 3
+    retried: bool = False  # the whole-KB retry ran (FR-A19)
+    searched_domain: Domain | None = None  # filter used by the last search; None is the whole KB
+
+
 class AgentState(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
 
@@ -52,10 +73,15 @@ class AgentState(BaseModel):
     intent: IntentResult | None = None
     pending_offer: PendingOffer | None = None
     ticket: TicketDraft | None = None
+    search_domain: Domain | None = None  # KB filter chosen by routing for this turn
+    part_result: PartResult | None = None
+    steps: list[str] = []  # this turn's trace, e.g. ["search_kb", "answer", "offer"] (FR-H11)
     reply: str = ""
 
 
-STATE_MODELS: tuple[type[BaseModel], ...] = (IntentResult, PendingOffer, TicketDraft, AgentState)
+STATE_MODELS: tuple[type[BaseModel], ...] = (
+    IntentResult, PendingOffer, TicketDraft, ChunkRef, PartResult, AgentState,
+)
 
 
 def new_thread_id() -> str:

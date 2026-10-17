@@ -40,7 +40,13 @@ from smartdesk_ai.agent.state import (
     RouteKind,
     thread_config,
 )
-from smartdesk_ai.agent.status_flow import after_s_email_reply, make_s_lookup_node, s_email_reply
+from smartdesk_ai.agent.status_flow import (
+    after_s_email_reply,
+    after_s_pick,
+    make_s_lookup_node,
+    make_s_pick_node,
+    s_email_reply,
+)
 from smartdesk_ai.agent.ticket_agent import (
     TicketDeps,
     escalation_offer,
@@ -114,6 +120,8 @@ def make_after_entry(has_router: bool) -> Callable[[AgentState], str]:
     def after_entry(state: AgentState) -> str:
         if state.awaiting == "email" and state.status_pending_email:
             return "s_email_reply"
+        if state.awaiting == "ticket_pick" and state.status_candidates:
+            return "s_pick"
         if state.awaiting in ("offer_reply", "email") and state.pending_offer is not None:
             return "offer_reply"
         return "route" if has_router else "kb_search"
@@ -315,7 +323,7 @@ def build_kb_graph(
     builder.add_edge(START, "entry")
     builder.add_conditional_edges(
         "entry", make_after_entry(route is not None),
-        ["offer_reply", "route", "kb_search", "s_email_reply"] if route else ["offer_reply", "kb_search"],
+        ["offer_reply", "route", "kb_search", "s_email_reply", "s_pick"] if route else ["offer_reply", "kb_search"],
     )
     builder.add_conditional_edges(
         "offer_reply", make_after_offer_reply(route is not None),
@@ -326,6 +334,8 @@ def build_kb_graph(
         builder.add_node("chitchat", chitchat_node)
         builder.add_node("s_lookup", make_s_lookup_node(deps.executor))
         builder.add_node("s_email_reply", s_email_reply)
+        builder.add_node("s_pick", make_s_pick_node(deps.executor))
+        builder.add_conditional_edges("s_pick", after_s_pick, ["route", END])
         builder.add_conditional_edges("route", after_route, ["kb_search", "t_collect", "s_lookup", "chitchat"])
         builder.add_conditional_edges("s_email_reply", after_s_email_reply, ["s_lookup", "route", END])
         builder.add_edge("chitchat", END)

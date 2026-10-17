@@ -115,6 +115,7 @@ class MockTicketClient:
 
     `fail_before_create` and `lose_responses` count down the next creates: the first fails before
     anything exists, the second creates the issue and then raises, as a lost response would.
+    `unreachable` makes every call fail transiently, as if GitHub were down (FR-F1).
     """
 
     def __init__(self, repo: str = "mock-org/mock-tickets") -> None:
@@ -125,8 +126,14 @@ class MockTicketClient:
         self._labels: set[str] = set()
         self._comments: dict[int, list[tuple[str, str]]] = {}
         self.fail_searches = 0
+        self.unreachable = False
+
+    def _reach(self) -> None:
+        if self.unreachable:
+            raise TransientTicketError("mock: GitHub is unreachable")
 
     def create(self, draft: TicketCreate) -> Ticket:
+        self._reach()
         if self.fail_before_create:
             self.fail_before_create -= 1
             raise TransientTicketError("mock: service unavailable")
@@ -138,15 +145,18 @@ class MockTicketClient:
         return ticket
 
     def get(self, number: int) -> Ticket:
+        self._reach()
         try:
             return self._issues[number]
         except KeyError:
             raise TicketNotFound(f"issue {number}") from None
 
     def find_by_request_id(self, request_id: str) -> Ticket | None:
+        self._reach()
         return next((t for t in reversed(self._issues.values()) if request_id_of(t.body) == request_id), None)
 
     def ensure_labels(self, labels: Sequence[LabelSpec]) -> list[str]:
+        self._reach()
         created = [spec.name for spec in labels if spec.name.lower() not in self._labels]
         self._labels.update(name.lower() for name in created)
         return created
@@ -160,6 +170,7 @@ class MockTicketClient:
         return ticket
 
     def search_by_email(self, email: str) -> list[Ticket]:
+        self._reach()
         if self.fail_searches:
             self.fail_searches -= 1
             raise TransientTicketError("mock: search unavailable")
@@ -168,6 +179,7 @@ class MockTicketClient:
     def update_issue(
         self, number: int, *, state: str | None = None, labels: Sequence[str] | None = None
     ) -> Ticket:
+        self._reach()
         changes: dict = {}
         if state is not None:
             changes["state"] = state
@@ -178,11 +190,13 @@ class MockTicketClient:
         return updated
 
     def add_comment(self, number: int, body: str, *, author_association: str = "MEMBER") -> None:
+        self._reach()
         """A comment, as someone would add in GitHub (a team member by default). Mock-only helper."""
         self.get(number)
         self._comments.setdefault(number, []).append((author_association, body))
 
     def latest_update(self, number: int) -> TeamUpdate | None:
+        self._reach()
         self.get(number)
         team = [body for assoc, body in self._comments.get(number, []) if assoc in TEAM_ASSOCIATIONS]
         return TeamUpdate(text=team[-1].strip()) if team else None

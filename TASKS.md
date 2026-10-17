@@ -88,7 +88,7 @@ Exit: executor tests (retry x3, no retry on bad args, no create before confirmat
 | [x] | T3.15 | Latest team update from most recent issue comment | C9 | `sd/tickets/github_client.py`, `tests/test_latest_comment.py` | Issue with several comments returns the newest; none gives no update |
 | [x] | T3.16 | Search fallback: find `Employee: <email>` in issue bodies and backfill the map | C11 | `sd/tickets/search_fallback.py`, `tests/test_search_fallback.py` | Hand-created mock issue not in map is found by email and then appears in the map |
 | [ ] | T3.17 | Seed script (idempotent, via the same client, writes map rows, all statuses, team comment, fake emails for 0/1/2+) | C8 | `scripts/seed_tickets.py`, `tests/test_seed_tickets.py` | Mock mode: run twice gives the same issue count; each seeded email's tickets found; every status present. Live run after **[CONFIRM]**. *Status: mock mode done and tested (`--dry-run` lists the live plan); the live run is waiting for your go-ahead, so the box stays open.* |
-| [ ] | T3.18 | GitHub unreachable handling: polite message, suggest retry | F1 | `sd/tickets/github_client.py`, `sd/tools/executor.py`, `tests/test_github_unreachable.py` | Mock network error after 3 attempts yields unavailable result mapped to a polite retry-later message |
+| [x] | T3.18 | GitHub unreachable handling: polite message, suggest retry | F1 | `sd/tickets/github_client.py`, `sd/tools/executor.py`, `tests/test_github_unreachable.py` | Mock network error after 3 attempts yields unavailable result mapped to a polite retry-later message |
 
 ---
 

@@ -37,6 +37,16 @@ class ErrorCode(StrEnum):
 # Tools that need the employee's email, and tools that need the employee's confirmation (FR-G5).
 EMAIL_TOOLS = frozenset({"create_ticket", "get_tickets"})
 CONFIRMED_TOOLS = frozenset({"create_ticket"})
+# What the employee is told when every attempt hit a transient failure (FR-F1, FR-G4). Plain words:
+# no service names, status codes or error text. `create_ticket` cannot promise nothing was created,
+# because the last response may have been lost, so it says it could not confirm.
+UNAVAILABLE_REPLIES = {
+    "create_ticket": "Sorry, I can't reach the ticket system right now, so I couldn't confirm that "
+                     "your ticket was created. Please try again later.",
+    "get_tickets": "Sorry, I can't reach the ticket system right now to check your tickets. "
+                   "Please try again later.",
+}
+UNAVAILABLE_DEFAULT = "Sorry, I can't complete that right now. Please try again later."
 ASK_FOR_EMAIL = "Ask the employee for their work email address before trying again."
 
 
@@ -49,6 +59,7 @@ class ToolResult(BaseModel):
     data: Any = None
     code: ErrorCode | None = None
     error: str | None = None  # safe for the model to read; never holds user input
+    reply: str | None = None  # set when unavailable: a polite message for the employee, as is
 
 
 def _issue_number(data: Any) -> int | None:
@@ -161,4 +172,5 @@ class ToolExecutor:
         return ToolResult(
             tool=name, outcome=Outcome.UNAVAILABLE, attempts=self._cfg.max_attempts,
             error="the service is temporarily unavailable",
+            reply=UNAVAILABLE_REPLIES.get(name, UNAVAILABLE_DEFAULT),
         )

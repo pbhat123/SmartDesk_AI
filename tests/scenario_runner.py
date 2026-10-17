@@ -32,7 +32,13 @@ def build(scenario: Scenario, built_index_dir, settings, tmp_path, answer_mode="
 
 def check_step(step: str, state, expect: Expect, issues_before: int, issues_after: int) -> None:
     reply = state.reply
-    if step == "ticket_offer":
+    if step == "kb_answer":
+        assert state.part_result is not None and state.part_result.answerable and state.pending_offer is None, reply
+    elif step == "thanks":
+        assert re.search(r"welcome|glad|happy", reply, re.I) and state.route_kind == "smalltalk", reply
+    elif step == "goodbye":
+        assert re.search(r"bye|take care", reply, re.I) and state.route_kind == "smalltalk", reply
+    elif step == "ticket_offer":
         assert state.pending_offer is not None and "yes or no" in reply.lower(), reply
     elif step == "ticket_offer_with_email_request":
         assert state.pending_offer is not None and "email" in reply.lower() and "don't know" in reply.lower(), reply
@@ -67,6 +73,8 @@ def run_scenario(scenario: Scenario, stack) -> list:
         issues_after = len(stack.client._issues)
         expect = turn.expect
         check_step(expect.step, state, expect, issues_before, issues_after)
+        for entry_id in expect.cites:
+            assert entry_id in state.part_result.citations, (entry_id, state.part_result.citations)
         for text in expect.reply_contains:
             assert text in state.reply, (text, state.reply)
         for field in expect.summary_fields:

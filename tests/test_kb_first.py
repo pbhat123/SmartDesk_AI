@@ -69,4 +69,4 @@ def test_a_rejected_retrieval_never_shows_the_model_answer(built_index_dir, sett
     state = run_turn(graph, new_thread_id(), "zzqx wvvk plorf")
     assert state.part_result.answerable is False
     assert "Here is what the policy says." not in state.reply
-    assert state.reply.startswith("I don't know") and state.pending_offer is not None
+    assert "I don't know" in state.reply and state.pending_offer is not None

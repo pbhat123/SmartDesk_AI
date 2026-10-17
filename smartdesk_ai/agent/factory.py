@@ -12,6 +12,7 @@ from typing import Any
 
 from smartdesk_ai.agent.answer import make_answerer
 from smartdesk_ai.agent.chat_service import Responder
+from smartdesk_ai.agent.chitchat import make_chitchat
 from smartdesk_ai.agent.confirm import make_confirm_parser
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph, make_kb_responder
 from smartdesk_ai.agent.router import make_router
@@ -20,7 +21,7 @@ from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
-from smartdesk_ai.llm.mock import MockAnswerModel, MockConfirmModel, MockDraftModel, MockRoutingModel
+from smartdesk_ai.llm.mock import MockAnswerModel, MockChitchatModel, MockConfirmModel, MockDraftModel, MockRoutingModel
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
@@ -80,7 +81,7 @@ def build_responder(
             )
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
-        answer_b = route_b = draft_b = confirm_b = openai_builder
+        answer_b = route_b = draft_b = confirm_b = chat_b = openai_builder
     else:
         embeddings = HashingEmbeddings()
         index_dir = Path(data_dir) / "index_mock"
@@ -90,6 +91,7 @@ def build_responder(
             update={"escalation": settings.thresholds.escalation_mock})})
         answer_b, route_b = _builder_for(MockAnswerModel()), _builder_for(MockRoutingModel())
         draft_b, confirm_b = _builder_for(MockDraftModel()), _builder_for(MockConfirmModel())
+        chat_b = _builder_for(MockChitchatModel())
     try:
         index = open_index(index_dir, embeddings)
     except IndexNotBuilt:
@@ -125,5 +127,6 @@ def build_responder(
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,
         status_max_listed=settings.status.max_listed,
+        chitchat=make_chitchat(settings, builder=chat_b),
     )
     return make_kb_responder(graph)

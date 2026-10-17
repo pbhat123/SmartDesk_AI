@@ -144,6 +144,24 @@ class MockDraftModel:
         return SimpleNamespace(content=json.dumps(reply))
 
 
+_MOCK_CHITCHAT = {
+    "greeting": "Hello! I can answer IT and HR questions, open a support ticket, or check on a ticket. How can I help?",
+    "thanks": "Glad I could help! Is there anything else you need?",
+    "goodbye": "Goodbye, have a great day! Come back any time.",
+    "other": "Happy to chat. I can help with IT and HR questions, tickets and ticket status.",
+    "deflect": "Sorry, I can't help with that one. I'm here for IT, HR and workplace questions.",
+    "clarify": "Could you tell me a bit more about what you need?",
+}
+
+
+class MockChitchatModel:
+    """Stand-in for the CHITCHAT task: a fixed reply per situation, read from the prompt."""
+
+    def invoke(self, messages):
+        situation = re.search(r"^Situation: (\w+)$", str(messages[-1].content), re.M).group(1)
+        return SimpleNamespace(content=_MOCK_CHITCHAT[situation])
+
+
 _CONFIRM_YES = re.compile(r"^(yes|yeah|yep|sure|ok(ay)?|go ahead|please do|looks good|that'?s right)\b", re.I)
 _CONFIRM_NO = re.compile(r"^(no|nope|cancel|never mind|don'?t|do not)\b", re.I)
 _CONFIRM_PRIORITY = re.compile(

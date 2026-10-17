@@ -22,14 +22,9 @@ from smartdesk_ai.agent.answer import (
     should_escalate,
 )
 from smartdesk_ai.agent.chat_service import Turn
+from smartdesk_ai.agent.chitchat import Chitchat, static_chitchat
 from smartdesk_ai.agent.intents import dialog_update_for
-from smartdesk_ai.agent.router import (
-    SMALLTALK_REPLY,
-    RouteDecision,
-    Router,
-    clarifying_question,
-    deflection_reply,
-)
+from smartdesk_ai.agent.router import RouteDecision, Router
 from smartdesk_ai.agent.state import (
     AgentState,
     ChunkRef,
@@ -192,12 +187,15 @@ def after_route(state: AgentState) -> str:
     return {"kb": "kb_search", "ticket": "t_collect", "status": "s_lookup"}.get(state.route_kind or "", "chitchat")
 
 
-def chitchat_node(state: AgentState) -> dict[str, Any]:
-    """Placeholder replies until the CHITCHAT task (T4.27)."""
-    reply = {"deflect": deflection_reply(), "clarify": clarifying_question()}.get(
-        state.route_kind or "", SMALLTALK_REPLY
-    )
-    return {"steps": state.steps + ["chitchat"], "reply": reply, "messages": [AIMessage(reply)]}
+def make_chitchat_node(chat: Chitchat) -> Callable[[AgentState], dict[str, Any]]:
+    """Small talk, deflection or the clarifying question (FR-D3, D5). No tool is called."""
+
+    def chitchat_node(state: AgentState) -> dict[str, Any]:
+        situation = state.route_kind if state.route_kind in ("deflect", "clarify") else "smalltalk"
+        reply = chat(situation, _question(state))  # type: ignore[arg-type]
+        return {"steps": state.steps + ["chitchat"], "reply": reply, "messages": [AIMessage(reply)]}
+
+    return chitchat_node
 
 
 # --- KB path ---------------------------------------------------------------------------------
@@ -314,10 +312,12 @@ def build_kb_graph(
     route: Router | None = None,
     tickets: TicketDeps | None = None,
     status_max_listed: int | None = None,
+    chitchat: Chitchat | None = None,
 ):
     """Compile the agent graph. Without a `route`, every new message goes to the KB path. Without
     `tickets`, the ticket path stops after collecting the email. With a `route`, `status_max_listed`
-    (config: status.max_listed) caps the status list."""
+    (config: status.max_listed) caps the status list. Without `chitchat`, small talk gets the fixed
+    replies (FR-F7)."""
     if route is not None and status_max_listed is None:
         raise ValueError("status_max_listed (config: status.max_listed) is required when routing is on")
     builder = StateGraph(AgentState)
@@ -339,7 +339,7 @@ def build_kb_graph(
     )
     if route is not None:
         builder.add_node("route", make_route_node(route))
-        builder.add_node("chitchat", chitchat_node)
+        builder.add_node("chitchat", make_chitchat_node(chitchat or static_chitchat))
         builder.add_node("s_lookup", make_s_lookup_node(deps.executor, status_max_listed))
         builder.add_node("s_email_reply", s_email_reply)
         builder.add_node("s_pick", make_s_pick_node(deps.executor))

@@ -16,6 +16,7 @@ from langgraph.types import interrupt
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY
+from smartdesk_ai.agent.chitchat import ACKNOWLEDGEMENT_PHRASES
 from smartdesk_ai.agent.confirm import (
     CANCELLED,
     GAVE_UP,
@@ -75,8 +76,9 @@ class OfferOutcome(BaseModel):
 
 
 def escalation_offer(email_known: bool) -> str:
-    """The one message after a KB gap: "I don't know" plus the offer (FR-A16)."""
-    return f"{INSUFFICIENT_REPLY} {OFFER_YES_NO if email_known else OFFER_WITH_EMAIL_REQUEST}"
+    """The one message after a KB gap: an acknowledgement (FR-D4), "I don't know", the offer (FR-A16)."""
+    offer = OFFER_YES_NO if email_known else OFFER_WITH_EMAIL_REQUEST
+    return f"{ACKNOWLEDGEMENT_PHRASES[0]} {INSUFFICIENT_REPLY} {offer}"
 
 
 def find_email(text: str) -> str | None:

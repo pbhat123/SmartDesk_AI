@@ -11,16 +11,33 @@ from collections.abc import Callable, Sequence
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langgraph.types import interrupt
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from smartdesk_ai.agent.answer import INSUFFICIENT_REPLY
+from smartdesk_ai.agent.confirm import (
+    CANCELLED,
+    GAVE_UP,
+    MAX_UNCLEAR,
+    REASK,
+    ConfirmParser,
+    apply_edit,
+)
 from smartdesk_ai.agent.prompt_loader import load_prompt
-from smartdesk_ai.agent.state import AgentState, Category, PendingOffer, Priority, TicketDraft
+from smartdesk_ai.agent.state import (
+    AgentState,
+    Category,
+    ConfirmDecision,
+    PendingOffer,
+    Priority,
+    TicketDraft,
+)
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, FallbackChat
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
 from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
+from smartdesk_ai.tools.executor import Outcome
 
 _EDGE_PUNCTUATION = "<>()[]{}\"',.;:!?"
 _YES = {"yes", "y", "yeah", "yep", "yup", "sure", "ok", "okay", "please", "yes please", "sure please",
@@ -160,6 +177,8 @@ class TicketDeps(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
     drafter: Callable[[Sequence[str]], TicketDraft]
+    executor: Any  # ToolExecutor with create_ticket registered; every tool call goes through it
+    parse_confirm: ConfirmParser
 
 
 CONFIRM_QUESTION = "Shall I go ahead and create this?"
@@ -199,7 +218,7 @@ def make_t_draft_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]
         except DraftUnavailable as outage:  # nothing is created; the employee can try again later
             return {"steps": steps + ["llm_unavailable"], "reply": outage.message,
                     "messages": [AIMessage(outage.message)], "awaiting": "none", "pending_offer": None}
-        return {"steps": steps, "ticket": draft, "awaiting": "none"}
+        return {"steps": steps, "ticket": draft, "awaiting": "none", "gate": None, "gate_unclear": 0}
 
     return t_draft
 
@@ -336,3 +355,90 @@ def make_drafter(
         return draft_from_statements(llm, prompt, statements)
 
     return drafter
+
+
+# --- the approval gate (FR-B2, FR-G12) ----------------------------------------------------------------
+
+CREATE_FAILED = "Sorry, something went wrong while creating the ticket, so I haven't created it. Please try again."
+
+
+def _summary(state: AgentState) -> str:
+    return confirmation_summary(state.ticket, state.email or "")
+
+
+def _end_flow(state: AgentState) -> dict[str, Any]:
+    """Leave the ticket flow: the draft and the pending offer are done with, the email stays."""
+    return {
+        "ticket": None, "pending_offer": None, "awaiting": "none", "gate": None, "gate_unclear": 0,
+        "ticket_context_start": len(state.messages) + 1,  # past the reply this node is about to add
+    }
+
+
+def make_t_confirm_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
+    """The only interrupt: it pauses for the employee's reply and parses it. Nodes restart from the
+    top on resume, so nothing before `interrupt` may have a side effect (PLAN 12.1)."""
+
+    def t_confirm(state: AgentState) -> dict[str, Any]:
+        reply = str(interrupt({"summary": _summary(state)}))
+        decision = deps.parse_confirm(reply, state.ticket)
+        if decision.decision == "edit" and not apply_edit(state.ticket, decision)[1]:
+            decision = ConfirmDecision(decision="unclear")  # an edit that changes nothing is no answer
+        unclear = state.gate_unclear + 1 if decision.decision == "unclear" else state.gate_unclear
+        return {"steps": state.steps + ["t_confirm"], "gate": decision, "gate_unclear": unclear}
+
+    return t_confirm
+
+
+def after_t_confirm(state: AgentState) -> str:
+    decision = state.gate.decision if state.gate else "unclear"
+    if decision == "yes":
+        return "t_create"
+    if decision == "no":
+        return "t_cancel"
+    if decision == "edit":
+        return "t_apply_edit"
+    return "t_cancel" if state.gate_unclear >= MAX_UNCLEAR else "t_reask"
+
+
+def t_apply_edit(state: AgentState) -> dict[str, Any]:
+    ticket, _ = apply_edit(state.ticket, state.gate)
+    return {"steps": state.steps + ["t_apply_edit"], "ticket": ticket, "gate_unclear": 0}
+
+
+def t_reask(state: AgentState) -> dict[str, Any]:
+    reply = f"{REASK}\n\n{_summary(state)}"
+    return {"steps": state.steps + ["t_reask"], "reply": reply, "messages": [AIMessage(reply)]}
+
+
+def t_cancel(state: AgentState) -> dict[str, Any]:
+    gave_up = state.gate is not None and state.gate.decision == "unclear"
+    reply = GAVE_UP if gave_up else CANCELLED
+    return {**_end_flow(state), "steps": state.steps + ["t_cancel"], "reply": reply,
+            "messages": [AIMessage(reply)]}
+
+
+def created_reply(ticket: Any) -> str:
+    return f"Your ticket has been created: #{ticket.number} {ticket.url}"
+
+
+def make_t_create_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
+    def t_create(state: AgentState) -> dict[str, Any]:
+        if state.gate is None or state.gate.decision != "yes" or state.ticket is None:
+            raise RuntimeError("create_ticket needs the employee's confirmation first (FR-B2)")
+        draft = state.ticket
+        result = deps.executor.execute(
+            "create_ticket",
+            {"title": draft.title, "description": draft.description, "category": draft.category,
+             "priority": draft.priority, "email": state.email},
+            agent="ticket_agent",
+            confirmed=True,
+        )
+        steps = state.steps + ["t_create"]
+        if result.outcome is Outcome.SUCCESS:
+            reply = created_reply(result.data)
+        else:  # the executor's reply is polite and names no service (FR-F1)
+            reply = result.reply or CREATE_FAILED
+            steps = steps + ["create_failed"]
+        return {**_end_flow(state), "steps": steps, "reply": reply, "messages": [AIMessage(reply)]}
+
+    return t_create

@@ -44,6 +44,18 @@ class TicketDraft(BaseModel):
     priority: Priority | None = None
 
 
+class ConfirmDecision(BaseModel):
+    """What the employee's reply at the approval gate means (FR-G12). An `edit` carries the fields
+    to change; `details` are added to the description in the employee's words (FR-B6)."""
+
+    decision: Literal["yes", "no", "edit", "unclear"]
+    title: str | None = None
+    description: str | None = None
+    details: str | None = None
+    category: Category | None = None
+    priority: Priority | None = None
+
+
 class ChunkRef(BaseModel):
     """A retrieved KB entry as shown in the debug view: id, title and score, never the text."""
 
@@ -76,6 +88,8 @@ class AgentState(BaseModel):
     ticket: TicketDraft | None = None
     route_kind: RouteKind | None = None  # where routing sent this turn
     ticket_context_start: int = 0  # index in `messages` where the current ticket's conversation begins
+    gate: ConfirmDecision | None = None  # the last reply at the approval gate
+    gate_unclear: int = 0  # unclear replies at the current gate; the second one cancels (FR-G12)
     search_domain: Domain | None = None  # KB filter chosen by routing for this turn
     part_result: PartResult | None = None
     steps: list[str] = []  # this turn's trace, e.g. ["search_kb", "answer", "offer"] (FR-H11)
@@ -83,7 +97,7 @@ class AgentState(BaseModel):
 
 
 STATE_MODELS: tuple[type[BaseModel], ...] = (
-    IntentResult, PendingOffer, TicketDraft, ChunkRef, PartResult, AgentState,
+    IntentResult, PendingOffer, TicketDraft, ConfirmDecision, ChunkRef, PartResult, AgentState,
 )
 
 

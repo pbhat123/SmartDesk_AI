@@ -12,6 +12,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
 
 from smartdesk_ai.agent.answer import (
     INSUFFICIENT_REPLY,
@@ -43,9 +44,15 @@ from smartdesk_ai.agent.ticket_agent import (
     TicketDeps,
     escalation_offer,
     handle_offer_reply,
+    after_t_confirm,
     make_t_collect_node,
+    make_t_confirm_node,
+    make_t_create_node,
     make_t_draft_node,
     make_t_present_node,
+    t_apply_edit,
+    t_cancel,
+    t_reask,
 )
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
@@ -324,7 +331,19 @@ def build_kb_graph(
         builder.add_node("t_present", make_t_present_node())
         builder.add_conditional_edges("t_collect", after_t_collect, ["t_draft", END])
         builder.add_conditional_edges("t_draft", after_t_draft, ["t_present", END])
-        builder.add_edge("t_present", END)
+        builder.add_node("t_confirm", make_t_confirm_node(tickets))
+        builder.add_node("t_apply_edit", t_apply_edit)
+        builder.add_node("t_reask", t_reask)
+        builder.add_node("t_create", make_t_create_node(tickets))
+        builder.add_node("t_cancel", t_cancel)
+        builder.add_edge("t_present", "t_confirm")
+        builder.add_conditional_edges(
+            "t_confirm", after_t_confirm, ["t_create", "t_cancel", "t_apply_edit", "t_reask"]
+        )
+        builder.add_edge("t_apply_edit", "t_present")
+        builder.add_edge("t_reask", "t_confirm")
+        builder.add_edge("t_create", END)
+        builder.add_edge("t_cancel", END)
     return builder.compile(checkpointer=checkpointer)
 
 
@@ -334,6 +353,10 @@ def run_turn(
     """Run one employee turn on a thread and return the resulting state. A given `email`
     becomes the session email; without one, the thread keeps what it already knows."""
     config = thread_config(thread_id)
+    if graph.get_state(config).next:  # paused at the approval gate: this message is the answer
+        fresh = {"messages": [HumanMessage(text)], "steps": ["start"], "reply": "", "part_result": None}
+        graph.invoke(Command(resume=text, update=fresh), config)
+        return AgentState(**graph.get_state(config).values)
     turn_input: dict[str, Any] = {"messages": [HumanMessage(text)], "search_domain": search_domain}
     if email is not None:
         turn_input["email"] = email

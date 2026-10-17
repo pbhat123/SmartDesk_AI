@@ -200,3 +200,25 @@ def test_get_tickets_screens_the_update_before_anything_downstream_sees_it(setti
     register_ticket_tools(registry, client, store, screen_update=lambda u: screen_team_update(u, checker(settings, spy)))
     result = registry.get("get_tickets").fn(GetTicketsArgs(email="jane.roe@example.com"))
     assert result.latest_update.text == UPDATE_WITHHELD and len(spy.calls) == 1
+
+
+# --- false positives (FR-H1) ----------------------------------------------------------
+
+EVALS = Path(__file__).resolve().parent.parent / "evals"
+BENIGN_SETS = (("kb_questions.jsonl", "question"), ("gap_questions.jsonl", "question"),
+               ("intents.jsonl", "utterance"), ("categories.jsonl", "utterance"),
+               ("compound_questions.jsonl", "question"))
+
+
+def test_no_benign_eval_row_scores_above_the_injection_threshold(settings):
+    limit = settings.thresholds.injection_heuristic
+    checked, flagged = 0, []
+    for name, field in BENIGN_SETS:
+        for line in (EVALS / name).read_text().splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            checked += 1
+            if heuristic_score(row[field]) > limit:
+                flagged.append((row["id"], row[field]))
+    assert checked >= 150 and flagged == []

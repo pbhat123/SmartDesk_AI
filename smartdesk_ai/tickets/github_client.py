@@ -48,6 +48,10 @@ def build_issue(draft: TicketCreate) -> IssuePayload:
     return IssuePayload(title=draft.title, body=body, labels=labels)
 
 
+def _same_email(found: str | None, wanted: str) -> bool:
+    return found is not None and found.lower() == wanted.strip().lower()
+
+
 def _last_value(body: str, prefix: str) -> str | None:
     for line in reversed(body.splitlines()):
         if line.startswith(prefix):
@@ -81,6 +85,13 @@ class TicketClient(Protocol):
         """The text of the most recent comment on the issue, or None if there is none (FR-C9)."""
         ...
 
+    def search_by_email(self, email: str) -> list[Ticket]:
+        """Issues whose last `Employee:` line is this email, by number (FR-C11).
+
+        Search can lag a minute behind a new issue, so this is the fallback, not the main path.
+        """
+        ...
+
 
 # --- mock mode ---------------------------------------------------------------
 
@@ -98,18 +109,14 @@ class MockTicketClient:
         self._issues: dict[int, Ticket] = {}
         self._labels: set[str] = set()
         self._comments: dict[int, list[str]] = {}
+        self.fail_searches = 0
 
     def create(self, draft: TicketCreate) -> Ticket:
         if self.fail_before_create:
             self.fail_before_create -= 1
             raise TransientTicketError("mock: service unavailable")
         payload = build_issue(draft)
-        number = len(self._issues) + 1
-        ticket = Ticket(
-            number=number, url=f"https://github.com/{self.repo}/issues/{number}",
-            title=payload.title, body=payload.body, state="open", labels=tuple(payload.labels),
-        )
-        self._issues[number] = ticket
+        ticket = self.add_issue(payload.title, payload.body, labels=payload.labels)
         if self.lose_responses:
             self.lose_responses -= 1
             raise TransientTicketError("mock: response lost")
@@ -128,6 +135,20 @@ class MockTicketClient:
         created = [spec.name for spec in labels if spec.name.lower() not in self._labels]
         self._labels.update(name.lower() for name in created)
         return created
+
+    def add_issue(self, title: str, body: str, *, state: str = "open", labels: Sequence[str] = ()) -> Ticket:
+        """An issue made by hand in GitHub: no request ID and no map row. Mock-only helper."""
+        number = len(self._issues) + 1
+        ticket = Ticket(number=number, url=f"https://github.com/{self.repo}/issues/{number}", title=title,
+                        body=body, state=state, labels=tuple(labels))
+        self._issues[number] = ticket
+        return ticket
+
+    def search_by_email(self, email: str) -> list[Ticket]:
+        if self.fail_searches:
+            self.fail_searches -= 1
+            raise TransientTicketError("mock: search unavailable")
+        return [t for t in self._issues.values() if _same_email(employee_email_of(t.body), email)]
 
     def add_comment(self, number: int, body: str) -> None:
         """A team comment, as someone would add in GitHub. Mock-only helper for tests and seeding."""
@@ -246,6 +267,20 @@ class GitHubRestClient:
                 if newest is None or stamp > newest[0]:  # ISO 8601 UTC stamps sort as text
                     newest = (stamp, body)
         return newest[1].strip() if newest else None
+
+    def search_by_email(self, email: str) -> list[Ticket]:
+        # Search matches loosely, so every hit is checked against the real Employee line.
+        query = f'repo:{self._repo} is:issue in:body "{EMPLOYEE_PREFIX}{email.strip()}"'
+        found = []
+        for page in self._pages("/search/issues", {"q": query}):
+            for item in page:
+                try:
+                    ticket = _to_ticket(item)
+                except TicketNotFound:
+                    continue
+                if _same_email(employee_email_of(ticket.body), email):
+                    found.append(ticket)
+        return sorted(found, key=lambda t: t.number)
 
     def ensure_labels(self, labels: Sequence[LabelSpec]) -> list[str]:
         have = {item["name"].lower() for page in self._pages(f"/repos/{self._repo}/labels", {}) for item in page}

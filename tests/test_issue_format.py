@@ -203,3 +203,9 @@ def test_setup_labels_script_runs_in_mock_mode_and_says_so(settings, capsys):
     assert load_script().main([], settings=settings) == 0
     out = capsys.readouterr().out
     assert "mock" in out and "9" in out
+
+
+def test_setup_labels_live_mode_needs_an_explicit_flag(settings, capsys):
+    live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"tickets": "live"})})
+    assert load_script().main([], settings=live) == 2
+    assert "--confirm-live" in capsys.readouterr().out

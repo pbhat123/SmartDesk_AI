@@ -2,8 +2,9 @@
 
 Uses `modes.tickets` from config.yaml: in mock mode nothing leaves this process. Going live means
 setting `modes.tickets: live` plus GITHUB_TOKEN and TICKETS_REPO, and it creates labels in a
-public repo, so confirm before you do. Running it again creates nothing new.
+public repo, so it also needs `--confirm-live`. Running it again creates nothing new.
 """
+import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -16,8 +17,14 @@ from smartdesk_ai.tickets import ALL_LABELS, TicketError, create_ticket_client  
 
 
 def main(argv: Sequence[str] | None = None, *, settings: Settings | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--confirm-live", action="store_true", help="required when modes.tickets is live")
+    args = parser.parse_args(argv)
     settings = settings or load_settings()
     mode = settings.modes.tickets
+    if mode == "live" and not args.confirm_live:
+        print("modes.tickets is live: this creates labels in the public tickets repo. Add --confirm-live.")
+        return 2
     try:
         created = create_ticket_client(settings, load_env()).ensure_labels(ALL_LABELS)
     except TicketError as exc:

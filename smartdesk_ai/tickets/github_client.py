@@ -90,6 +90,16 @@ class TicketClient(Protocol):
         """
         ...
 
+    def update_issue(
+        self, number: int, *, state: str | None = None, labels: Sequence[str] | None = None
+    ) -> Ticket:
+        """Set the state (open/closed) and/or replace the whole label list. Used by the seed script."""
+        ...
+
+    def add_comment(self, number: int, body: str) -> None:
+        """Add a comment to an issue. Used by the seed script."""
+        ...
+
     def search_by_email(self, email: str) -> list[Ticket]:
         """Issues whose last `Employee:` line is this email, by number (FR-C11).
 
@@ -154,6 +164,18 @@ class MockTicketClient:
             self.fail_searches -= 1
             raise TransientTicketError("mock: search unavailable")
         return [t for t in self._issues.values() if _same_email(employee_email_of(t.body), email)]
+
+    def update_issue(
+        self, number: int, *, state: str | None = None, labels: Sequence[str] | None = None
+    ) -> Ticket:
+        changes: dict = {}
+        if state is not None:
+            changes["state"] = state
+        if labels is not None:
+            changes["labels"] = tuple(labels)
+        updated = Ticket.model_validate({**self.get(number).model_dump(), **changes})
+        self._issues[number] = updated
+        return updated
 
     def add_comment(self, number: int, body: str, *, author_association: str = "MEMBER") -> None:
         """A comment, as someone would add in GitHub (a team member by default). Mock-only helper."""
@@ -245,6 +267,17 @@ class GitHubRestClient:
 
     def get(self, number: int) -> Ticket:
         return _to_ticket(self._json(self._send("GET", f"/repos/{self._repo}/issues/{number}")))
+
+    def update_issue(
+        self, number: int, *, state: str | None = None, labels: Sequence[str] | None = None
+    ) -> Ticket:
+        changes = {k: v for k, v in (("state", state), ("labels", list(labels) if labels is not None else None))
+                   if v is not None}
+        response = self._send("PATCH", f"/repos/{self._repo}/issues/{number}", json=changes)
+        return _to_ticket(self._json(response))
+
+    def add_comment(self, number: int, body: str) -> None:
+        self._send("POST", f"/repos/{self._repo}/issues/{number}/comments", json={"body": body})
 
     def find_by_request_id(self, request_id: str) -> Ticket | None:
         # Newest first, so a ticket created a moment ago is on page one. GitHub search can lag.

@@ -19,9 +19,10 @@ from smartdesk_ai.tickets.schemas import (
     TicketNotFound,
     TransientTicketError,
 )
+from smartdesk_ai.tickets.status import TicketStatus, derive_status
 
 __all__ = [
     "ALL_LABELS", "Category", "GitHubRestClient", "MockTicketClient", "Priority", "Ticket", "TicketClient",
-    "TicketConfigError", "TicketCreate", "TicketError", "TicketNotFound", "TransientTicketError",
-    "build_issue", "create_ticket_client", "employee_email_of", "request_id_of",
+    "TicketConfigError", "TicketCreate", "TicketError", "TicketNotFound", "TicketStatus", "TransientTicketError",
+    "build_issue", "create_ticket_client", "derive_status", "employee_email_of", "request_id_of",
 ]

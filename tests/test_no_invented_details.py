@@ -49,7 +49,7 @@ def test_reply_shows_exactly_the_id_link_and_status_from_the_response(settings, 
     reply = result.data.receipt()
     assert "#4242" in reply
     assert "https://github.com/octo/tickets/issues/4242" in reply
-    assert "open" in reply
+    assert "(Open)" in reply
     assert (result.data.number, result.data.url, result.data.state) == (
         4242, "https://github.com/octo/tickets/issues/4242", "open")
 

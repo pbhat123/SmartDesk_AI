@@ -5,6 +5,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from smartdesk_ai.tickets.status import STATUS_IN_PROGRESS, STATUS_RESOLVED, TicketStatus, derive_status
+
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")  # no whitespace: it goes into a body line
 
 
@@ -46,9 +48,13 @@ class Ticket(BaseModel):
     state: Literal["open", "closed"]
     labels: tuple[str, ...] = ()
 
+    @property
+    def status(self) -> TicketStatus:
+        return derive_status(self.state, self.labels)
+
     def receipt(self) -> str:
         """The facts for a "ticket created" reply, only from the GitHub response (FR-B4, FR-B13)."""
-        return f"Ticket #{self.number} ({self.state}): {self.url}"
+        return f"Ticket #{self.number} ({self.status.value}): {self.url}"
 
 
 class LabelSpec(BaseModel):
@@ -59,8 +65,6 @@ class LabelSpec(BaseModel):
     description: str
 
 
-STATUS_IN_PROGRESS = "in-progress"
-STATUS_RESOLVED = "resolved"
 ALL_LABELS: tuple[LabelSpec, ...] = (
     LabelSpec(name="IT", color="1d76db", description="IT support request"),
     LabelSpec(name="HR", color="d93f0b", description="HR or payroll request"),

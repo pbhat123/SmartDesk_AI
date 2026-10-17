@@ -23,6 +23,7 @@ from smartdesk_ai.agent.answer import (
 )
 from smartdesk_ai.agent.chat_service import Turn
 from smartdesk_ai.agent.chitchat import Chitchat, static_chitchat
+from smartdesk_ai.agent.followup import contextual_question, topic_after
 from smartdesk_ai.agent.intents import dialog_update_for
 from smartdesk_ai.agent.router import RouteDecision, Router
 from smartdesk_ai.agent.state import (
@@ -231,11 +232,13 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
 
 def make_kb_search_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
     def kb_search(state: AgentState) -> dict[str, Any]:
-        outcome = _search_and_answer(deps, _question(state), state.search_domain)
+        text = _question(state)
+        outcome = _search_and_answer(deps, contextual_question(text, state.last_topic), state.search_domain)
         if isinstance(outcome, Unavailable):
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
-        return {"steps": state.steps + ["search_kb", "answer"], "part_result": outcome, "reply": outcome.answer}
+        return {"steps": state.steps + ["search_kb", "answer"], "part_result": outcome, "reply": outcome.answer,
+                "last_topic": topic_after(text, state.last_topic)}
 
     return kb_search
 
@@ -249,7 +252,7 @@ def make_kb_retry_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
     """The one whole-KB retry (FR-A19): the same question with no domain filter."""
 
     def kb_retry(state: AgentState) -> dict[str, Any]:
-        outcome = _search_and_answer(deps, _question(state), None)
+        outcome = _search_and_answer(deps, contextual_question(_question(state), state.last_topic), None)
         if isinstance(outcome, Unavailable):
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}

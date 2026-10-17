@@ -111,7 +111,7 @@ chunking:
 # Active version per prompt (FR-H14): file agent/prompts/<name>_v<N>.md.
 # Provisional, files arrive with their tasks (T0.4 loader, T4.x and T5.x prompts).
 prompts:
-  orchestrator: 1
+  orchestrator: 2
   answer: 1
   synthesizer: 1
   grounding_judge: 1

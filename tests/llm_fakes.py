@@ -13,7 +13,13 @@ class FakeAnswerLLM:
     """
 
     def __init__(self, mode="cite_top", raw=None, citations=None):
-        self.mode, self.raw, self.citations, self.calls = mode, raw, citations, []
+        # `mode` may be a list: one mode per call, the last one repeating.
+        self.modes = list(mode) if isinstance(mode, list | tuple) else [mode]
+        self.raw, self.citations, self.calls = raw, citations, []
+
+    @property
+    def mode(self):
+        return self.modes[min(len(self.calls) - 1, len(self.modes) - 1)]
 
     def invoke(self, messages):
         self.calls.append(messages)

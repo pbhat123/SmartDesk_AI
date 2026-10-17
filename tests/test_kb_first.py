@@ -45,7 +45,7 @@ def test_the_only_way_into_the_offer_node_is_through_the_kb_search(built_index_d
     graph, _ = build_test_graph(built_index_dir, settings, tmp_path)
     drawn = graph.get_graph()
     into_offer = {e.source for e in drawn.edges if e.target == "offer"}
-    assert into_offer == {"kb_search"}
+    assert into_offer <= {"kb_search", "kb_retry"}  # the retry is a KB search too (T4.9)
 
 
 def test_the_trace_is_per_turn(built_index_dir, settings, tmp_path):

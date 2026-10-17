@@ -5,22 +5,20 @@ kb_query, a domain. The dialog state `awaiting` goes into the prompt so a bare "
 second one" is routed correctly. Routing on top of this (confidence threshold, tool-pick
 fallback) lives in `router.py` (FR-D8).
 """
-import json
-import re
 from collections.abc import Callable
 from typing import Any, Literal
 
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field
 
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.state import AgentState, Awaiting, Category, Intent, IntentResult
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.factory import ModelBuilder, get_llm, openai_builder
+from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
 
 Route = Literal["it_worker", "hr_worker", "misc", "ticket_agent", "none"]
 
-_FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.S)
 # The intent that continues each pending flow; any other firm intent is a topic change (FR-D2).
 _CONTINUES: dict[str, str] = {
     "offer_reply": "create_ticket",
@@ -54,15 +52,9 @@ def _to_result(reply: ClassifierReply) -> IntentResult:
 
 
 def _parse(content: Any) -> IntentResult:
-    if isinstance(content, ClassifierReply):  # structured-output mode (live client)
-        return _to_result(content)
-    raw = (content if isinstance(content, str) else str(content)).strip()
-    fenced = _FENCE.match(raw)
-    if fenced:
-        raw = fenced.group(1)
     try:
-        return _to_result(ClassifierReply.model_validate_json(raw))
-    except ValidationError as error:
+        return _to_result(parse_model_reply(ClassifierReply, content))
+    except ReplyError as error:
         raise ClassifierError("classifier reply is not a valid classification") from error
 
 

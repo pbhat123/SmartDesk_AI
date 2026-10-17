@@ -127,7 +127,7 @@ Exit: flows A/B/C scripted; 0/1/2+ status; confirm yes/no/edit; routing set; CLI
 | [x] | T4.28 | Multi-turn: follow-ups use context; email remembered whole session | D6 | `sd/agent/graph.py`, `tests/test_multi_turn.py` | Multi-turn script never re-asks for email; "what about sick leave?" resolves using prior topic |
 | [x] | T4.29 | Single agent graph with all three capabilities; domain classification consistent | D7 | `sd/agent/graph.py`, `tests/test_single_graph.py` | One compiled graph handles KB, create, status; category set agreement threshold met on mock fixtures |
 | [x] | T4.30 | Flows A, B, C end to end in mock mode | A (AC), B (AC), C (AC) | `tests/test_flows_abc.py` | Scripted flows A, B, C pass: A answers password reset then goodbye; B offers ticket and returns ID; C lists one open ticket with team update |
-| [ ] | T4.31 | **[CONFIRM]** One live run: CLI chat, create one ticket in the tickets repo, check status | B3, C2 | none (manual) | Your OK first; one real ticket created after explicit "yes", status check returns it; result noted in PLAN.md |
+| [x] | T4.31 | **[CONFIRM]** One live run: CLI chat, create one ticket in the tickets repo, check status | B3, C2 | none (manual) | Your OK first; one real ticket created after explicit "yes", status check returns it; result noted in PLAN.md |
 
 ---
 

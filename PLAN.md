@@ -78,7 +78,7 @@ Signatures only. Pydantic models for every boundary (CLAUDE.md).
 class Settings(BaseModel): ...      # models, tier map, prices, windows, thresholds, prompt versions, modes
 def load_settings(path: Path = ...) -> Settings   # config.yaml + env overrides; cached
 ```
-`config.yaml` keys (FR-H16): `models.{main,light}`, `reasoning_effort`, `task_tiers{}`, `context_windows`, `prices`, `budget.{cutoff1,cutoff2,timezone}`, `rate_limits.{questions,creates,lookups,window_s,bypass}`, `compaction.trigger_pct`, `retrieval.{strategy=hybrid_rerank,k_each=20,rrf_k=60,top_n=5}`, `thresholds.{escalation (top dense cosine),routing_confidence,semantic_cache_cutoff,injection_heuristic}`, `routing.confidence_threshold`, `cache.{semantic_cutoff,enabled}`, `input.max_chars`, `prompts{name: version}`, `modes.{llm,tickets}`.
+`config.yaml` keys (FR-H16): `models.{main,light}`, `reasoning_effort`, `task_tiers{}`, `context_windows`, `prices`, `budget.{cutoff1,cutoff2,timezone}`, `rate_limits.{questions,creates,lookups,window_s,bypass}`, `compaction.trigger_pct`, `retrieval.{strategy=hybrid_rerank,k_each=20,rrf_k=60,top_n=5}`, `thresholds.{escalation (top dense cosine),routing_confidence,semantic_cache_cutoff,injection_heuristic}`, `routing.confidence_threshold`, `cache.{semantic_cutoff,enabled}`, `input.max_chars`, `prompts{name: version}`, `modes.{llm,tickets}`, `github.{api_base_url,api_version,timeout_seconds,per_page}` (added T3.10).
 
 ### 3.2 `llm/`
 ```python
@@ -124,10 +124,11 @@ class TicketClient(Protocol):
     def find_by_request_id(self, request_id: str) -> Ticket | None   # uses list-issues, not search (flag F-03)
     def search_by_email(self, email: str) -> list[Ticket]
 class GitHubRestClient; class MockTicketClient                       # GitHubMcpClient only if time allows
-class TicketMap:  add(email, number, request_id); numbers_for(email); backfill(email, numbers)
-def find_tickets(email, client, tmap) -> list[Ticket]                # map first, search fallback + backfill (FR-C11)
-def derive_status(state: str, labels: set[str]) -> TicketStatus      # FR-C6
+class TicketStore:  begin/complete/get (request log, FR-G6); link_email(email, number); numbers_for(email)   # built T3.7, T3.13
+def find_tickets(email, client, store) -> list[Ticket]               # map first, search fallback + backfill (FR-C11)
+def derive_status(state: str, labels) -> TicketStatus                # FR-C6
 ```
+**As built (T3.10 to T3.16).** `TicketClient` also has `ensure_labels(labels)` (idempotent, FR-B11); `create_ticket_client(settings, env)` picks `MockTicketClient` or `GitHubRestClient` from `modes.tickets` (config only, no `TICKETS_MODE` env override; live mode without `GITHUB_TOKEN`/`TICKETS_REPO` raises `TicketConfigError`). `Ticket` is `{number, url, title, body, state, labels}` copied from the GitHub response, with `.status` and `.receipt()`; a response missing a field raises `TicketError`, never a filled-in ticket (FR-B13). Transient failures (network, timeout, 429, 5xx, rate-limit 403) raise `TransientTicketError`, a `ConnectionError` subclass, so the executor retries them without `tickets/` importing `tools/`. `MockTicketClient` can `fail_before_create`, `lose_responses`, `fail_searches`, and has `add_issue`/`add_comment` for hand-made data. The executor writes the email map row after a successful create; `tools/ticket_tools.py` registers `create_ticket` with `find_by_request_id` as its recovery check. `get_tickets` is not registered yet: it composes `find_tickets`, `derive_status` and `latest_update` in the status flow (Phase 4).
 Files: `sd/tickets/github_client.py` (`TicketClient`, `GitHubRestClient`, `MockTicketClient`, body/label building), `schemas.py` (enums, models), `sqlite_map.py` (`TicketMap`), `search_fallback.py` (`find_tickets`), `status.py` (`derive_status`).
 Ticket body is built in one place: description, then `Employee: <email>`, then `Request-ID: <uuid>` (FR-B11, G6).
 

@@ -98,7 +98,10 @@ class ChatService:
             return edge
         ctx = RequestContext(session_id=session_id, request_id=uuid.uuid4().hex)
         with request_scope(ctx, self._services):
-            if self._services.budget_level(ctx) >= 2:  # cutoff 2: no guard, model or tool runs (FR-H8)
+            limit = self._services.limiter.hit("questions", session_id) if self._services.limiter else None
+            if limit is not None and not limit.allowed:  # every message counts, even small talk (FR-H13)
+                reply = ChatReply(text=limit.message or "", debug={"edge": "rate_limited"})
+            elif self._services.budget_level(ctx) >= 2:  # cutoff 2: no guard, model or tool runs (FR-H8)
                 reply = ChatReply(text=SERVICE_UNAVAILABLE_MESSAGE, debug={"edge": "budget_cutoff_2"})
             else:
                 reply = self._handle(session_id, text)

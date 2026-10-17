@@ -26,6 +26,7 @@ class Outcome(StrEnum):
     SUCCESS = "success"
     VALIDATION_ERROR = "validation_error"
     UNAVAILABLE = "unavailable"  # transient failures used up every attempt
+    RATE_LIMITED = "rate_limited"  # a usage counter is full (FR-H13); `reply` holds the wait message
     ERROR = "error"  # a permanent failure: unknown tool or a non-transient error in the function
 
 
@@ -64,6 +65,21 @@ class ToolResult(BaseModel):
     reply: str | None = None  # set when unavailable: a polite message for the employee, as is
 
 
+# The employee's own status checks count as lookups; the ticket agent's duplicate check does not.
+LOOKUP_AGENTS = frozenset({"status_flow"})
+
+
+def _rate_counter(tool: str, agent: str) -> str | None:
+    if tool == "create_ticket":
+        return "ticket_creations"
+    return "ticket_lookups" if tool == "get_tickets" and agent in LOOKUP_AGENTS else None
+
+
+def _email_of(raw_args: dict[str, Any]) -> str | None:
+    email = raw_args.get("email")
+    return email if isinstance(email, str) and email else None
+
+
 def _issue_number(data: Any) -> int | None:
     number = data.get("number") if isinstance(data, dict) else getattr(data, "number", None)
     return number if isinstance(number, int) else None
@@ -98,7 +114,14 @@ class ToolExecutor:
     ) -> ToolResult:
         started = self._clock()
         attempt_ms: list[tuple[float, str]] = []
-        result = self._execute(name, raw_args, confirmed, attempt_ms)
+        scope = current_scope()
+        counter = _rate_counter(name, agent)
+        limited = self._rate_limited(scope, counter, raw_args)
+        result = limited or self._execute(name, raw_args, confirmed, attempt_ms)
+        if limited is None and scope is not None and counter and result.outcome is Outcome.SUCCESS:
+            ctx, services = scope
+            if services.limiter is not None:
+                services.limiter.record(counter, ctx.session_id, _email_of(raw_args))
         if self._metrics is not None:
             self._metrics.record(ToolCallRecord(
                 tool=name, agent=agent, outcome=result.outcome.value,
@@ -108,12 +131,23 @@ class ToolExecutor:
                 attempt_outcomes=[o for _, o in attempt_ms],
                 total_latency_ms=(self._clock() - started) * 1000,
             ))
-        scope = current_scope()
         if scope is not None:
             scope[1].on_tool(scope[0], agent, name)
         if self._trace is not None:
             self._log_trace(name, raw_args, agent, result, attempt_ms, (self._clock() - started) * 1000)
         return result
+
+    @staticmethod
+    def _rate_limited(scope, counter: str | None, raw_args: dict[str, Any]) -> "ToolResult | None":
+        """A full usage counter stops the call before the tool runs (FR-H13)."""
+        if scope is None or counter is None or scope[1].limiter is None:
+            return None
+        ctx, services = scope
+        decision = services.limiter.check(counter, ctx.session_id, _email_of(raw_args))
+        if decision.allowed:
+            return None
+        return ToolResult(tool=counter, outcome=Outcome.RATE_LIMITED, attempts=0,
+                          error="usage limit reached", reply=decision.message)
 
     def _log_trace(
         self, name: str, raw_args: dict[str, Any], agent: str, result: ToolResult,

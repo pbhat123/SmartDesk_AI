@@ -41,6 +41,7 @@ from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.compaction import Compactor, make_summarizer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.metrics import MetricsRecorder
+from smartdesk_ai.ops.rate_limit import RateLimiter
 from smartdesk_ai.ops.runtime import Services, current_budget_level
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
@@ -125,7 +126,8 @@ def build_responder(
     budget = BudgetController(settings, spend)
     # Mock runs count tokens but price nothing, so they never touch the real daily budget.
     cost = CostTracker(settings, priced=live, path=Path(data_dir) / COST_LOG, on_spend=budget.add)
-    services = Services(cost=cost, budget=budget, trace=trace)
+    limiter = RateLimiter(settings.rate_limits, Path(data_dir) / OPS_DB)
+    services = Services(cost=cost, budget=budget, limiter=limiter, trace=trace)
     try:
         index = open_index(index_dir, CostedEmbeddings(embeddings, cost, settings))
     except IndexNotBuilt:

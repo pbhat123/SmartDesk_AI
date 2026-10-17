@@ -81,8 +81,6 @@ def main(
         line = line.strip()
         if line.lower() in EXIT_WORDS:
             break
-        if not line:
-            continue
         reply = service.handle(session_id, line)
         output(reply.text)
         if args.debug:

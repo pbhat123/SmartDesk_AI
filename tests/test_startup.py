@@ -14,6 +14,7 @@ import pytest
 
 from smartdesk_ai.agent.__main__ import main
 from smartdesk_ai.agent.chat_service import (
+    EMPTY_REPLY,
     STUB_REPLY,
     ChatReply,
     ChatService,
@@ -137,10 +138,10 @@ def test_cli_answers_then_quits():
     assert out.count(STUB_REPLY) == 1
 
 
-def test_cli_exits_cleanly_on_eof_and_skips_blank_lines():
+def test_cli_exits_cleanly_on_eof_and_answers_blank_lines_with_a_prompt():
     code, out = run_cli(["", "hello"])
     assert code == 0
-    assert out.count(STUB_REPLY) == 1
+    assert out.count(STUB_REPLY) == 1 and out.count(EMPTY_REPLY) == 1
 
 
 def test_cli_banner_lists_degraded_modes():

@@ -19,6 +19,11 @@ from smartdesk_ai.ops.health import HealthRegistry, get_registry
 logger = logging.getLogger(__name__)
 
 STUB_REPLY = "SmartDesk AI is starting up. The help desk agent is not connected yet."
+EMPTY_REPLY = "It looks like your message was empty. Please type your question or request."
+
+
+def too_long_reply(max_chars: int) -> str:
+    return f"That message is a bit too long for me (the limit is {max_chars} characters). Could you shorten it?"
 
 
 class ChatReply(BaseModel):
@@ -79,9 +84,20 @@ class ChatService:
         self._responder = responder
         self._output_guard = output_guard
 
+    def _edge_case(self, text: str) -> ChatReply | None:
+        if not text.strip():
+            return ChatReply(text=EMPTY_REPLY, debug={"edge": "empty"})
+        limit = self.settings.input.max_chars
+        if len(text) > limit:
+            return ChatReply(text=too_long_reply(limit), debug={"edge": "too_long"})
+        return None
+
     def handle(self, session_id: str, text: str) -> ChatReply:
         if not session_id:
             raise ValueError("session_id must not be empty")
+        edge = self._edge_case(text)
+        if edge is not None:  # cheap checks first: nothing reaches a guard, a model or a tool (FR-F4)
+            return edge
         decision = self._input_guard(text)
         debug: dict[str, Any] = {}
         if decision.blocked:

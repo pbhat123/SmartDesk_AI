@@ -46,6 +46,10 @@ class Ticket(BaseModel):
     state: Literal["open", "closed"]
     labels: tuple[str, ...] = ()
 
+    def receipt(self) -> str:
+        """The facts for a "ticket created" reply, only from the GitHub response (FR-B4, FR-B13)."""
+        return f"Ticket #{self.number} ({self.state}): {self.url}"
+
 
 class LabelSpec(BaseModel):
     model_config = ConfigDict(frozen=True)

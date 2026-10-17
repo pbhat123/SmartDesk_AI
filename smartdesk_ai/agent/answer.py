@@ -6,6 +6,7 @@ and the flow escalates even when retrieval scores passed (`should_escalate`). If
 fails because every model tier is down, `AnswerUnavailable` is raised instead: that is an outage
 to tell the employee about, never a ticket offer (FR-F2, FR-F1).
 """
+import logging
 import time
 from collections.abc import Callable, Sequence
 from typing import Any
@@ -19,6 +20,11 @@ from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, FallbackChat
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
+
+logger = logging.getLogger(__name__)
+
+# (question, draft answer, retrieved chunks) -> True when every claim is supported (FR-H2). May raise.
+Judge = Callable[[str, str, Sequence[KBChunk]], bool]
 
 INSUFFICIENT_REPLY = "I don't know the answer to that from our knowledge base."
 
@@ -74,8 +80,19 @@ def _sources_line(cited: Sequence[str], chunks: Sequence[KBChunk]) -> str:
     return "Sources: " + "; ".join(f"{i} ({titles[i]})" for i in cited)
 
 
-def answer_from_context(llm: Any, prompt: str, question: str, chunks: Sequence[KBChunk]) -> AnswerResult:
-    """Answer `question` from `chunks` only. Raises `AnswerError` on a failed or invalid call."""
+def _grounded(judge: Judge, question: str, answer: str, chunks: Sequence[KBChunk]) -> bool:
+    try:
+        return judge(question, answer, chunks)
+    except Exception as error:  # a judge that cannot decide never lets an unchecked answer through
+        logger.warning("grounding judge failed (%s); answer treated as ungrounded", type(error).__name__)
+        return False
+
+
+def answer_from_context(
+    llm: Any, prompt: str, question: str, chunks: Sequence[KBChunk], judge: Judge | None = None
+) -> AnswerResult:
+    """Answer `question` from `chunks` only. Raises `AnswerError` on a failed or invalid call.
+    With a `judge`, a draft that is not grounded in the chunks becomes the insufficient signal (FR-H2)."""
     if not chunks:  # signal 1: nothing to answer from, so no model call
         return _insufficient()
     human = f"Question: {question}\n\nContext:\n{format_context(chunks)}"
@@ -93,6 +110,8 @@ def answer_from_context(llm: Any, prompt: str, question: str, chunks: Sequence[K
     if not cited:  # an answer that names no retrieved entry is never shown (FR-A13)
         return _insufficient()
     text = reply.answer.strip()
+    if judge is not None and not _grounded(judge, question, text, chunks):
+        return _insufficient()
     return AnswerResult(text=f"{text}\n\n{_sources_line(cited, chunks)}", answer=text, insufficient=False, citations=cited)
 
 
@@ -109,10 +128,12 @@ def make_answerer(
     budget_level: int = 0,
     structured: bool | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    judge: Judge | None = None,
 ) -> Callable[[str, Sequence[KBChunk]], AnswerResult]:
     """An answerer for the WORKER_ANSWER task and the active answer prompt. Every call goes
     through the Main/Light outage fallback. The live client uses structured-output mode; a custom
-    builder (the mock path) gets plain JSON unless `structured=True`."""
+    builder (the mock path) gets plain JSON unless `structured=True`. The grounding `judge` runs once per
+    answered part, inside this step (FR-H2)."""
     use_schema = structured if structured is not None else builder is openai_builder
     llm = FallbackChat(
         "WORKER_ANSWER", settings, builder=builder, budget_level=budget_level,
@@ -121,6 +142,6 @@ def make_answerer(
     prompt = load_prompt("answer", settings).text
 
     def answer(question: str, chunks: Sequence[KBChunk]) -> AnswerResult:
-        return answer_from_context(llm, prompt, question, chunks)
+        return answer_from_context(llm, prompt, question, chunks, judge)
 
     return answer

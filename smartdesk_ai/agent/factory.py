@@ -15,6 +15,7 @@ from smartdesk_ai.agent.chat_service import Responder
 from smartdesk_ai.agent.chitchat import make_chitchat
 from smartdesk_ai.agent.confirm import make_confirm_parser
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph, make_kb_responder
+from smartdesk_ai.agent.grounding import make_grounding_judge
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
@@ -22,7 +23,15 @@ from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.injection import make_injection_checker, screen_team_update
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
-from smartdesk_ai.llm.mock import MockAnswerModel, MockInjectionModel, MockChitchatModel, MockConfirmModel, MockDraftModel, MockRoutingModel
+from smartdesk_ai.llm.mock import (
+    MockAnswerModel,
+    MockChitchatModel,
+    MockConfirmModel,
+    MockDraftModel,
+    MockGroundingModel,
+    MockInjectionModel,
+    MockRoutingModel,
+)
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
@@ -82,7 +91,7 @@ def build_responder(
             )
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
-        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = openai_builder
+        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = judge_b = openai_builder
     else:
         embeddings = HashingEmbeddings()
         index_dir = Path(data_dir) / "index_mock"
@@ -94,6 +103,7 @@ def build_responder(
         draft_b, confirm_b = _builder_for(MockDraftModel()), _builder_for(MockConfirmModel())
         chat_b = _builder_for(MockChitchatModel())
         inject_b = _builder_for(MockInjectionModel())
+        judge_b = _builder_for(MockGroundingModel())
     try:
         index = open_index(index_dir, embeddings)
     except IndexNotBuilt:
@@ -125,8 +135,9 @@ def build_responder(
         parse_confirm=make_confirm_parser(settings, builder=confirm_b),
         duplicate_threshold=settings.thresholds.duplicate_title,
     )
+    answerer = make_answerer(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))
     graph = build_kb_graph(
-        KBDeps(executor=executor, answer=make_answerer(settings, builder=answer_b)),
+        KBDeps(executor=executor, answer=answerer),
         make_checkpointer(Path(data_dir) / CHECKPOINT_DB, STATE_MODELS),
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,

@@ -34,7 +34,7 @@ class SearchSpy:
 
 
 def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", routed=False,
-             drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None):
+             drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None):
     """Everything the tests need: the compiled graph plus the spy, the tickets client and the store."""
     index = open_index(built_index_dir, HashingEmbeddings())
     spy = SearchSpy(make_search_kb(index, settings, reranker=None, health=HealthRegistry()))
@@ -46,7 +46,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
     executor = ToolExecutor(registry, settings, request_store=store, sleep=lambda _: None)
     if seeded:  # the demo tickets of scripts/seed_tickets.py, through the same client and map
         seed(client, store)
-    answer = make_answerer(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM())
+    answer = make_answerer(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM(), judge=judge)
     saver = make_checkpointer(tmp_path / name, STATE_MODELS)
     route = make_router(settings, builder=lambda model_id, cfg: MockRoutingModel()) if routed else None
     tickets = None

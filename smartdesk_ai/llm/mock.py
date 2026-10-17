@@ -201,3 +201,16 @@ class MockInjectionModel:
         text = str(messages[-1].content).split("<<<TEXT\n", 1)[-1].rsplit("\nTEXT>>>", 1)[0]
         hit = bool(_MOCK_INJECTION.search(text)) and not _MOCK_INJECTION_BENIGN.search(text)
         return SimpleNamespace(content=json.dumps({"injection": hit, "reason": "mock rule" if hit else None}))
+
+
+class MockGroundingModel:
+    """Stand-in for the GROUNDING_JUDGE task: grounded when every content word and every number of the
+    draft answer also appears in the context."""
+
+    def invoke(self, messages):
+        human = str(messages[-1].content)
+        answer = human.split("Draft answer:\n", 1)[1].split("\n\nContext:\n", 1)[0]
+        context = human.split("\n\nContext:\n", 1)[1]
+        tokens = lambda text: _content_words(text) | set(re.findall(r"\d+", text))  # noqa: E731
+        missing = sorted(tokens(answer) - tokens(context))
+        return SimpleNamespace(content=json.dumps({"grounded": not missing, "unsupported": missing[:5]}))

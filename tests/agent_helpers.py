@@ -2,6 +2,7 @@
 from smartdesk_ai.agent.answer import make_answerer
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph
 from smartdesk_ai.agent.router import make_router
+from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
 from smartdesk_ai.llm.mock import MockRoutingModel
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.agent.state import STATE_MODELS
@@ -25,7 +26,7 @@ class SearchSpy:
         return self.fn(args)
 
 
-def build_test_graph(built_index_dir, settings, tmp_path, llm=None, name="chat.db", routed=False):
+def build_test_graph(built_index_dir, settings, tmp_path, llm=None, name="chat.db", routed=False, drafter_llm=None):
     index = open_index(built_index_dir, HashingEmbeddings())
     spy = SearchSpy(make_search_kb(index, settings, reranker=None, health=HealthRegistry()))
     registry = ToolRegistry()
@@ -34,4 +35,5 @@ def build_test_graph(built_index_dir, settings, tmp_path, llm=None, name="chat.d
     answer = make_answerer(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM())
     saver = make_checkpointer(tmp_path / name, STATE_MODELS)
     route = make_router(settings, builder=lambda model_id, cfg: MockRoutingModel()) if routed else None
-    return build_kb_graph(KBDeps(executor=executor, answer=answer), saver, route=route), spy
+    tickets = TicketDeps(drafter=make_drafter(settings, builder=lambda model_id, cfg: drafter_llm)) if drafter_llm else None
+    return build_kb_graph(KBDeps(executor=executor, answer=answer), saver, route=route, tickets=tickets), spy

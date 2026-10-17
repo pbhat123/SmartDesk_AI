@@ -39,7 +39,13 @@ from smartdesk_ai.agent.state import (
     RouteKind,
     thread_config,
 )
-from smartdesk_ai.agent.ticket_agent import escalation_offer, handle_offer_reply, make_t_collect_node
+from smartdesk_ai.agent.ticket_agent import (
+    TicketDeps,
+    escalation_offer,
+    handle_offer_reply,
+    make_t_collect_node,
+    make_t_draft_node,
+)
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
@@ -269,8 +275,16 @@ def reply_node(state: AgentState) -> dict[str, Any]:
     return {"steps": state.steps + ["reply"], "messages": [AIMessage(state.reply)]}
 
 
-def build_kb_graph(deps: KBDeps, checkpointer: Any = None, *, route: Router | None = None):
-    """Compile the agent graph. Without a `route`, every new message goes to the KB path."""
+def after_t_collect(state: AgentState) -> str:
+    """A ready ticket continues to the draft; a question to the employee ends the turn."""
+    return "t_draft" if state.steps[-1] == "t_collect" and state.reply == "" else END
+
+
+def build_kb_graph(
+    deps: KBDeps, checkpointer: Any = None, *, route: Router | None = None, tickets: TicketDeps | None = None
+):
+    """Compile the agent graph. Without a `route`, every new message goes to the KB path. Without
+    `tickets`, the ticket path stops after collecting the email."""
     builder = StateGraph(AgentState)
     builder.add_node("entry", entry_node)
     builder.add_node("offer_reply", offer_reply_node)
@@ -278,7 +292,7 @@ def build_kb_graph(deps: KBDeps, checkpointer: Any = None, *, route: Router | No
     builder.add_node("kb_retry", make_kb_retry_node(deps))
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
-    builder.add_node("t_collect", make_t_collect_node())
+    builder.add_node("t_collect", make_t_collect_node(drafting=tickets is not None))
     builder.add_edge(START, "entry")
     builder.add_conditional_edges("entry", make_after_entry(route is not None),
                                   ["offer_reply", "route", "kb_search"] if route else ["offer_reply", "kb_search"])
@@ -297,7 +311,12 @@ def build_kb_graph(deps: KBDeps, checkpointer: Any = None, *, route: Router | No
     builder.add_conditional_edges("kb_retry", after_kb_retry, ["offer", "reply", END])
     builder.add_edge("offer", END)
     builder.add_edge("reply", END)
-    builder.add_edge("t_collect", END)
+    if tickets is None:
+        builder.add_edge("t_collect", END)
+    else:
+        builder.add_node("t_draft", make_t_draft_node(tickets))
+        builder.add_conditional_edges("t_collect", after_t_collect, ["t_draft", END])
+        builder.add_edge("t_draft", END)
     return builder.compile(checkpointer=checkpointer)
 
 

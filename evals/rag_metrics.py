@@ -47,6 +47,12 @@ class Judge(Protocol):
 
     def factual_precision(self, answer: str, reference: str) -> float | None: ...
 
+    def answer_relevancy(self, question: str, answer: str) -> float | None: ...
+
+    def context_precision(self, question: str, contexts: Sequence[str], reference: str) -> float | None: ...
+
+    def context_recall(self, question: str, contexts: Sequence[str], reference: str) -> float | None: ...
+
 
 # --- computed metrics ---------------------------------------------------------------------------
 
@@ -123,6 +129,19 @@ class MockJudge:
         a, r = _content(answer), _content(reference)
         return len(a & r) / len(a) if a else 0.0
 
+    def answer_relevancy(self, question: str, answer: str) -> float:
+        q, a = _content(question), _content(answer)
+        return len(q & a) / len(q) if q else 0.0
+
+    def context_precision(self, question: str, contexts: Sequence[str], reference: str) -> float:
+        r = _content(reference)
+        useful = sum(bool(r & _content(c)) for c in contexts)
+        return useful / len(contexts) if contexts else 0.0
+
+    def context_recall(self, question: str, contexts: Sequence[str], reference: str) -> float:
+        r = _content(reference)
+        return len(r & _content(" ".join(contexts))) / len(r) if r else 0.0
+
 
 def build_ragas_metrics(llm: Any, embeddings: Any) -> dict[str, Any]:
     """The pinned Ragas metric objects (legacy `ragas.metrics` classes), judged by `llm`."""
@@ -133,20 +152,43 @@ def build_ragas_metrics(llm: Any, embeddings: Any) -> dict[str, Any]:
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        from ragas.metrics import AnswerCorrectness, FactualCorrectness, Faithfulness
+        from ragas.metrics import (
+            AnswerCorrectness,
+            AnswerSimilarity,
+            FactualCorrectness,
+            Faithfulness,
+            LLMContextPrecisionWithReference,
+            LLMContextRecall,
+            ResponseRelevancy,
+        )
 
         return {
             "faithfulness": Faithfulness(llm=llm),
-            "answer_correctness": AnswerCorrectness(llm=llm, embeddings=embeddings),
+            # evaluate() would set answer_similarity; we score one sample at a time, so it is set here
+            "answer_correctness": AnswerCorrectness(
+                llm=llm, embeddings=embeddings, answer_similarity=AnswerSimilarity(embeddings=embeddings)),
             "factual_precision": FactualCorrectness(llm=llm, mode="precision"),
+            "answer_relevancy": ResponseRelevancy(llm=llm, embeddings=embeddings),
+            "context_precision": LLMContextPrecisionWithReference(llm=llm),
+            "context_recall": LLMContextRecall(llm=llm),
         }
+
+
+class SpendCeilingExceeded(RuntimeError):
+    """The judge's spend passed the ceiling the run was given; the run stops."""
 
 
 class RagasJudge:
     name = "ragas"
+    SYSTEMATIC_AFTER = 3  # this many calls in a row failing for one metric means it is broken, not flaky
 
-    def __init__(self, *, faithfulness: Any, answer_correctness: Any, factual_precision: Any) -> None:
-        self._faithfulness, self._correctness, self._precision = faithfulness, answer_correctness, factual_precision
+    def __init__(self, *, faithfulness: Any, answer_correctness: Any, factual_precision: Any,
+                 answer_relevancy: Any = None, context_precision: Any = None, context_recall: Any = None) -> None:
+        self._metrics = {"faithfulness": faithfulness, "answer_correctness": answer_correctness,
+                         "factual_precision": factual_precision, "answer_relevancy": answer_relevancy,
+                         "context_precision": context_precision, "context_recall": context_recall}
+        self.errors: dict[str, int] = {}  # failed samples per metric (they count as missing)
+        self._calls: dict[str, int] = {}
 
     @staticmethod
     def _sample(**fields: Any) -> Any:
@@ -161,17 +203,41 @@ class RagasJudge:
     def _score(value: Any) -> float | None:
         return None if value is None or math.isnan(float(value)) else float(value)
 
+    def _run(self, name: str, **fields: Any) -> float | None:
+        """Score one sample. A failing sample is counted and treated as missing; a metric whose first calls all
+        fail raises, so a broken setup stops the run early. The spend ceiling is never swallowed."""
+        metric = self._metrics[name]
+        if metric is None:
+            return None
+        self._calls[name] = self._calls.get(name, 0) + 1
+        try:
+            return self._score(metric.single_turn_score(self._sample(**fields)))
+        except SpendCeilingExceeded:
+            raise
+        except Exception as error:
+            self.errors[name] = self.errors.get(name, 0) + 1
+            if self.errors[name] >= self.SYSTEMATIC_AFTER and self.errors[name] == self._calls[name]:
+                raise RuntimeError(f"Ragas metric {name} failed {self.errors[name]} times in a row: "
+                                   f"{type(error).__name__}: {error}") from error
+            return None
+
     def faithfulness(self, question: str, answer: str, contexts: Sequence[str]) -> float | None:
-        sample = self._sample(user_input=question, response=answer, retrieved_contexts=list(contexts))
-        return self._score(self._faithfulness.single_turn_score(sample))
+        return self._run("faithfulness", user_input=question, response=answer, retrieved_contexts=list(contexts))
 
     def answer_correctness(self, question: str, answer: str, reference: str) -> float | None:
-        sample = self._sample(user_input=question, response=answer, reference=reference)
-        return self._score(self._correctness.single_turn_score(sample))
+        return self._run("answer_correctness", user_input=question, response=answer, reference=reference)
 
     def factual_precision(self, answer: str, reference: str) -> float | None:
-        sample = self._sample(response=answer, reference=reference)
-        return self._score(self._precision.single_turn_score(sample))
+        return self._run("factual_precision", response=answer, reference=reference)
+
+    def answer_relevancy(self, question: str, answer: str) -> float | None:
+        return self._run("answer_relevancy", user_input=question, response=answer)
+
+    def context_precision(self, question: str, contexts: Sequence[str], reference: str) -> float | None:
+        return self._run("context_precision", user_input=question, retrieved_contexts=list(contexts), reference=reference)
+
+    def context_recall(self, question: str, contexts: Sequence[str], reference: str) -> float | None:
+        return self._run("context_recall", user_input=question, retrieved_contexts=list(contexts), reference=reference)
 
 
 # --- report ----------------------------------------------------------------------------------------
@@ -189,6 +255,10 @@ class RagReport(BaseModel):
     citation_accuracy: float | None
     n_cited: int
     factual_precision: float | None
+    answer_relevancy: float | None = None
+    context_precision: float | None = None
+    context_recall: float | None = None
+    judge_errors: dict[str, int] = Field(default_factory=dict)
     outputs: list[RagOutput] = Field(default_factory=list, exclude=True)
 
 
@@ -206,6 +276,12 @@ def compute_metrics(
     correct = [judge.answer_correctness(by_id[o.question_id].question, o.answer, by_id[o.question_id].reference_answer)
                for o in answered]
     precision = [judge.factual_precision(o.answer, by_id[o.question_id].reference_answer) for o in answered]
+    relevancy = [judge.answer_relevancy(by_id[o.question_id].question, o.answer) for o in answered]
+    with_context = [o for o in outputs if o.contexts]  # the retrieval metrics cover escalated questions too
+    ctx_precision = [judge.context_precision(by_id[o.question_id].question, o.contexts, by_id[o.question_id].reference_answer)
+                     for o in with_context]
+    ctx_recall = [judge.context_recall(by_id[o.question_id].question, o.contexts, by_id[o.question_id].reference_answer)
+                  for o in with_context]
     scored = [f for f in faith if f is not None]
     accuracy, cited = citation_accuracy(answered, rows)
     return RagReport(
@@ -213,7 +289,8 @@ def compute_metrics(
         retrieval=retrieval_scores(outputs, rows, ks), answer_correctness=_mean(correct),
         hallucination_rate=(sum(f < 1.0 for f in scored) / len(scored)) if scored else None,
         grounded_answer_rate=_mean(faith), citation_accuracy=accuracy, n_cited=cited,
-        factual_precision=_mean(precision), outputs=list(outputs),
+        factual_precision=_mean(precision), answer_relevancy=_mean(relevancy), context_precision=_mean(ctx_precision),
+        context_recall=_mean(ctx_recall), judge_errors=dict(getattr(judge, "errors", {})), outputs=list(outputs),
     )
 
 
@@ -258,7 +335,11 @@ def run(
     rows = kb_rows(split)
     answer_fn = answer_fn or make_answer_fn(settings, index, res.reranker, mock_answerer(settings))
     judge = judge or MockJudge()
-    report = compute_metrics([answer_fn(r) for r in rows], rows, judge)
+    outputs = [answer_fn(r) for r in rows]
+    if out_dir:  # the paid part of a real run is kept even if the judge then fails
+        out_dir.mkdir(parents=True, exist_ok=True)
+        (out_dir / "rag_outputs.json").write_text(json.dumps([o.model_dump() for o in outputs], indent=2))
+    report = compute_metrics(outputs, rows, judge)
     _print(report)
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -278,15 +359,14 @@ def _print(report: RagReport) -> None:
         print(f"  @{k}: precision {s['precision']:.3f}  recall {s['recall']:.3f}  f1 {s['f1']:.3f}")
     print(f"  answer correctness {_fmt(report.answer_correctness)}  hallucination rate {_fmt(report.hallucination_rate)}"
           f"  grounded-answer rate {_fmt(report.grounded_answer_rate)}")
+    print(f"  answer relevancy {_fmt(report.answer_relevancy)}  context precision {_fmt(report.context_precision)}"
+          f"  context recall {_fmt(report.context_recall)}"
+          + (f"  judge errors {report.judge_errors}" if report.judge_errors else ""))
     print(f"  citation accuracy {_fmt(report.citation_accuracy)} over {report.n_cited} cited  "
           f"factual precision {_fmt(report.factual_precision)}")
 
 
 # --- the real run (paid models; only after the user approved the plan) -----------------------------------------------
-
-class SpendCeilingExceeded(RuntimeError):
-    """The judge's spend passed the ceiling the run was given; the run stops."""
-
 
 class UsageCounter:
     """A LangChain callback that adds up the tokens of every model call it sees (the Ragas judge's calls).

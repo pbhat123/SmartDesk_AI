@@ -252,3 +252,88 @@ def test_a_real_rag_run_with_the_mock_judge_is_refused(capsys):
 
     assert main(["--only", "rag"]) == 1
     assert "--judge ragas" in capsys.readouterr().err
+
+
+# --- answer relevancy, context precision and context recall; judge errors; the AnswerSimilarity fix --------------------
+
+def test_the_mock_judge_scores_the_three_added_metrics():
+    judge = rm.MockJudge()
+    assert judge.answer_relevancy("how do I reset my password", "Reset your password in the portal.") > 0.0
+    assert judge.answer_relevancy("how do I reset my password", "Bananas are yellow fruit.") == 0.0
+    reference = "Reset the password in the portal."
+    assert judge.context_recall("q", ["The portal resets a password for you."], reference) > 0.5
+    assert judge.context_recall("q", ["Unrelated parking text."], reference) == 0.0
+    assert judge.context_precision("q", ["Reset the password in the portal.", "Parking text about cars."], reference) == 0.5
+    assert judge.context_precision("q", [], reference) == 0.0
+
+
+def test_the_report_carries_the_three_added_metrics_over_the_right_questions():
+    rows = [row(1, "A"), row(2, "A")]
+    outs = [out(1, ["A"], ["A"], answer="Reset your password in the portal.", contexts=["Reset your password in the portal."]),
+            out(2, ["A"], contexts=["Reset your password in the portal."])]  # escalated: no answer shown
+    report = rm.compute_metrics(outs, rows, rm.MockJudge(), ks=(1,))
+    assert report.answer_relevancy is not None and report.context_precision is not None and report.context_recall is not None
+    assert report.context_recall > 0.0  # retrieval metrics cover both questions, answer relevancy only the answered one
+
+
+def test_the_ragas_judge_maps_the_added_metrics_onto_ragas_samples():
+    rel, prec, rec = FakeMetric(0.6), FakeMetric(0.7), FakeMetric(0.8)
+    judge = rm.RagasJudge(faithfulness=FakeMetric(1.0), answer_correctness=FakeMetric(1.0), factual_precision=FakeMetric(1.0),
+                          answer_relevancy=rel, context_precision=prec, context_recall=rec)
+    assert judge.answer_relevancy("the question", "the answer") == 0.6
+    assert judge.context_precision("the question", ["c1"], "the reference") == 0.7
+    assert judge.context_recall("the question", ["c1"], "the reference") == 0.8
+    assert (prec.samples[0].reference, prec.samples[0].retrieved_contexts) == ("the reference", ["c1"])
+    assert rel.samples[0].response == "the answer"
+
+
+def test_the_ragas_metrics_include_the_added_classes_and_answer_correctness_has_its_similarity_metric():
+    metrics = rm.build_ragas_metrics(llm=object(), embeddings=object())
+    assert type(metrics["answer_relevancy"]).__name__ == "ResponseRelevancy"
+    assert type(metrics["context_precision"]).__name__ == "LLMContextPrecisionWithReference"
+    assert type(metrics["context_recall"]).__name__ == "LLMContextRecall"
+    assert metrics["answer_correctness"].answer_similarity is not None  # "AnswerSimilarity must be set" in the first live run
+
+
+class Raises:
+    def __init__(self, error):
+        self.error, self.samples = error, []
+
+    def single_turn_score(self, sample):
+        raise self.error
+
+
+def test_one_failing_sample_is_counted_not_fatal_but_a_systematic_failure_stops_the_run():
+    judge = rm.RagasJudge(faithfulness=FakeMetric(1.0), answer_correctness=Raises(ValueError("parse")),
+                          factual_precision=FakeMetric(1.0))
+    assert judge.answer_correctness("q", "a", "r") is None and judge.errors == {"answer_correctness": 1}
+    judge.answer_correctness("q", "a", "r")
+    with pytest.raises(RuntimeError, match="answer_correctness"):
+        judge.answer_correctness("q", "a", "r")  # the first three calls all failed: not flaky, broken
+
+
+def test_the_spend_ceiling_is_never_swallowed_by_the_error_counter(settings):
+    judge = rm.RagasJudge(faithfulness=Raises(rm.SpendCeilingExceeded("over")), answer_correctness=FakeMetric(1.0),
+                          factual_precision=FakeMetric(1.0))
+    with pytest.raises(rm.SpendCeilingExceeded):
+        judge.faithfulness("q", "a", ["c"])
+
+
+def test_the_pipeline_answers_are_saved_before_the_judge_runs(settings, tmp_path):
+    class Boom:
+        name = "boom"
+
+        def __getattr__(self, name):
+            raise RuntimeError("judge down")
+
+    res = make_resources(mock=True)
+
+    def answer_fn(r):
+        o = out(1, ["A"], ["A"], answer="An answer.")
+        o.question_id = r.id
+        return o
+
+    with pytest.raises(RuntimeError):
+        rm.run(res, None, tmp_path, judge=Boom(), answer_fn=answer_fn, split="dev")
+    saved = json.loads((tmp_path / "rag_outputs.json").read_text())
+    assert len(saved) >= 1  # the paid part of the run is not lost when the judge fails

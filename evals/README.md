@@ -31,7 +31,14 @@ Substitutions and caveats:
   first (`ragas_compat`). Remove it when the pins change.
 - Mock runs use a lexical stand-in judge, so their correctness, faithfulness and precision numbers only
   exercise the code. They are not results.
-- "Supports" in citation accuracy is decided by the ground-truth expected entry, not by a model.
+- "Supports" in citation accuracy is decided by the ground-truth expected entry, not by a model. An answer that
+  also cites a second entry that truly supports it is penalised; "expected entry cited" shows how many answers cite
+  the right entry whatever else they cite.
+- **The references are brief** (21 words on average, against 41 for the answers). Answer correctness and factual
+  precision score the answer against that brief reference, so a correct answer that adds true detail (a deadline, a
+  contact, an escalation rule) scores lower: correctness 0.695 and factual precision 0.508 understate answer
+  quality. Read them as relative numbers between prompt versions, not as accuracy. Faithfulness, context recall and the
+  gap set are the better quality signals. Key-fact references were considered and not adopted.
 
 ## Other steps
 

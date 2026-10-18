@@ -626,6 +626,6 @@ Reading it: dense alone has the expected entry at rank 1 for 49 of 53 questions 
 
 **Proposed fixes (not applied; each needs your approval, and any answer-prompt change needs a rerun of the gap set, about $0.26, because v3 exists to stop the gap-006 leak):**
 1. Answer prompt v4 (**done: v4 is active**, live gap rerun in 14.4): never say "the context" or "the policy says"; when the entry lists immediate steps, deadlines or conditions that bear on the question, include them in one line.
-2. Citations: tell the answerer to cite only entries it used a fact from, and report "expected entry cited" (51/51) beside citation accuracy. Longer term, judge each cited chunk for support instead of comparing ids.
-3. Retrieval order: look at kb-021, kb-025 and kb-043 in the existing retrieval ablation before changing anything.
+2. Citations (**done**: v4 cites only entries used, and the RAG report prints "expected entry cited n/answered" beside citation accuracy). Longer term, judge each cited chunk for support instead of comparing ids.
+3. Retrieval order (**reported above, no change**; for the Phase 7 retrieval review).
 4. Metrics: the short references understate correctness and factual precision. Decision: no key-facts lists; the limitation is noted in `evals/README.md` and the two numbers are read with that in mind.

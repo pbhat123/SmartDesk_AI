@@ -91,7 +91,7 @@ thresholds:
   escalation_mock: 0.10      # mock mode only (hashing embeddings are weaker); the mock answer model judges sufficiency
   routing_confidence: 0.60   # provisional, tuned in T4.4 (FR-D8)
   semantic_cache_cutoff: 0.95  # provisional, tuned in T6.10 (high cut-off, cache rules)
-  duplicate_title: 0.80      # provisional; title similarity at which an open ticket counts as a duplicate (FR-F4)
+  duplicate_title: 0.72      # tuned offline on 60 title pairs (best F1); see evals/results/duplicate_threshold.json
   injection_heuristic: 0.30  # provisional, tuned in T5.4 (LLM classifier runs only above this, FR-H1)
 
 # Input and output guardrails (FR-H1, FR-H2).

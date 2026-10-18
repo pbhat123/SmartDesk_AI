@@ -1,7 +1,12 @@
 """Shared fixtures: a real ingest of the real KB, built once per session with mock embeddings."""
+import os
+
 import pytest
 
 from smartdesk_ai.rag.ingest import ROOT
+
+for _variable in ("SMARTDESK_LLM_MODE", "SMARTDESK_TICKETS_MODE"):  # a developer's exported override must not change the suite
+    os.environ.pop(_variable, None)
 
 DATA_DIR = ROOT / "data"  # holds the live ticket map (app.db), the live index and the embedding cache
 

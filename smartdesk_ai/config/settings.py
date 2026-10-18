@@ -4,6 +4,8 @@ Every field is required and the models forbid unknown keys, so a missing or
 misspelled key fails at startup with its dotted path. Nothing has a default in
 code: model IDs, prices, thresholds and limits live only in config.yaml.
 """
+import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -261,7 +263,24 @@ def _format(error: ValidationError) -> str:
     return "\n".join(lines)
 
 
-def load_settings(path: Path | str = DEFAULT_CONFIG) -> Settings:
+MODE_ENV = {"llm": "SMARTDESK_LLM_MODE", "tickets": "SMARTDESK_TICKETS_MODE"}
+
+
+def _mode_overrides(environ: Mapping[str, str]) -> dict[str, str]:
+    """`modes.llm` / `modes.tickets` from the environment, for one run (a live LLM with mock tickets, say) without
+    editing config.yaml. Only these two switches can be overridden; everything else stays in the file."""
+    found = {}
+    for key, variable in MODE_ENV.items():
+        value = environ.get(variable, "").strip().lower()
+        if value in ("", "mock", "live"):
+            if value:
+                found[key] = value
+        else:
+            raise ConfigError(f"{variable} is {value!r}; it must be one of: mock, live")
+    return found
+
+
+def load_settings(path: Path | str = DEFAULT_CONFIG, environ: Mapping[str, str] | None = None) -> Settings:
     path = Path(path)
     if not path.is_file():
         raise ConfigError(f"config file not found: {path}")
@@ -271,6 +290,9 @@ def load_settings(path: Path | str = DEFAULT_CONFIG) -> Settings:
         raise ConfigError(f"{path} is not valid YAML: {exc}") from exc
     if not isinstance(data, dict):
         raise ConfigError(f"{path} must contain a mapping at the top level")
+    overrides = _mode_overrides(os.environ if environ is None else environ)
+    if overrides and isinstance(data.get("modes"), dict):
+        data["modes"] = {**data["modes"], **overrides}
     try:
         return Settings(**data)
     except ValidationError as exc:

@@ -165,7 +165,7 @@ def build_service(
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     registry = registry if registry is not None else get_registry()
     registry.register_env(env)
-    settings = load_settings(config_path)
+    settings = load_settings(config_path, environ=environ)
     if responder_factory is not None:
         responder = responder_factory(settings)
     if input_guard is None:  # every message passes the guard before the graph (FR-H1)

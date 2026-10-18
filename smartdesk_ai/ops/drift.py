@@ -267,7 +267,7 @@ def main(
     parser.add_argument("--estimate", action="store_true", help="print the cost estimate and stop")
     parser.add_argument("--yes", action="store_true", help="skip the confirmation prompt (mock mode only)")
     args = parser.parse_args(argv)
-    settings = load_settings(config_path)
+    settings = load_settings(config_path, environ=environ)
     golden = golden_set or Golden.load()
     estimate = estimate_drift(settings, golden.size)
     for line in describe_estimate(estimate, golden):

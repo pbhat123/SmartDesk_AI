@@ -125,5 +125,5 @@ prompts:
   tool_select: 1
   injection_classifier: 1
   compaction: 1
-  confirm_parse: 1
+  confirm_parse: 2
   chitchat: 1

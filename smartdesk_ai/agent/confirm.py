@@ -5,6 +5,7 @@ CONFIRM_PARSE task (Light-Model, FR-H17). The parser never guesses: a malformed 
 outage, or anything it cannot read is `unclear`, and the gate asks again or cancels. `rule_parser`
 is the model-free version, for which every other reply is unclear.
 """
+import re
 import time
 from collections.abc import Callable
 from typing import Any, Literal
@@ -29,6 +30,20 @@ CANCELLED = "Okay, I won't create the ticket. Is there anything else I can help 
 GAVE_UP = "I couldn't tell what you'd like, so I haven't created the ticket. Just ask if you want to try again."
 
 
+# Wording that tries to get past the gate. A reply with any of it is never a yes, whatever else it says (FR-B2, FR-G12).
+BYPASS = re.compile(
+    r"\b(?:skip\w*|bypass\w*|overrid\w+|(?:pre-?|already\s+|previously\s+)(?:confirm\w*|approv\w*|agreed|said)|approv\w*"
+    r"|no\s+need\s+to\s+(?:confirm|ask|check)|without\s+(?:asking|confirm\w*|checking)|don'?t\s+(?:ask|confirm))\b", re.I)
+# A yes needs an explicit agreement word in the reply itself, even when the model reads the reply as yes.
+AFFIRM = re.compile(
+    r"\b(?:yes|yeah|yep|yup|sure|ok|okay|correct|confirm\w*|go\s+ahead|looks?\s+good|that'?s\s+right|please\s+(?:do|create)"
+    r"|create\s+it|proceed)\b", re.I)
+
+
+def tries_to_bypass(reply: str) -> bool:
+    return BYPASS.search(reply) is not None
+
+
 def exact_decision(reply: str) -> ConfirmDecision | None:
     """"yes" or "no" alone (any case, trailing punctuation allowed), or None. No model call."""
     word = reply.strip().rstrip(".!").strip().lower()
@@ -38,6 +53,8 @@ def exact_decision(reply: str) -> ConfirmDecision | None:
 
 
 def rule_parser(reply: str, draft: TicketDraft) -> ConfirmDecision:
+    if tries_to_bypass(reply):
+        return ConfirmDecision(decision="unclear")
     return exact_decision(reply) or ConfirmDecision(decision="unclear")
 
 
@@ -106,6 +123,9 @@ def ground_edit(decision: ConfirmDecision, raw: str, draft: TicketDraft) -> Conf
 
 def parse_confirmation(llm: Any, prompt: str, reply: str, draft: TicketDraft) -> ConfirmDecision:
     """An exact yes/no makes no model call. Otherwise one CONFIRM_PARSE call; any failure is unclear."""
+    unclear = ConfirmDecision(decision="unclear")
+    if tries_to_bypass(reply):  # decided here, never by the model (FR-B2, FR-G12)
+        return unclear
     exact = exact_decision(reply)
     if exact is not None:
         return exact
@@ -113,13 +133,14 @@ def parse_confirmation(llm: Any, prompt: str, reply: str, draft: TicketDraft) ->
         f"Current ticket:\nTitle: {draft.title}\nDescription: {draft.description}\n"
         f"Category: {draft.category}\nPriority: {draft.priority or 'not set'}\n\nEmployee reply: {reply}"
     )
-    unclear = ConfirmDecision(decision="unclear")
     try:
         response = llm.invoke([SystemMessage(prompt), HumanMessage(human)])
         parsed = parse_model_reply(ConfirmReply, getattr(response, "content", response))
     except Exception:  # a bad reply (ReplyError) or an outage: ask again rather than guess
         return unclear
     decision = ConfirmDecision(**parsed.model_dump())
+    if decision.decision == "yes" and not AFFIRM.search(reply):
+        return unclear
     has_changes = any(v is not None for v in (decision.title, decision.description, decision.details,
                                               decision.category, decision.priority))
     if decision.decision == "yes" and has_changes:  # "yes, but ..." is never a plain yes

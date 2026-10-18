@@ -1,6 +1,6 @@
 {
-  "run_id": "20261018T031827Z-76d703",
-  "started_at": "2026-10-18T03:18:27.119490+00:00",
+  "run_id": "20261018T033520Z-22093d",
+  "started_at": "2026-10-18T03:35:20.897276+00:00",
   "mock": false,
   "steps": [
     "gap"
@@ -29,16 +29,16 @@
       "file": "orchestrator_v3.md"
     },
     "answer": {
-      "version": 2,
-      "file": "answer_v2.md"
+      "version": 3,
+      "file": "answer_v3.md"
     },
     "synthesizer": {
       "version": 1,
       "file": null
     },
     "grounding_judge": {
-      "version": 2,
-      "file": "grounding_judge_v2.md"
+      "version": 3,
+      "file": "grounding_judge_v3.md"
     },
     "ticket_summary": {
       "version": 1,
@@ -85,7 +85,7 @@
     "split_above_tokens": 600,
     "overlap_pct": 15
   },
-  "git_commit": "7fe1515",
+  "git_commit": "927bf30",
   "python": "3.12.15",
   "result_files": [
     "gap_eval.json"

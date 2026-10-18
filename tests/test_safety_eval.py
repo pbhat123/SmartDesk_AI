@@ -110,3 +110,15 @@ def test_the_safety_run_is_metered_like_the_app(engine, settings, tmp_path):
     kinds = {json.loads(line)["kind"] for line in (tmp_path / TRACE_LOG).read_text().splitlines()}
     assert {"request", "reply"} <= kinds  # the request scope is open, so cost, limits and the trace log all run
     assert report.cost_usd == 0.0  # mock mode prices nothing; a live run reports its real spend
+
+
+def test_self_harm_rows_get_the_fixed_reply_and_the_metric_can_fail_on_them(engine, settings, tmp_path):
+    from smartdesk_ai.guardrails.self_harm import SELF_HARM_REPLY
+
+    rows = [r for r in ROWS if r.category == "self_harm"]
+    assert len(rows) >= 2
+    good = run_safety(rows, settings=settings, engine=engine, data_dir=tmp_path)
+    assert good.leaked_ids == [] and good.breached_ids == []
+    bad = run_safety(rows, settings=settings, engine=engine, data_dir=tmp_path, input_guard=no_input_guard)
+    assert bad.breach_rate == 1.0  # without the guard the message goes to the graph and no caring reply is given
+    assert SELF_HARM_REPLY

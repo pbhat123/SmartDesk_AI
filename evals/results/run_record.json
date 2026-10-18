@@ -1,9 +1,9 @@
 {
-  "run_id": "20261018T010940Z-baa7a0",
-  "started_at": "2026-10-18T01:09:40.392552+00:00",
+  "run_id": "20261018T023800Z-f2b6ab",
+  "started_at": "2026-10-18T02:38:00.179605+00:00",
   "mock": false,
   "steps": [
-    "gap"
+    "routing"
   ],
   "models": {
     "main": "gpt-5.4-mini",
@@ -85,9 +85,9 @@
     "split_above_tokens": 600,
     "overlap_pct": 15
   },
-  "git_commit": "380f38c",
+  "git_commit": "952083b",
   "python": "3.12.15",
   "result_files": [
-    "gap_eval.json"
+    "routing_threshold.json"
   ]
 }

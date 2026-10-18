@@ -32,6 +32,18 @@ Substitutions and caveats:
   exercise the code. They are not results.
 - "Supports" in citation accuracy is decided by the ground-truth expected entry, not by a model.
 
+## Other steps
+
+| Step | What it measures | Notes |
+|---|---|---|
+| `agent` (`--mock`) | Completion rate, task accuracy, steps, latency, cost per task, error rate over `evals/scenarios` | Definitions at the top of `agent_metrics.py`. Throughput comes from `scripts/load_test.py`. |
+| `gap` (`--mock`) | Gap pass rate, KB answer rate, escalation precision and recall, end to end | A gap question passes only on a ticket offer: never an answer, never a deflection. The default mock answer model is lexical and answers some grey-zone gap questions, so the mock number is below 100%; the pytest uses a scripted model that reports insufficient context. |
+| `duplicate` | Sweep of `thresholds.duplicate_title` over `title_pairs.jsonl` | Free and offline. Prints the current value and two proposals; never edits config. |
+| `routing` | Sweep of `thresholds.routing_confidence` over `intents.jsonl` | Mock classifier by default; the live classifier needs `--confirm-spend`. Never edits config. |
+
+`python -m evals.safety_eval --live --confirm-spend` repeats the safety set with the real classifier,
+Moderation API and models (tickets stay mock).
+
 ## Real runs cost money
 
 A real judge run (`--judge ragas --confirm-spend`) makes many model calls. It is never run by the tests

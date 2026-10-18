@@ -1,0 +1,60 @@
+{"id": "dup-001", "a": "My monitor keeps flickering", "b": "Monitor keeps flickering", "same_issue": true}
+{"id": "dup-002", "a": "VPN keeps dropping every hour", "b": "VPN drops every hour from home", "same_issue": true}
+{"id": "dup-003", "a": "Monitor flickers after docking", "b": "My monitor flickers after I dock the laptop", "same_issue": true}
+{"id": "dup-004", "a": "Cannot log in to Outlook", "b": "Can't login to Outlook", "same_issue": true}
+{"id": "dup-005", "a": "Laptop battery drains very fast", "b": "laptop battery draining very fast!", "same_issue": true}
+{"id": "dup-006", "a": "Printer on floor 3 is not working", "b": "The printer on floor 3 isn't working", "same_issue": true}
+{"id": "dup-007", "a": "Forgot my password and locked out", "b": "I forgot my password and I'm locked out", "same_issue": true}
+{"id": "dup-008", "a": "Wi-Fi keeps disconnecting in meeting rooms", "b": "WiFi keeps disconnecting in the meeting rooms", "same_issue": true}
+{"id": "dup-009", "a": "Need a second monitor stand", "b": "Request for a second monitor stand", "same_issue": true}
+{"id": "dup-010", "a": "Question about a payslip deduction", "b": "Payslip deduction question", "same_issue": true}
+{"id": "dup-011", "a": "Slack notifications not showing on my phone", "b": "Slack notifications are not showing on phone", "same_issue": true}
+{"id": "dup-012", "a": "Keyboard keys are sticking", "b": "My keyboard keys are sticking", "same_issue": true}
+{"id": "dup-013", "a": "MFA app stopped working after phone change", "b": "MFA stopped working after changing my phone", "same_issue": true}
+{"id": "dup-014", "a": "Tableau licence expired", "b": "Tableau license expired", "same_issue": true}
+{"id": "dup-015", "a": "Headset microphone not detected", "b": "Headset mic is not detected", "same_issue": true}
+{"id": "dup-016", "a": "Screen goes black randomly", "b": "My screen goes black randomly", "same_issue": true}
+{"id": "dup-017", "a": "Cannot connect to the office VPN", "b": "Unable to connect to office VPN", "same_issue": true}
+{"id": "dup-018", "a": "Expense claim rejected without reason", "b": "My expense claim was rejected without a reason", "same_issue": true}
+{"id": "dup-019", "a": "Dock does not charge my laptop", "b": "The dock doesn't charge my laptop", "same_issue": true}
+{"id": "dup-020", "a": "Outlook calendar not syncing", "b": "Outlook calendar is not syncing", "same_issue": true}
+{"id": "dup-021", "a": "Leave balance looks wrong in the portal", "b": "Leave balance is wrong in the portal", "same_issue": true}
+{"id": "dup-022", "a": "Laptop fan is very loud", "b": "Laptop fan very loud", "same_issue": true}
+{"id": "dup-023", "a": "Mouse pointer freezes", "b": "My mouse pointer keeps freezing", "same_issue": true}
+{"id": "dup-024", "a": "Zoom camera not working", "b": "Zoom camera does not work", "same_issue": true}
+{"id": "dup-025", "a": "Software install request for VS Code", "b": "Request to install VS Code", "same_issue": true}
+{"id": "dup-026", "a": "Shared drive access denied", "b": "Access denied to the shared drive", "same_issue": true}
+{"id": "dup-027", "a": "Password reset email never arrives", "b": "Password reset email does not arrive", "same_issue": true}
+{"id": "dup-028", "a": "Second laptop charger needed", "b": "Need a second laptop charger", "same_issue": true}
+{"id": "dup-029", "a": "Tax declaration form will not submit", "b": "Tax declaration form won't submit", "same_issue": true}
+{"id": "dup-030", "a": "Badge not opening the 4th floor door", "b": "My badge does not open the 4th floor door", "same_issue": true}
+{"id": "dup-031", "a": "My monitor keeps flickering", "b": "VPN drops every hour from home", "same_issue": false}
+{"id": "dup-032", "a": "VPN keeps dropping every hour", "b": "VPN access request for a new joiner", "same_issue": false}
+{"id": "dup-033", "a": "Monitor flickers after docking", "b": "Request for a second monitor stand", "same_issue": false}
+{"id": "dup-034", "a": "Cannot log in to Outlook", "b": "Outlook calendar not syncing", "same_issue": false}
+{"id": "dup-035", "a": "Laptop battery drains very fast", "b": "Laptop fan is very loud", "same_issue": false}
+{"id": "dup-036", "a": "Printer on floor 3 is not working", "b": "Printer toner needs replacing on floor 3", "same_issue": false}
+{"id": "dup-037", "a": "Forgot my password and locked out", "b": "Password policy question", "same_issue": false}
+{"id": "dup-038", "a": "Wi-Fi keeps disconnecting in meeting rooms", "b": "Wi-Fi password for guests", "same_issue": false}
+{"id": "dup-039", "a": "Question about a payslip deduction", "b": "Question about my tax declaration", "same_issue": false}
+{"id": "dup-040", "a": "Slack notifications not showing on my phone", "b": "Slack channel access request", "same_issue": false}
+{"id": "dup-041", "a": "Keyboard keys are sticking", "b": "Mouse pointer freezes", "same_issue": false}
+{"id": "dup-042", "a": "MFA app stopped working after phone change", "b": "MFA setup help for new joiner", "same_issue": false}
+{"id": "dup-043", "a": "Tableau licence expired", "b": "Tableau dashboard is slow to load", "same_issue": false}
+{"id": "dup-044", "a": "Headset microphone not detected", "b": "Headset needed for new hire", "same_issue": false}
+{"id": "dup-045", "a": "Screen goes black randomly", "b": "Screen resolution wrong on docking station", "same_issue": false}
+{"id": "dup-046", "a": "Cannot connect to the office VPN", "b": "Cannot connect to the guest Wi-Fi", "same_issue": false}
+{"id": "dup-047", "a": "Expense claim rejected without reason", "b": "Expense claim status question", "same_issue": false}
+{"id": "dup-048", "a": "Dock does not charge my laptop", "b": "Dock does not detect my second monitor", "same_issue": false}
+{"id": "dup-049", "a": "Leave balance looks wrong in the portal", "b": "Leave application stuck pending approval", "same_issue": false}
+{"id": "dup-050", "a": "Zoom camera not working", "b": "Zoom licence upgrade request", "same_issue": false}
+{"id": "dup-051", "a": "Software install request for VS Code", "b": "Software install request for Photoshop", "same_issue": false}
+{"id": "dup-052", "a": "Shared drive access denied", "b": "Shared drive is very slow", "same_issue": false}
+{"id": "dup-053", "a": "Password reset email never arrives", "b": "Password expired during leave", "same_issue": false}
+{"id": "dup-054", "a": "Second laptop charger needed", "b": "Second monitor needed", "same_issue": false}
+{"id": "dup-055", "a": "Tax declaration form will not submit", "b": "Tax proof upload failing", "same_issue": false}
+{"id": "dup-056", "a": "Badge not opening the 4th floor door", "b": "Badge lost, need a replacement", "same_issue": false}
+{"id": "dup-057", "a": "Laptop will not start", "b": "Laptop screen cracked", "same_issue": false}
+{"id": "dup-058", "a": "Printer not working", "b": "Scanner not working", "same_issue": false}
+{"id": "dup-059", "a": "Request for access to the HR portal", "b": "Request for access to the finance portal", "same_issue": false}
+{"id": "dup-060", "a": "Email signature missing", "b": "Email storage is full", "same_issue": false}

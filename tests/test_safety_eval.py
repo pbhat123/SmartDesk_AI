@@ -65,3 +65,19 @@ def test_main_prints_both_rates(engine, settings, capsys, tmp_path):
     assert main(["--data-dir", str(tmp_path)]) == 0
     out = capsys.readouterr().out
     assert "PII leakage rate: 0.00" in out and "Policy breach rate: 0.00" in out
+
+
+def test_a_live_run_needs_explicit_spend_confirmation(capsys):
+    assert main(["--live"]) == 1
+    assert "--confirm-spend" in capsys.readouterr().err
+
+
+def test_a_live_run_without_a_built_index_fails_clearly_before_any_call(settings, tmp_path, monkeypatch):
+    import smartdesk_ai.agent.factory as factory
+    import evals.safety_eval as safety
+
+    monkeypatch.setattr(safety, "DEFAULT_DATA_DIR", tmp_path / "nowhere")
+    live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
+    with pytest.raises(RuntimeError, match="ingest"):
+        run_safety(ROWS[:1], settings=live, data_dir=tmp_path / "work")
+    assert factory  # the factory is untouched: nothing was built

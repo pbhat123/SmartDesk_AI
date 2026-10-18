@@ -3,7 +3,8 @@
 Runs every row through the real input guard, graph and output guard with mock LLMs and mock tickets (no
 network, no spend). Leakage: the share of rows where a `leak_strings` value shows up in a place named by
 `leak_scope` (reply, log, trace including the local trace log, LLM input, ticket body). Breach: the share of rows that break a `must_not`
-rule. Target for both: 0. `python -m evals.safety_eval [--data-dir DIR]` prints both rates.
+rule. Target for both: 0. `python -m evals.safety_eval [--data-dir DIR]` prints both rates; `--live --confirm-spend` uses the real classifier,
+Moderation API and models (tickets stay mock).
 """
 import argparse
 import logging
@@ -17,9 +18,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from evals.common import EVALS_DIR, load_jsonl, longest_shared_span
 from evals.schemas import SafetyRow
 from smartdesk_ai.agent.chat_service import ChatReply, ChatService, InputGuard
-from smartdesk_ai.agent.factory import TRACE_LOG, build_responder
+from smartdesk_ai.agent.factory import DEFAULT_DATA_DIR, TRACE_LOG, build_responder
 from smartdesk_ai.agent.prompt_loader import PROMPTS_DIR
 from smartdesk_ai.agent.state import new_thread_id
+from smartdesk_ai.config.env import DEFAULT_DOTENV
 from smartdesk_ai.config.settings import Settings, load_settings
 from smartdesk_ai.guardrails.input_guard import build_input_guard
 from smartdesk_ai.guardrails.output_guard import build_output_guard
@@ -105,13 +107,14 @@ def _run_case(
     row: SafetyRow, settings: Settings, engine: PresidioEngine | None, data_dir: Path,
     input_guard: InputGuard | None,
 ) -> CaseResult:
-    client = MockTicketClient()
+    client = MockTicketClient()  # tickets are never real, even in a live run
     registry = HealthRegistry()
-    spy = _SpyResponder(build_responder(settings, environ={}, dotenv_path=None, data_dir=data_dir,
-                                        registry=registry, client=client))
-    guard = input_guard or build_input_guard(settings, environ={}, dotenv_path=None, registry=registry, engine=engine)
-    out_guard = build_output_guard(settings, DEFAULT_KB_DIR, environ={}, dotenv_path=None, registry=registry,
-                                   engine=engine)
+    # A live run reads the real keys from the environment and .env; a mock run reads none.
+    env = {"environ": None, "dotenv_path": DEFAULT_DOTENV} if settings.modes.llm == "live" else {
+        "environ": {}, "dotenv_path": None}
+    spy = _SpyResponder(build_responder(settings, data_dir=data_dir, registry=registry, client=client, **env))
+    guard = input_guard or build_input_guard(settings, registry=registry, engine=engine, **env)
+    out_guard = build_output_guard(settings, DEFAULT_KB_DIR, registry=registry, engine=engine, **env)
     service = ChatService(settings, input_guard=guard, responder=spy, output_guard=out_guard)
     session = new_thread_id()
     trace_path = data_dir / TRACE_LOG
@@ -185,18 +188,35 @@ def run_safety(
     """Every row on its own session. `input_guard` replaces the real guard (to show the metric can fail)."""
     settings = settings or load_settings()
     data_dir = data_dir or Path(tempfile.mkdtemp(prefix="safety_eval_"))
+    if settings.modes.llm == "live":  # the live index is built once by the ingest script; share it, keep everything else apart
+        live_index = DEFAULT_DATA_DIR / "index"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        if not (data_dir / "index").exists():
+            if not live_index.exists():
+                raise RuntimeError("no live KB index; build it first: python -m smartdesk_ai.rag.ingest")
+            (data_dir / "index").symlink_to(live_index, target_is_directory=True)
     return SafetyReport(cases=[_run_case(r, settings, engine, data_dir, input_guard) for r in rows])
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.safety_eval")
-    parser.add_argument("--data-dir", type=Path, default=None, help="scratch folder for the mock index and checkpoints")
+    parser.add_argument("--data-dir", type=Path, default=None, help="scratch folder for the index link and checkpoints")
+    parser.add_argument("--live", action="store_true",
+                        help="real injection classifier, Moderation API, answer and judge models (costs money)")
+    parser.add_argument("--confirm-spend", action="store_true", help="allow a --live run")
     args = parser.parse_args(argv)
+    if args.live and not args.confirm_spend:
+        print("error: --live calls paid models; add --confirm-spend once you have approved the cost", file=sys.stderr)
+        return 1
+    settings = load_settings()
+    if args.live:
+        settings = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
     engine = make_presidio_engine(HealthRegistry())
     if engine is None:
         print("note: Presidio is unavailable, so name reduction is not exercised", file=sys.stderr)
-    report = run_safety([SafetyRow(**r) for r in load_jsonl(SAFETY_SET)], engine=engine, data_dir=args.data_dir)
-    print(f"Cases: {len(report.cases)}")
+    report = run_safety([SafetyRow(**r) for r in load_jsonl(SAFETY_SET)], settings=settings, engine=engine,
+                        data_dir=args.data_dir)
+    print(f"Cases: {len(report.cases)} ({'live' if args.live else 'mock'})")
     print(f"PII leakage rate: {report.leakage_rate:.2f}  {report.leaked_ids or ''}")
     print(f"Policy breach rate: {report.breach_rate:.2f}  {report.breached_ids or ''}")
     for case in report.cases:

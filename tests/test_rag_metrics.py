@@ -223,3 +223,10 @@ def test_a_confirmed_real_run_goes_to_run_real(monkeypatch, tmp_path):
     monkeypatch.setattr(run_module, "get_index", lambda res, d: None)
     assert run_module.main(["--only", "rag", "--judge", "ragas", "--confirm-spend", "--out-dir", str(tmp_path)]) == 0
     assert seen["out_dir"] == tmp_path
+
+
+def test_a_real_rag_run_with_the_mock_judge_is_refused(capsys):
+    from evals.run import main
+
+    assert main(["--only", "rag"]) == 1
+    assert "--judge ragas" in capsys.readouterr().err

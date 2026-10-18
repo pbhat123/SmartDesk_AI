@@ -104,6 +104,7 @@ def build_stack(
     registry: HealthRegistry | None = None,
     client: TicketClient | None = None,
     tracing_factories: TracingFactories | None = None,
+    mock_answer_model: Any | None = None,
 ) -> "AgentStack":
     """Everything the app is made of: the compiled graph with its ticket client, ticket map, executor and ops
     services. `build_responder` wraps it for the CLI and the UI; the evals use the parts directly."""
@@ -130,7 +131,8 @@ def build_stack(
         # Hashing vectors score lower than the real embeddings, so retrieval uses its own mock threshold.
         search_settings = settings.model_copy(update={"thresholds": settings.thresholds.model_copy(
             update={"escalation": settings.thresholds.escalation_mock})})
-        answer_b, route_b = _builder_for(MockAnswerModel()), _builder_for(MockRoutingModel())
+        answer_b = _builder_for(mock_answer_model or MockAnswerModel())  # evals swap in a scripted answer model
+        route_b = _builder_for(MockRoutingModel())
         draft_b, confirm_b = _builder_for(MockDraftModel()), _builder_for(MockConfirmModel())
         chat_b = _builder_for(MockChitchatModel())
         inject_b = _builder_for(MockInjectionModel())

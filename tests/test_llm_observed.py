@@ -22,6 +22,7 @@ from smartdesk_ai.ops.health import HealthRegistry
 from smartdesk_ai.ops.runtime import RequestContext, Services, request_scope
 from smartdesk_ai.rag.ingest import ROOT
 from smartdesk_ai.tickets import MockTicketClient
+from tests.pii_helpers import has_phone
 
 PACKAGE = ROOT / "smartdesk_ai"
 # Only these two modules may obtain a chat model: factory.py defines the builders, fallback.py is the one caller.
@@ -135,7 +136,7 @@ def test_the_trace_log_masks_the_classifier_prompt(settings, tmp_path):
     with request_scope(ctx, services):
         classify("my email is jane.roe@example.com and my phone is +91 98765 43210, vpn is down")
     text = (tmp_path / "trace.jsonl").read_text()
-    assert "orchestrator" in text and "jane.roe@example.com" not in text and "98765" not in text
+    assert "orchestrator" in text and "jane.roe@example.com" not in text and not has_phone(text)
 
 
 def test_the_budget_gate_applies_to_the_classifier_and_the_tool_picker(settings, tmp_path):

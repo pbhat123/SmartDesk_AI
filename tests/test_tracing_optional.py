@@ -28,6 +28,7 @@ from smartdesk_ai.ops.tracing import (
     split_event,
 )
 from smartdesk_ai.tickets import MockTicketClient
+from tests.pii_helpers import has_phone
 
 EMAIL = "jane.roe@example.com"
 PHONE = "+91 98765 43210"
@@ -144,7 +145,7 @@ def test_with_keys_spans_and_runs_carry_masked_data_only(settings, tmp_path, off
     spans, runs = offline.span_text(), "\n".join(offline.sent)
     assert spans != "[]" and runs
     for blob in (spans, runs):
-        assert EMAIL not in blob and "98765" not in blob and "jane.roe" not in blob
+        assert EMAIL not in blob and not has_phone(blob) and "jane.roe" not in blob
     assert "j***@example.com" in spans and "[PHONE]" in spans
 
 

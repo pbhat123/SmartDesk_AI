@@ -11,6 +11,7 @@ from smartdesk_ai.llm.fallback import FallbackChat
 from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.runtime import RequestContext, Services, request_scope
 from smartdesk_ai.rag.embeddings import HashingEmbeddings
+from tests.pii_helpers import has_phone
 
 
 class UsageModel:
@@ -155,7 +156,7 @@ def test_the_cost_log_holds_numbers_only(settings, tmp_path):
     services = Services(cost=cost)
     services.finish_request(ctx, goal="kb_answer")
     raw = path.read_text()
-    assert "jane.roe" not in raw and "98765" not in raw
+    assert "jane.roe" not in raw and not has_phone(raw)
     row = json.loads(raw.splitlines()[0])
     assert row["task"] == "kb_answer" and row["request_id"] == "r1" and "ts" in row
 

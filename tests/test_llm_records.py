@@ -14,6 +14,7 @@ from smartdesk_ai.llm.fallback import FallbackChat
 from smartdesk_ai.ops.runtime import RequestContext, Services, masked_user_id, request_scope
 from smartdesk_ai.ops.trace_log import TASK_PROMPTS, TraceLog, make_masker
 from smartdesk_ai.tickets import MockTicketClient
+from tests.pii_helpers import has_phone
 
 EMAIL = "jane.roe@example.com"
 PHONE = "+91 98765 43210"
@@ -66,7 +67,7 @@ def test_prompt_and_completion_pass_through_redaction(settings, tmp_path):
     messages = [SystemMessage("system"), HumanMessage(f"my email is {EMAIL} and my phone is {PHONE}")]
     call_llm(settings, trace, model=Model(text=f"I will write to {EMAIL}"), messages=messages)
     raw = trace.path.read_text()
-    assert EMAIL not in raw and "98765" not in raw
+    assert EMAIL not in raw and not has_phone(raw)
     [rec] = events(trace, "llm_call")
     assert "j***@example.com" in rec["prompt"] and "[PHONE]" in rec["prompt"] and "j***@example.com" in rec["completion"]
 
@@ -140,7 +141,7 @@ def test_requests_replies_steps_tool_calls_and_llm_calls_are_all_logged(conversa
 def test_a_request_event_holds_the_guarded_text_not_the_raw_text(conversation):
     rows, _ = conversation
     texts = [r["text"] for r in rows if r["kind"] == "request"]
-    assert any("[PHONE]" in t for t in texts) and not any("98765" in t for t in texts)
+    assert any("[PHONE]" in t for t in texts) and not any(has_phone(t) for t in texts)
 
 
 def test_steps_are_ordered_per_request(conversation):
@@ -154,7 +155,7 @@ def test_the_user_id_appears_once_the_email_is_known_and_never_as_an_email(conve
     rows, raw = conversation
     ids = {r["user_id"] for r in rows if r.get("user_id")}
     assert ids == {masked_user_id(EMAIL)}
-    assert EMAIL not in raw and "98765" not in raw
+    assert EMAIL not in raw and not has_phone(raw)
     assert any(r["kind"] == "llm_call" and r["user_id"] for r in rows)
 
 

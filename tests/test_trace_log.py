@@ -12,6 +12,7 @@ from smartdesk_ai.tickets import MockTicketClient
 from smartdesk_ai.tools.errors import TransientToolError
 from smartdesk_ai.tools.executor import ToolExecutor
 from smartdesk_ai.tools.registry import ToolRegistry
+from tests.pii_helpers import has_phone
 
 EMAIL = "jane.roe@example.com"
 PHONE = "+91 98765 43210"
@@ -37,7 +38,7 @@ def test_strings_anywhere_in_an_event_are_masked(tmp_path):
     log = new_log(tmp_path)
     log.event("x", text=f"mail {EMAIL} or call {PHONE}", nested={"to": [EMAIL, {"deep": EMAIL}]})
     raw = log.path.read_text()
-    assert EMAIL not in raw and "98765" not in raw
+    assert EMAIL not in raw and not has_phone(raw)
     [event] = lines(log)
     assert "j***@example.com" in event["text"] and "[PHONE]" in event["text"]
     assert event["nested"]["to"][1]["deep"] == "j***@example.com"

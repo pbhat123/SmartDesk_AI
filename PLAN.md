@@ -652,3 +652,33 @@ A six-question live check of the v3 weaknesses (answers only, no judge, $0.024):
 So "the context" wording and the dropped steps are fixed in these samples, and over-citation is only partly reduced. Every added claim was checked against the KB. The full effect on the Ragas metrics is measured in the final rerun after Phase 7, not now.
 
 **Cost accounting finding.** For this run the spend ledger says $0.3401 (217 chat calls, 348,948 input and 18,895 output tokens) and the per-request cost tracker says $0.2952 (300,609 input, 17,181 output). The 14% difference is the intent classifier: `agent/intents.py` and `agent/router.py` call the model through `get_llm(...)` directly, so those calls never reach the cost tracker, the LLM records or the daily budget. The ledger sees every call. Consequence: earlier "spend" figures from the tracker (the gap runs, the sweep) were low by about this share, and the app's $5/$10 cutoffs undercounted the same way. **Fixed:** the classifier and the tool picker now run through `FallbackChat` like every other task. What those direct `get_llm` calls skipped, all now applied: the cost entry (FR-H7); the trace record and so the Langfuse and LangSmith sinks, with the prompt masked (FR-H9, G11); the budget gate (no call at cutoff 2, the Light model at cutoff 1, FR-H8); transient-error retry with backoff and the Main to Light fallback (FR-F2). Rate limits (FR-H13) count questions, ticket creations and lookups per message in `ChatService`, not model calls, so they were never skipped. `tests/test_llm_observed.py` fails if any module outside `llm/factory.py` and `llm/fallback.py` builds a chat model, and if the cost entries, trace records and real model calls of a whole conversation differ (it fails on the old code). Estimates from before this fix are about 14% low.
+
+#### 14.5 Retrieval ablation per question (offline, 0 API calls)
+
+`python -m evals.retrieval_report` ranks the expected entry for every KB question under five strategies from the cached embeddings; an uncached text raises instead of calling the API (`evals/results/retrieval_report.json`, `tests/test_retrieval_report.py`). 53 questions:
+
+| Strategy | hit@1 | hit@3 | hit@5 | MRR |
+|---|---|---|---|---|
+| dense | **0.925** | **1.000** | **1.000** | **0.956** |
+| BM25 | 0.509 | 0.774 | 0.830 | 0.663 |
+| hybrid (RRF) | 0.774 | 0.925 | 0.943 | 0.861 |
+| hybrid+rerank (production) | 0.736 | 0.981 | 1.000 | 0.847 |
+| dense+rerank | 0.755 | 0.981 | 1.000 | 0.862 |
+
+Dev and test halves agree (dense hit@1 0.926 and 0.923; hybrid+rerank 0.704 and 0.769). By type, dense leads on simple (0.957) and how-to (0.895); only on the 11 policy-interpretation questions does plain hybrid reach 1.000.
+
+**Do the questions favour dense?** Partly. A question shares on average 44% of its content words with its expected entry (range 0 to 83%), because the set is paraphrased on purpose (FR-A18). BM25 needs shared words and dense does not: the correlation between overlap and a rank-1 hit is 0.40 for BM25, 0.09 for dense and 0.28 for hybrid+rerank. Split in half by overlap:
+
+| hit@1 | Low overlap half (26) | High overlap half (27) |
+|---|---|---|
+| dense | 0.923 | 0.926 |
+| BM25 | 0.385 | 0.630 |
+| hybrid | 0.615 | 0.926 |
+| hybrid+rerank | 0.654 | 0.815 |
+| dense+rerank | 0.692 | 0.815 |
+
+So the set handicaps BM25 and anything that leans on it, and dense's lead in the low half is partly paraphrase bias. But even where words are shared, dense equals hybrid at hit@1 and beats hybrid+rerank, so the result is not only an artefact. Limits: 53 questions written by one author against a 53-entry KB, and none uses exact terms such as error codes, tool names or entry ids, which is where BM25 earns its place.
+
+**Gap-set impact, offline part.** The cosine signal comes from the dense search whatever the strategy, so at 0.40 it escalates 10 of 21 gap questions and 1 of 53 KB questions (kb-041), for every strategy. The other 11 gap questions are decided by the answerer and judge, which see the retrieved chunks, and the chunks differ a lot by strategy: the mean Jaccard overlap of the top-5 entries on the gap questions is 0.29 for dense against the production strategy, 0.33 for plain hybrid and 0.81 for dense+rerank (for gap-006, dense returns HR-REIMB-01, 03 and 02; production returns HR-REIMB-02, 03 and others). That part needs the models, so a strategy change needs a live gap rerun (about $0.30). The expected entry is missing from the top 5 given to the answerer for 0 questions with dense, hybrid+rerank and dense+rerank, 3 with hybrid and 9 with BM25. Local latency per query: dense 0.4 ms, BM25 0.1 ms, hybrid 0.5 ms, dense+rerank 509 ms, hybrid+rerank 729 ms.
+
+**Recommendation (no config change made).** On this KB, plain dense retrieval is the best strategy: it has the best hit@1 and MRR, ties on hit@3 and hit@5, and is about 1,800 times faster per query than hybrid+rerank. The reranker adds nothing at k=3 or 5 and lowers hit@1 and MRR, and BM25 pulls kb-021 down to rank 11 under hybrid. Keep BM25 and the reranker as swappable stages (FR-A6, A7), but do not make them the default until a keyword-style question set shows they earn it. If a reranker stays, dense+rerank is the better pairing than hybrid+rerank. Before adopting: (1) SPEC section 2 names hybrid + rerank, so this is a spec change for you to approve (CLAUDE.md); (2) write a second question set with exact-term queries; (3) run the live gap rerun above; (4) optionally cut `top_n` from 5 to 3, since dense hits within 3 for every question (fewer answer tokens).

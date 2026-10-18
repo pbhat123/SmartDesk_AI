@@ -40,6 +40,13 @@ Substitutions and caveats:
   quality. Read them as relative numbers between prompt versions, not as accuracy. Faithfulness, context recall and the
   gap set are the better quality signals. Key-fact references were considered and not adopted.
 
+## Retrieval report (offline)
+
+`python -m evals.retrieval_report [--mock] [--out-dir DIR]` gives hit@1/3/5 and MRR per strategy (dense, BM25, hybrid,
+hybrid + rerank, dense + rerank) overall, per split, per question type and for the low and high lexical-overlap halves
+of the questions, which shows paraphrase bias. A real run reads only `data/embedding_cache.json`; an uncached text raises,
+so it makes no API call. Findings are in PLAN.md section 14.5.
+
 ## Other steps
 
 | Step | What it measures | Notes |
@@ -117,4 +124,3 @@ question that is still escalated:
   used, report "expected entry cited", judge each cited chunk (not applied).
 - **Expected entry not ranked first** in 13 of 51 answered questions (for example kb-043, where two unrelated entries rank above it).
   Look at it in the retrieval ablation before changing anything.
-

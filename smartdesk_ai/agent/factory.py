@@ -5,6 +5,7 @@ no network. llm live: the real models, embeddings and index (needs OPENAI_API_KE
 tickets mock: an in-memory client, no GitHub calls. Anything that makes live mode unusable raises
 `LiveModeUnavailable`, and the caller falls back to mock with a notice (FR-F7).
 """
+import logging
 import os
 from dataclasses import dataclass
 from collections.abc import Mapping
@@ -90,6 +91,15 @@ def resolve_data_dir(data_dir: Path | None, environ: Mapping[str, str] | None) -
     return Path(override) if override else DEFAULT_DATA_DIR
 
 
+SDK_LOGGERS = ("openai", "httpx", "httpcore")  # at DEBUG they log full request bodies, raw emails included
+
+
+def quiet_sdk_loggers() -> None:
+    """Pin the HTTP and OpenAI SDK loggers to WARNING, so a DEBUG root logger cannot write prompts to a log (FR-G11)."""
+    for name in SDK_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
+
+
 def _builder_for(model: Any) -> ModelBuilder:
     return lambda model_id, cfg: model
 
@@ -112,6 +122,7 @@ def build_stack(
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     data_dir = resolve_data_dir(data_dir, environ)
+    quiet_sdk_loggers()
     configure_mask_salt(env.mask_salt.get_secret_value() if env.mask_salt else None)
     live = settings.modes.llm == "live"
     reranker = None

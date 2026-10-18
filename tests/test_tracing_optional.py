@@ -259,3 +259,15 @@ def test_default_langfuse_client_uses_the_configured_host(monkeypatch):
     default_langfuse_client(
         load_env(environ={**base, "LANGFUSE_HOST": "https://us.cloud.langfuse.com"}, dotenv_path=None), lambda text: text)
     assert seen["base_url"] == "https://us.cloud.langfuse.com"
+
+
+def test_sdk_loggers_stay_quiet_whatever_the_root_level(settings, tmp_path):
+    root = logging.getLogger()
+    old = root.level
+    root.setLevel(logging.DEBUG)
+    try:
+        build_responder(settings, environ={}, dotenv_path=None, data_dir=tmp_path, client=MockTicketClient())
+        for name in ("openai", "openai._base_client", "httpx", "httpcore"):
+            assert not logging.getLogger(name).isEnabledFor(logging.INFO), name  # they would log request bodies
+    finally:
+        root.setLevel(old)

@@ -164,8 +164,7 @@ class MockTicketClient:
     def add_issue(self, title: str, body: str, *, state: str = "open", labels: Sequence[str] = ()) -> Ticket:
         """An issue made by hand in GitHub: no request ID and no map row. Mock-only helper."""
         number = len(self._issues) + 1
-        ticket = Ticket(number=number, url=f"https://github.com/{self.repo}/issues/{number}", title=title,
-                        body=body, state=state, labels=tuple(labels))
+        ticket = Ticket(number=number, url="", title=title, body=body, state=state, labels=tuple(labels))  # no link: it is not on GitHub
         self._issues[number] = ticket
         return ticket
 

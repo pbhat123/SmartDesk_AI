@@ -111,7 +111,9 @@ def render_list(refs: Sequence[TicketRef], older: int = 0) -> str:
 def render_ticket(ticket: Ticket, update: TeamUpdate | None) -> str:
     """One ticket: ID, title, status, link, and the latest team update (FR-C7). Everything but the update
     is copied from GitHub's response; the update is untrusted text and appears only quoted (FR-C9)."""
-    lines = [f"Ticket #{ticket.number}: {ticket.title}", f"Status: {ticket.status.value}", ticket.url, ""]
+    mock = " (mock)" if ticket.is_mock else ""
+    lines = [f"Ticket #{ticket.number}{mock}: {ticket.title}", f"Status: {ticket.status.value}"]
+    lines += [ticket.url, ""] if ticket.url else [""]
     if update is None:
         lines.append(NO_UPDATE_YET)
     else:

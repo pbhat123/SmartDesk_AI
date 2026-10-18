@@ -37,10 +37,10 @@ def test_one_ticket_shows_id_title_status_and_the_latest_team_update(stack):
     assert "We are testing a replacement docking cable and will update you tomorrow." in reply
 
 
-def test_the_link_is_the_one_github_returned(stack):
+def test_a_mock_ticket_is_marked_and_has_no_link(stack):
     reply = ask(stack).reply
     [ticket] = [t for t in stack.client._issues.values() if "Employee: " + ONE_EMAIL in t.body]
-    assert re.findall(r"https?://\S+", reply) == [ticket.url]
+    assert ticket.url == "" and "(mock)" in reply and re.findall(r"https?://\S+", reply) == []
 
 
 def test_exactly_one_ticket_id_is_shown(stack):

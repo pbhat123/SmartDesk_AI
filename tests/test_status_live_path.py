@@ -34,5 +34,5 @@ def test_the_cli_shows_a_ticket_created_in_the_same_session(tmp_path):
          data_dir=tmp_path, registry=HealthRegistry())
     text = "\n".join(out)
     assert "Your ticket has been created. Ticket #5" in text  # after the four preloaded demo tickets
-    assert "Ticket #5: My monitor keeps flickering" in text and "Status: Open" in text
+    assert "Ticket #5 (mock): My monitor keeps flickering" in text and "Status: Open" in text
     assert "No updates from the support team yet." in text

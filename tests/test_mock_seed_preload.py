@@ -37,7 +37,7 @@ def test_seeding_the_package_way_matches_the_script_way():
 def test_one_ticket_email_shows_the_seeded_ticket_and_its_team_comment(tmp_path):
     out = chat([f"Any updates on my monitor ticket?", ONE_EMAIL], tmp_path)
     item = next(s for s in SEEDS if s.email == ONE_EMAIL)
-    assert f"Ticket #1: {item.title}" in out and "Status: In Progress" in out and f"> {item.comment}" in out
+    assert f"Ticket #1 (mock): {item.title}" in out and "Status: In Progress" in out and f"> {item.comment}" in out
 
 
 def test_two_tickets_email_gets_the_list_and_can_pick(tmp_path):

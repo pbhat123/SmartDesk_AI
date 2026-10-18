@@ -57,7 +57,7 @@ def test_mock_create_returns_realistic_ticket():
     ticket = client.create(DRAFT)
     assert isinstance(ticket, Ticket)
     assert ticket.number == 1 and ticket.state == "open"
-    assert ticket.url == f"https://github.com/{client.repo}/issues/1"
+    assert ticket.url == "" and ticket.is_mock  # a mock ticket has no link, and none is invented
     assert ticket.title == DRAFT.title
     assert {"IT", "high"} <= set(ticket.labels)
 

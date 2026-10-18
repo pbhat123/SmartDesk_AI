@@ -253,10 +253,11 @@ def find_duplicate(title: str, tickets: Sequence[Any], threshold: float) -> Any 
 
 
 def duplicate_question(ref: TicketRef) -> str:
-    return (
-        f"You already have an open ticket that looks the same: #{ref.number} \"{ref.title}\" "
-        f"({ref.status}), {ref.url}. {DUPLICATE_ASK}"
-    )
+    if ref.url:
+        named = f"#{ref.number} \"{ref.title}\" ({ref.status}), {ref.url}"
+    else:  # a mock ticket has no link
+        named = f"#{ref.number} (mock) \"{ref.title}\" ({ref.status})"
+    return f"You already have an open ticket that looks the same: {named}. {DUPLICATE_ASK}"
 
 
 def make_t_dup_check_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:

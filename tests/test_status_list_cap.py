@@ -92,9 +92,9 @@ def test_the_cap_follows_the_config_value(built_index_dir, settings, tmp_path):
 def test_a_listed_ticket_can_still_be_picked(built_index_dir, settings, tmp_path):
     stack = stack_with(12, built_index_dir, settings, tmp_path)
     tid, _ = ask(stack)
-    assert "Ticket #3: Request number 3" in run_turn(stack.graph, tid, "the last one").reply
+    assert "Ticket #3 (mock): Request number 3" in run_turn(stack.graph, tid, "the last one").reply
     tid, _ = ask(stack)
-    assert "Ticket #12: Request number 12" in run_turn(stack.graph, tid, "the first one").reply
+    assert "Ticket #12 (mock): Request number 12" in run_turn(stack.graph, tid, "the first one").reply
 
 
 def test_an_older_ticket_cannot_be_picked_from_the_capped_list(built_index_dir, settings, tmp_path):

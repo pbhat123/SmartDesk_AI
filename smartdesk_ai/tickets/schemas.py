@@ -42,7 +42,7 @@ class Ticket(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     number: int
-    url: str
+    url: str  # GitHub's link; empty for a mock ticket, which has none and never gets an invented one
     title: str
     body: str = ""
     state: Literal["open", "closed"]
@@ -52,8 +52,15 @@ class Ticket(BaseModel):
     def status(self) -> TicketStatus:
         return derive_status(self.state, self.labels)
 
+    @property
+    def is_mock(self) -> bool:
+        return not self.url
+
     def receipt(self) -> str:
-        """The facts for a "ticket created" reply, only from the GitHub response (FR-B4, FR-B13)."""
+        """The facts for a "ticket created" reply, only from the GitHub response (FR-B4, FR-B13).
+        A mock ticket is marked as one and has no link."""
+        if self.is_mock:
+            return f"Ticket #{self.number} (mock): {self.status.value}"
         return f"Ticket #{self.number} ({self.status.value}): {self.url}"
 
 

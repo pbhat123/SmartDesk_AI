@@ -10,10 +10,12 @@ from pathlib import Path
 
 from evals import chunking_ablation, retrieval_eval, tune_threshold
 from evals.harness import DEFAULT_INDEX_DIR, ROOT, Resources, make_resources
+from evals.run_record import build_record, write_record
 from smartdesk_ai.rag.index import IndexNotBuilt, KBIndex, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ingest
 
 STEPS = ("ingest", "retrieval", "chunking", "threshold")
+RESULT_FILES = {"retrieval": "retrieval.json", "chunking": "chunking.json", "threshold": "threshold.json"}
 
 
 def build_index(res: Resources, index_dir: Path, kb_dir: Path = DEFAULT_KB_DIR) -> None:
@@ -65,6 +67,12 @@ def main(argv: list[str] | None = None) -> int:
         if "threshold" in steps:
             tune_threshold.run(res, index, args.out_dir, args.config if args.write_config else None, args.chosen)
         res.embeddings.save()
+        record = build_record(res.settings, mock=args.mock, steps=steps)
+        if args.out_dir:
+            written = [RESULT_FILES[s] for s in steps if s in RESULT_FILES and (args.out_dir / RESULT_FILES[s]).exists()]
+            print(f"run record: {write_record(record, args.out_dir, written)}")
+        else:
+            print(record.model_dump_json(indent=2))
     except (IndexNotBuilt, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

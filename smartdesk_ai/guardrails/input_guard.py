@@ -1,6 +1,6 @@
 """The input guard (FR-H1): runs on every user message before the agent graph.
 
-Order: PII redaction (email kept), name reduction, Moderation, injection check. Each later step sees only the redacted
+Order: PII redaction (email kept), name reduction, violent-threat rule, Moderation, injection check. Each later step sees only the redacted
 text, so raw PII never reaches the Moderation API, a log or a trace. A blocked message gets a polite
 refusal and the reason is logged; the text is never logged. There is no topic filter here: that is the
 orchestrator's `out_of_scope` intent (FR-D9).
@@ -16,6 +16,7 @@ from smartdesk_ai.guardrails.injection import REFUSAL as INJECTION_REFUSAL
 from smartdesk_ai.guardrails.injection import InjectionChecker, make_injection_checker
 from smartdesk_ai.guardrails.moderation import KeywordModerator, Moderator, OpenAIModerator
 from smartdesk_ai.guardrails.names import NameReducer
+from smartdesk_ai.guardrails.threats import is_violent_threat
 from smartdesk_ai.guardrails.pii import PiiRedactor, PresidioEngine, make_presidio_engine, mask_emails_in
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.mock import MockInjectionModel
@@ -26,6 +27,10 @@ logger = logging.getLogger(__name__)
 MODERATION_REFUSAL = (
     "Sorry, I can't help with that message. Please keep our conversation respectful and I'll be glad to "
     "help with an IT or HR question."
+)
+THREAT_REFUSAL = (
+    "I can't help with a message that threatens someone. If things are getting this tense, please talk to "
+    "your manager or the People Team. I'm glad to help with an IT or HR question whenever you're ready."
 )
 
 
@@ -44,6 +49,8 @@ class InputGuard:
         safe = reduced.text
         if redacted.kinds or reduced.count:
             logger.info("input redacted: pii=%s names=%d", sorted(set(redacted.kinds)), reduced.count)
+        if is_violent_threat(safe):
+            return self._block(safe, THREAT_REFUSAL, "threat:violence")
         reason = self._moderation_reason(safe)
         if reason is not None:
             return self._block(safe, MODERATION_REFUSAL, reason)

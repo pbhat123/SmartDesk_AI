@@ -91,7 +91,7 @@ input:
   max_chars: 4000            # FR-F4
 
 thresholds:
-  escalation: 0.40           # provisional until the live re-check; run 2 at 0.45 gave KB answered 71.7% / gap pass 100%; replay at 0.40 gives 79.2% / 100% (needs a live re-check)
+  escalation: 0.40           # final: live sweep 0.30-0.50 in evals/results/gap_sweep.json (gap pass 100% throughout; KB answer 98.1% at 0.40, 86.8% at 0.45)
   escalation_mock: 0.10      # mock mode only (hashing embeddings are weaker); the mock answer model judges sufficiency
   routing_confidence: 0.60   # provisional, tuned in T4.4 (FR-D8)
   semantic_cache_cutoff: 0.95  # provisional, tuned in T6.10 (high cut-off, cache rules)

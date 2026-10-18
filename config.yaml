@@ -122,7 +122,7 @@ chunking:
 # Provisional, files arrive with their tasks (T0.4 loader, T4.x and T5.x prompts).
 prompts:
   orchestrator: 3
-  answer: 2
+  answer: 3
   synthesizer: 1
   grounding_judge: 2
   ticket_summary: 1

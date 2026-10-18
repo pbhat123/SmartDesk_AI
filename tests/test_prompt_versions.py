@@ -13,9 +13,12 @@ def test_grounding_judge_v2_is_active_and_keeps_v1(settings):
     assert '{"grounded"' in prompt.text and json.loads('{"grounded": true, "unsupported": []}')
 
 
-def test_answer_v2_is_active_and_keeps_v1(settings):
+def test_answer_v3_is_active_and_keeps_older_versions(settings):
     prompt = load_prompt("answer", settings)
-    assert prompt.version == 2 and 1 in available_versions("answer")
-    assert "simple inference" in prompt.text and "partial answer" in prompt.text
-    assert "core fact" in prompt.text and "different topic" in prompt.text  # the gap guard stays
-    assert '"insufficient"' in prompt.text and '"citations"' in prompt.text
+    assert prompt.version == 3 and {1, 2} <= set(available_versions("answer"))
+    text = prompt.text
+    assert "specific item" in text and "parking fees" in text  # gap-006: a neighbouring rule is not the item asked about
+    assert "several parts" in text and "A question about one item never gets a partial answer" in text
+    assert 'Never begin with "Yes" or "No" unless the context states that fact' in text
+    assert "different topic" in text
+    assert '"insufficient"' in text and '"citations"' in text

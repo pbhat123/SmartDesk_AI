@@ -146,9 +146,10 @@ def default_langfuse_client(env: EnvSettings, masker: Masker) -> Any:
     from langfuse import Langfuse
 
     mask, mask_otel_spans = langfuse_hooks(masker)
+    host = {"base_url": env.langfuse_host} if env.langfuse_host else {}  # unset: the SDK's default (EU cloud)
     return Langfuse(
         public_key=env.langfuse_public_key.get_secret_value(), secret_key=env.langfuse_secret_key.get_secret_value(),
-        mask=mask, mask_otel_spans=mask_otel_spans)
+        mask=mask, mask_otel_spans=mask_otel_spans, **host)
 
 
 def default_langsmith_client(env: EnvSettings, masker: Masker) -> Any:

@@ -20,6 +20,7 @@ OPTIONAL_KEYS = (
     "LANGSMITH_API_KEY",
     "LANGFUSE_PUBLIC_KEY",
     "LANGFUSE_SECRET_KEY",
+    "LANGFUSE_HOST",
     "REDIS_URL",
     "MASK_SALT",
 )
@@ -38,6 +39,7 @@ class EnvSettings(BaseModel):
     langsmith_api_key: SecretStr | None = None
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
+    langfuse_host: str | None = None  # the Langfuse region or self-hosted URL; unset means the SDK default (EU cloud)
     redis_url: str | None = None
     mask_salt: SecretStr | None = None  # salt for masked user IDs and rate-limit email hashes (FR-G11)
 
@@ -46,6 +48,13 @@ class EnvSettings(BaseModel):
     def _check_repo(cls, value: str | None) -> str | None:
         if value is not None and not _REPO.match(value):
             raise ValueError(f"TICKETS_REPO must look like 'owner/repo', got {value!r}")
+        return value
+
+    @field_validator("langfuse_host")
+    @classmethod
+    def _check_host(cls, value: str | None) -> str | None:
+        if value is not None and not value.startswith(("https://", "http://")):
+            raise ValueError(f"LANGFUSE_HOST must be a URL starting with https://, got {value!r}")
         return value
 
     @property

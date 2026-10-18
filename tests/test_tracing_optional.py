@@ -20,6 +20,7 @@ from smartdesk_ai.ops.health import Component, HealthRegistry, Status
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
 from smartdesk_ai.ops.tracing import (
     LangfuseSink,
+    default_langfuse_client,
     TracingFactories,
     build_tracing,
     langfuse_hooks,
@@ -245,3 +246,16 @@ def test_building_tracing_never_sets_the_langsmith_env_flag(settings, tmp_path, 
     import os
 
     assert "LANGSMITH_TRACING" not in os.environ
+
+
+def test_default_langfuse_client_uses_the_configured_host(monkeypatch):
+    import langfuse
+
+    seen = {}
+    monkeypatch.setattr(langfuse, "Langfuse", lambda **kwargs: seen.update(kwargs))
+    base = {"LANGFUSE_PUBLIC_KEY": "pk", "LANGFUSE_SECRET_KEY": "sk"}
+    default_langfuse_client(load_env(environ=base, dotenv_path=None), lambda text: text)
+    assert "base_url" not in seen  # the SDK's own default (EU cloud) applies
+    default_langfuse_client(
+        load_env(environ={**base, "LANGFUSE_HOST": "https://us.cloud.langfuse.com"}, dotenv_path=None), lambda text: text)
+    assert seen["base_url"] == "https://us.cloud.langfuse.com"

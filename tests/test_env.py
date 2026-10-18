@@ -138,3 +138,14 @@ def test_dotenv_is_gitignored():
     lines = (ROOT / ".gitignore").read_text().splitlines()
     assert ".env" in lines
     assert ".env.example" not in lines
+
+
+def test_langfuse_host_is_optional_and_read_from_env():
+    assert load_env(environ={}, dotenv_path=NO_FILE).langfuse_host is None
+    env = load_env(environ={"LANGFUSE_HOST": " https://us.cloud.langfuse.com "}, dotenv_path=NO_FILE)
+    assert env.langfuse_host == "https://us.cloud.langfuse.com"
+
+
+def test_langfuse_host_must_be_an_http_url():
+    with pytest.raises(ValueError, match="LANGFUSE_HOST"):
+        load_env(environ={"LANGFUSE_HOST": "us.cloud.langfuse.com"}, dotenv_path=NO_FILE)

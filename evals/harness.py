@@ -72,3 +72,23 @@ def kb_rows(split: str | None = None) -> list[KBQuestion]:
 def gap_rows(split: str | None = None) -> list[GapQuestion]:
     rows = [GapQuestion(**r) for r in load_jsonl(EVALS_DIR / "gap_questions.jsonl")]
     return [r for r in rows if split is None or r.split == split]
+
+
+def live_settings(settings: Settings) -> Settings:
+    """The same settings with the real models switched on. Tickets stay in the mock mode they are in."""
+    return settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
+
+
+def link_live_index(data_dir: Path) -> None:
+    """Make the real KB index (built once by the ingest script) visible in a scratch data folder, so a live
+    eval shares the index but keeps its checkpoints, logs and counters apart from the real ones."""
+    from smartdesk_ai.agent.factory import DEFAULT_DATA_DIR
+
+    data_dir.mkdir(parents=True, exist_ok=True)
+    target = data_dir / "index"
+    if target.exists():
+        return
+    source = DEFAULT_DATA_DIR / "index"
+    if not source.exists():
+        raise RuntimeError("no live KB index; build it first: python -m smartdesk_ai.rag.ingest")
+    target.symlink_to(source, target_is_directory=True)

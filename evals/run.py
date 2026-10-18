@@ -57,9 +57,12 @@ def main(argv: list[str] | None = None) -> int:
         print("error: the live routing run calls the paid classifier; add --confirm-spend once you have approved the cost",
               file=sys.stderr)
         return 1
-    if {"agent", "gap"} & set(steps) and not args.mock:
-        print("error: the agent and gap steps run only in --mock mode for now (a live run needs a cost plan first)",
+    if "gap" in steps and not args.mock and not args.confirm_spend:
+        print("error: the live gap run calls paid models; add --confirm-spend once you have approved the cost",
               file=sys.stderr)
+        return 1
+    if "agent" in steps and not args.mock:
+        print("error: the agent step runs only in --mock mode for now (a live run needs a cost plan first)", file=sys.stderr)
         return 1
     if "rag" in steps and not args.mock and args.judge != "ragas":
         print("error: the rag step runs with --mock, or for real with --judge ragas --confirm-spend", file=sys.stderr)

@@ -16,9 +16,10 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from evals.common import EVALS_DIR, load_jsonl, longest_shared_span
+from evals.harness import link_live_index, live_settings
 from evals.schemas import SafetyRow
 from smartdesk_ai.agent.chat_service import ChatReply, ChatService, InputGuard
-from smartdesk_ai.agent.factory import DEFAULT_DATA_DIR, TRACE_LOG, build_responder
+from smartdesk_ai.agent.factory import TRACE_LOG, build_responder
 from smartdesk_ai.agent.prompt_loader import PROMPTS_DIR
 from smartdesk_ai.agent.state import new_thread_id
 from smartdesk_ai.config.env import DEFAULT_DOTENV
@@ -188,13 +189,8 @@ def run_safety(
     """Every row on its own session. `input_guard` replaces the real guard (to show the metric can fail)."""
     settings = settings or load_settings()
     data_dir = data_dir or Path(tempfile.mkdtemp(prefix="safety_eval_"))
-    if settings.modes.llm == "live":  # the live index is built once by the ingest script; share it, keep everything else apart
-        live_index = DEFAULT_DATA_DIR / "index"
-        data_dir.mkdir(parents=True, exist_ok=True)
-        if not (data_dir / "index").exists():
-            if not live_index.exists():
-                raise RuntimeError("no live KB index; build it first: python -m smartdesk_ai.rag.ingest")
-            (data_dir / "index").symlink_to(live_index, target_is_directory=True)
+    if settings.modes.llm == "live":
+        link_live_index(data_dir)
     return SafetyReport(cases=[_run_case(r, settings, engine, data_dir, input_guard) for r in rows])
 
 
@@ -210,7 +206,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     settings = load_settings()
     if args.live:
-        settings = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
+        settings = live_settings(settings)
     engine = make_presidio_engine(HealthRegistry())
     if engine is None:
         print("note: Presidio is unavailable, so name reduction is not exercised", file=sys.stderr)

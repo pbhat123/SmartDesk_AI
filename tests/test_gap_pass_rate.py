@@ -81,3 +81,22 @@ def test_the_cli_step_writes_the_result_file(tmp_path):
     data = json.loads((tmp_path / "gap_eval.json").read_text())
     assert data["mock"] is True and data["n_gap"] == len(gap_rows()) and "cases" in data
     assert json.loads((tmp_path / "run_record.json").read_text())["result_files"] == ["gap_eval.json"]
+
+
+def test_a_live_gap_run_needs_explicit_spend_confirmation(capsys):
+    assert main(["--only", "gap"]) == 1
+    assert "--confirm-spend" in capsys.readouterr().err
+
+
+def test_a_confirmed_live_gap_run_uses_the_live_stack_with_mock_tickets(monkeypatch, tmp_path):
+    from evals import gap_eval, run as run_module
+
+    seen = {}
+    monkeypatch.setattr(gap_eval, "build_live_stack", lambda settings, work: seen.update(live=True) or stack_with(
+        settings, tmp_path, FakeAnswerLLM("insufficient")))
+    monkeypatch.setattr(run_module, "make_resources", lambda **kw: make_resources(mock=True).__class__(
+        settings=make_resources(mock=True).settings, embeddings=make_resources(mock=True).embeddings,
+        reranker=None, mock=False))
+    monkeypatch.setattr(run_module, "get_index", lambda res, d: None)
+    assert run_module.main(["--only", "gap", "--confirm-spend", "--out-dir", str(tmp_path / "out")]) == 0
+    assert seen == {"live": True}

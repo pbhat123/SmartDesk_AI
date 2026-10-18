@@ -13,7 +13,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from evals.harness import Resources, gap_rows, kb_rows
+from evals.harness import Resources, gap_rows, kb_rows, link_live_index, live_settings
 from smartdesk_ai.agent.factory import AgentStack, build_stack
 from smartdesk_ai.agent.graph import run_turn
 from smartdesk_ai.agent.state import AgentState, new_thread_id
@@ -97,9 +97,22 @@ def run_cases(stack: AgentStack, split: str | None = None) -> list[Case]:
     return cases
 
 
+def build_live_stack(settings: Settings, work_dir: Path) -> AgentStack:
+    """The real models and embeddings over the real index, with mock tickets (no GitHub calls)."""
+    from smartdesk_ai.config.env import DEFAULT_DOTENV
+    from smartdesk_ai.tickets import MockTicketClient
+
+    link_live_index(work_dir)
+    return build_stack(live_settings(settings), environ=None, dotenv_path=DEFAULT_DOTENV, data_dir=work_dir,
+                       client=MockTicketClient())
+
+
 def run(res: Resources, out_dir: Path | None, work_dir: Path, *, settings: Settings | None = None,
         stack: AgentStack | None = None) -> GapReport:
-    stack = stack or build_stack(settings or res.settings, environ={}, dotenv_path=None, data_dir=work_dir)
+    if stack is None:
+        settings = settings or res.settings
+        stack = (build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir) if res.mock
+                 else build_live_stack(settings, work_dir))
     report = summarize(run_cases(stack))
     print(f"gap eval ({'mock' if res.mock else 'live'}): gap pass rate {report.gap_pass_rate:.3f} "
           f"({report.n_gap} questions), KB answer rate {report.kb_answer_rate:.3f} ({report.n_kb} questions)")
@@ -107,6 +120,9 @@ def run(res: Resources, out_dir: Path | None, work_dir: Path, *, settings: Setti
     print(f"  escalation precision {precision}  recall {report.escalation_recall:.3f}")
     for failure in report.failures:
         print(f"  FAIL {failure}")
+    cost = stack.services.cost
+    print(f"  spend: ${cost.total:.4f} over {len(cost.entries)} steps ({sum(e.input_tokens for e in cost.entries)} input, "
+          f"{sum(e.output_tokens for e in cost.entries)} output tokens)")
     if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
         payload = {"mock": res.mock, **report.model_dump(),

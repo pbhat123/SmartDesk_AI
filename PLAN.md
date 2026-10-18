@@ -610,8 +610,22 @@ Correction to my earlier note that low scores come from answers being shorter th
 
 **Real issues (added to Known failure cases in evals/README.md).** (a) Answers sometimes drop actionable steps or deadlines that sit in the retrieved entry (kb-019, kb-037). (b) User-facing wording refers to "the context" or "the policy" (kb-007, kb-019, kb-050). (c) Answers cite a second entry that is not needed (kb-002, 007, 030). (d) In 13 of 51 answered questions the expected entry is not ranked first (reranker or fusion order).
 
+**Retrieval order for kb-021, kb-025 and kb-043 under each strategy** (the saved ablation, `evals/results/retrieval.json`, holds only recall averages, so the per-question ranks were recomputed with `evals/retrieval_eval.py::rank_results` from the cached embeddings: 0 API calls, 318 cache hits). Rank of the expected entry, 1 is best; report only, nothing changed:
+
+| Strategy | kb-021 (HR-ONB-01) | kb-025 (HR-PROB-02) | kb-043 (HR-HARASS-02) | Questions with the expected entry not at rank 1 (of 53) |
+|---|---|---|---|---|
+| bm25 | not retrieved | 1 | 2 | 26 |
+| dense | 1 | 3 | 1 | 4 |
+| hybrid (RRF) | 11 | 1 | 2 | 12 |
+| **hybrid+rerank (production)** | 3 | 2 | 3 | 14 |
+| dense+rerank | 3 | 2 | 3 | 13 |
+| hybrid 2:1 | 11 | 2 | 1 | 9 |
+| hybrid 3:1 | 11 | 2 | 1 | 9 |
+
+Reading it: dense alone has the expected entry at rank 1 for 49 of 53 questions (recall@1 0.925, recall@3 and @5 1.000), against 0.736, 0.981 and 1.000 for the production hybrid+rerank. The reranker rescues kb-021 (BM25 noise drops it to rank 11 under hybrid) but pushes unrelated entries above the right one for kb-043 (IT-EQUIP-04 and HR-ONB-03) and kb-025 (HR-LEAVE-03 is a close second source). On this KB, the rerank step costs recall@1 and recall@3 against dense-only. This is a finding for the Phase 7 retrieval review, not a change now: the KB is small (53 entries), so the ablation may not carry to a larger one.
+
 **Proposed fixes (not applied; each needs your approval, and any answer-prompt change needs a rerun of the gap set, about $0.26, because v3 exists to stop the gap-006 leak):**
-1. Answer prompt v4: never say "the context" or "the policy says"; when the entry lists immediate steps, deadlines or conditions that bear on the question, include them in one line.
+1. Answer prompt v4 (**done: v4 is active**, live gap rerun in 14.4): never say "the context" or "the policy says"; when the entry lists immediate steps, deadlines or conditions that bear on the question, include them in one line.
 2. Citations: tell the answerer to cite only entries it used a fact from, and report "expected entry cited" (51/51) beside citation accuracy. Longer term, judge each cited chunk for support instead of comparing ids.
 3. Retrieval order: look at kb-021, kb-025 and kb-043 in the existing retrieval ablation before changing anything.
-4. Metrics: the short references understate correctness and factual precision. Add a key-facts list per reference, or report recall of reference facts instead of factual precision. This changes the eval set, so it needs your OK (FR-A18 applies to the KB, not to references).
+4. Metrics: the short references understate correctness and factual precision. Decision: no key-facts lists; the limitation is noted in `evals/README.md` and the two numbers are read with that in mind.

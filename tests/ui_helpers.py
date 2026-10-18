@@ -31,3 +31,20 @@ def element_text(node) -> str:
         parts.extend(str(getattr(e, "value", e)) for e in getattr(node, kind, []))
     parts.extend(frame.value.to_csv() for frame in node.dataframe)
     return "\n".join(parts)
+
+
+def charts(node) -> list:
+    """The line charts of a rendered block, each as a frame with one column per series and one row per point."""
+    from streamlit import dataframe_util
+
+    frames = []
+    for chart in node.get("vega_lite_chart"):
+        long = dataframe_util.convert_arrow_bytes_to_pandas_df(chart.proto.datasets[0].data.data)
+        long = long.rename(columns=lambda name: name.split(" -- ")[0])  # Streamlit's "index -- streamlit-generated"
+        if "color" in long.columns:  # several series come as (index, color = series name, value)
+            long = long.pivot(index="index", columns="color", values="value")
+        else:  # one series is already wide
+            long = long.set_index("index")
+        long.columns.name = None
+        frames.append(long)
+    return frames

@@ -131,3 +131,11 @@ prompts:
   compaction: 1
   confirm_parse: 2
   chitchat: 1
+
+# Drift check (FR-H15): re-runs the golden set (KB set plus gap set) and stores the metrics. The estimate shown before a
+# live run is the per-question token use measured in the live gap run of 2026-10-18 (spend ledger run fed9cc6c090c:
+# 74 questions, 348,948 main input, 18,895 main output and 1,250 embedding tokens), rounded up. The run stops, and stores
+# nothing, once its spend passes the estimate times ceiling_multiplier.
+drift:
+  tokens_per_question: {main_input: 4800, main_output: 260, embedding: 20}
+  ceiling_multiplier: 2.0

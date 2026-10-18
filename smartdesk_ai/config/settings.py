@@ -204,6 +204,17 @@ class Chunking(_Strict):
         return value
 
 
+class DriftTokens(_Strict):
+    main_input: Annotated[int, Field(gt=0)]
+    main_output: Annotated[int, Field(gt=0)]
+    embedding: Annotated[int, Field(ge=0)]
+
+
+class Drift(_Strict):
+    tokens_per_question: DriftTokens  # measured in a live run, used for the estimate shown before one (FR-H15)
+    ceiling_multiplier: Annotated[float, Field(ge=1)]  # a run stops once spend passes estimate x this
+
+
 class Settings(_Strict):
     models: Models
     tiers: dict[str, Tier]
@@ -222,6 +233,7 @@ class Settings(_Strict):
     chunking: Chunking
     prompts: dict[str, Annotated[int, Field(ge=1)]]
     reasoning_effort: dict[str, Effort]  # per-task override on the Main tier
+    drift: Drift
 
     @field_validator("reasoning_effort")
     @classmethod

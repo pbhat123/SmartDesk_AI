@@ -20,6 +20,17 @@ from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.pii import mask_emails_in
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
 from smartdesk_ai.ops.cost import CostEntry
+from smartdesk_ai.ops.drift import (
+    DRIFT_LOG,
+    DriftCeilingExceeded,
+    DriftHistory,
+    DriftPoint,
+    DriftRunner,
+    Golden,
+    describe_estimate,
+    estimate_drift,
+    make_runner,
+)
 from smartdesk_ai.ops.health import HealthRegistry
 from smartdesk_ai.ops.hitl_counters import HitlCounts, load_counts
 from smartdesk_ai.ops.metrics import ToolCallRecord, load_records, summarize_tools
@@ -98,6 +109,7 @@ class MonitoringData(BaseModel):
     budget: BudgetRow
     stale: StaleReport
     hitl: HitlCounts
+    drift: list[DriftPoint]
     agent_metrics: AgentMetrics | None
 
 
@@ -193,6 +205,7 @@ def load_monitoring(
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
         hitl=load_counts(data_dir / HITL_FILE),
+        drift=DriftHistory(data_dir / DRIFT_LOG).points(),
         agent_metrics=_agent_metrics(Path(results_dir)),
     )
 
@@ -293,6 +306,81 @@ def _render_agent_metrics(data: MonitoringData) -> None:
     st.caption("Throughput (requests per second) is measured by `scripts/load_test.py`, not by this tab.")
 
 
+RATE_COLUMNS = {"faithfulness": "Faithfulness", "recall_at_k": "Recall@k", "escalation_rate": "Escalation rate"}
+
+
+def _drift_frame(points: list[DriftPoint]) -> pd.DataFrame:
+    index = pd.to_datetime([p.ts for p in points])
+    return pd.DataFrame({label: [getattr(p, field) for p in points] for field, label in RATE_COLUMNS.items()}
+                        | {"Average rerank score": [p.avg_rerank_score for p in points]}, index=index)
+
+
+def _render_drift_history(ctx: UiContext, data: MonitoringData) -> None:
+    mode = ctx.settings.modes.llm
+    points = [p for p in data.drift if p.mode == mode]
+    other = {m: sum(p.mode == m for p in data.drift) for m in ("mock", "live") if m != mode}
+    if not points:
+        st.caption(f"No drift checks yet in {mode} mode." if not data.drift else
+                   f"No drift checks yet in {mode} mode ({other[next(iter(other))]} from the other mode are hidden).")
+        return
+    frame = _drift_frame(points)
+    hidden = sum(other.values())
+    st.caption(f"{len(points)} point{'s' if len(points) != 1 else ''} from {mode} runs"
+               + (f"; {hidden} from {next(iter(other))} runs are hidden, since the two are not comparable" if hidden else "")
+               + ". A line appears from the second check on.")
+    st.line_chart(frame[list(RATE_COLUMNS.values())])
+    st.line_chart(frame[["Average rerank score"]])
+    with st.expander("Run details"):
+        st.dataframe(pd.DataFrame([{
+            "when": p.ts, "mode": p.mode, "faithfulness": p.faithfulness, f"recall@{p.k}": p.recall_at_k,
+            "escalation": round(p.escalation_rate, 3), "avg rerank score": p.avg_rerank_score,
+            "retrieval": f"{p.retrieval_strategy} (reranker {p.reranker_status})",
+            "prompts": ", ".join(f"{name}_v{version}" for name, version in sorted(p.prompt_versions.items())),
+            "models": ", ".join(f"{tier}: {model}" for tier, model in p.models.items()), "USD": p.usd}
+            for p in reversed(points)]), hide_index=True, width="stretch")
+
+
+def _drift_controls(ctx: UiContext) -> None:
+    """The button flow: estimate first, run only after an explicit confirmation (FR-H15)."""
+    state = st.session_state
+    if notice := state.pop("drift_notice", None):
+        (st.error if notice[0] == "error" else st.success)(notice[1])
+    if not state.get("drift_pending"):
+        if st.button("Check for drift", key="drift_start"):
+            state["drift_pending"] = True
+            st.rerun()
+        return
+    golden = Golden.load()
+    for line in describe_estimate(estimate_drift(ctx.settings, golden.size), golden):
+        st.write(line)
+    confirm, cancel = st.columns(2)
+    if cancel.button("Cancel", key="drift_cancel"):
+        state["drift_pending"] = False
+        st.rerun()
+    if confirm.button("Confirm and run", key="drift_confirm", type="primary"):
+        runner: DriftRunner = state.get("drift_runner") or make_runner(ctx.settings, golden=golden)
+        state["drift_pending"] = False
+        try:
+            with st.spinner("Running the golden set"):
+                point = runner()
+            DriftHistory(ctx.data_dir / DRIFT_LOG).append(point)
+            state["drift_notice"] = ("ok", "Drift check stored.")
+        except DriftCeilingExceeded as stop:  # our own message: numbers only
+            state["drift_notice"] = ("error", f"The drift check stopped: {stop}. Nothing was stored.")
+        except Exception as error:  # the type only: a message could echo a prompt or an address (FR-G11)
+            state["drift_notice"] = ("error", f"The drift check did not finish ({type(error).__name__}). "
+                                              "Nothing was stored.")
+        st.rerun()
+
+
+def _render_drift(ctx: UiContext, data: MonitoringData) -> None:
+    st.subheader("Drift")
+    st.caption("Re-runs the golden set (KB set plus gap set) and charts Faithfulness (the runtime grounding judge's "
+               "accept rate), Recall@k, escalation rate and the average top rerank score over time.")
+    _drift_controls(ctx)
+    _render_drift_history(ctx, data)
+
+
 def render_monitoring(ctx: UiContext) -> None:
     if st.button("Refresh", key="monitoring_refresh"):
         st.rerun()
@@ -303,3 +391,4 @@ def render_monitoring(ctx: UiContext) -> None:
     _render_stale(data)
     _render_hitl(data)
     _render_agent_metrics(data)
+    _render_drift(ctx, data)

@@ -22,6 +22,9 @@ STATEMENTS = [
     "Honestly I just want to die",
     "I am planning to harm myself after this call",
     "Sometimes I wish I were dead",
+    "Honestly I feel suicidal, I don't care about this ticket anymore",
+    "I have been feeling suicidal lately",
+    "I feel like dying",
 ]
 NOT_SELF_HARM = [
     "How do I kill this process on my laptop?",
@@ -34,6 +37,7 @@ NOT_SELF_HARM = [
     "What is the suicide prevention policy at SmartDesk?",
     "The process will die if memory runs out",
     "I'd kill for a faster laptop",
+    "My colleague felt suicidal last year, how do I support them?",
 ]
 
 

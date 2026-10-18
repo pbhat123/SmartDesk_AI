@@ -27,6 +27,7 @@ _PATTERNS = [
     re.compile(r"\bi\s+(?:just\s+)?(?:want|wanna)\s+to\s+die\b(?!\s*\.{0,3}\s*of\b)", re.I),
     re.compile(r"\bi\s+don'?t\s+want\s+to\s+(?:live|be\s+alive|be\s+here)\s*(?:any\s*more|anymore)?", re.I),
     re.compile(r"\bi\s+feel\s+like\s+(?:ending\s+it\s+all|killing\s+myself|dying)\b", re.I),
+    re.compile(r"\bi(?:\s+(?:feel|felt)|\s+am\s+feeling|'m\s+feeling|(?:'ve|\s+have)\s+been\s+feeling)\s+suicidal\b", re.I),
     re.compile(r"\bi\s+wish\s+i\s+(?:were|was)\s+dead\b", re.I),
     re.compile(r"\b(?:i\s+want\s+to|i'm\s+going\s+to)\s+end\s+it\s+all\b", re.I),
 ]

@@ -148,3 +148,39 @@ def test_the_tab_shows_zeros_before_any_ticket_flow(tmp_path):
     tab = monitoring_app(mock_context(tmp_path)).main
     metrics = {m.label: m.value for m in tab.metric}
     assert metrics["Approvals"] == metrics["Rejections"] == metrics["Edits"] == "0"
+
+
+# --- UI review fix 6: the counters in a browser-style run -----------------------------------------------------
+
+def _turns(ctx, session, *texts):
+    return [ctx.service.handle(session, t) for t in texts]
+
+
+def test_a_title_change_at_the_gate_counts_as_one_edit_and_the_yes_after_it_as_the_approval(tmp_path):
+    ctx = mock_context(tmp_path)
+    replies = _turns(ctx, "a", "My laptop screen is cracked, please raise a ticket", EMAIL,
+                     "change the title to Cracked laptop screen", "yes")
+    assert "Title: Cracked laptop screen" in replies[2].text and "Ticket #" in replies[3].text
+    assert load_counts(tmp_path / "hitl.jsonl") == HitlCounts(approvals=1, edits=1)
+
+
+def test_the_same_words_after_the_gate_closed_are_a_new_question_and_count_nothing(tmp_path):
+    """This is what the 2026-10-18 browser test did: 'no' (1 rejection), then the title change AFTER the cancel,
+    which is no longer an edit of anything, then a yes to a new ticket offer (1 approval). Edits stayed at 0."""
+    ctx = mock_context(tmp_path)
+    _turns(ctx, "a", "My laptop screen is cracked, please raise a ticket", EMAIL, "no")
+    assert load_counts(tmp_path / "hitl.jsonl") == HitlCounts(rejections=1)
+    reply = ctx.service.handle("a", "change the title to Cracked laptop screen")
+    assert "t_confirm" not in reply.debug["steps"]  # no gate was open
+    assert load_counts(tmp_path / "hitl.jsonl") == HitlCounts(rejections=1)
+
+
+def test_a_full_browser_style_run_reads_one_rejection_one_edit_one_approval(tmp_path):
+    ctx = mock_context(tmp_path)
+    start = ("My laptop screen is cracked, please raise a ticket", EMAIL)
+    _turns(ctx, "r", *start, "no")
+    _turns(ctx, "e", *start, "change the title to Cracked laptop screen", "yes")  # the edit, then its approval
+    counts = load_counts(tmp_path / "hitl.jsonl")
+    assert (counts.approvals, counts.rejections, counts.edits) == (1, 1, 1)
+    metrics = {m.label: m.value for m in monitoring_app(ctx).main.metric}
+    assert (metrics["Approvals"], metrics["Rejections"], metrics["Edits"]) == ("1", "1", "1")

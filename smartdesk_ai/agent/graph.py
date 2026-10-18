@@ -103,7 +103,8 @@ def _last_human_index(state: AgentState) -> int:
 
 
 def _chunk_refs(found: SearchKBResult) -> list[ChunkRef]:
-    return [ChunkRef(entry_id=c.entry_id, title=c.title, score=c.score) for c in found.chunks]
+    return [ChunkRef(entry_id=c.entry_id, title=c.title, score=c.score, dense=c.dense, rrf=c.rrf, rerank=c.rerank)
+            for c in found.chunks]
 
 
 # --- entry and routing -------------------------------------------------------------------------
@@ -249,6 +250,8 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
         answerable=found.answerable,
         llm_insufficient=answer.insufficient,
         searched_domain=domain,
+        top_cosine=found.top_cosine,
+        threshold=found.threshold,
     )
 
 
@@ -447,6 +450,9 @@ def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
         if part is not None:
             debug["chunks"] = [c.model_dump() for c in part.chunks]
             debug["answer"] = part.answer
+            debug["retrieval"] = {  # what the UI's debug panel shows beside the chunks
+                "top_cosine": part.top_cosine, "threshold": part.threshold,
+                "escalated": state.pending_offer is not None and not part.citations}
         return Turn(text=state.reply, debug=debug)
 
     return kb_responder

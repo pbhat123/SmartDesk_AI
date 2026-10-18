@@ -71,6 +71,9 @@ class ChunkRef(BaseModel):
     entry_id: str
     title: str
     score: float
+    dense: float | None = None  # cosine, RRF and rerank score of this entry's best piece (None: stage did not run)
+    rrf: float | None = None
+    rerank: float | None = None
 
 
 class PartResult(BaseModel):
@@ -83,6 +86,8 @@ class PartResult(BaseModel):
     llm_insufficient: bool = False  # signal 3
     retried: bool = False  # the whole-KB retry ran (FR-A19)
     searched_domain: Domain | None = None  # filter used by the last search; None is the whole KB
+    top_cosine: float | None = None  # the escalation signal of the last search, and the threshold it was held to
+    threshold: float | None = None
 
 
 class AgentState(BaseModel):

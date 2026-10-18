@@ -51,3 +51,8 @@ class ParentEntry(BaseModel):
 class RetrievedEntry(ParentEntry):
     score: float  # of the best-scoring piece
     chunk_id: str  # that piece
+    # The same piece's score at each stage, for the debug view; None when the stage did not run or the piece
+    # was not in its list (the dense list only holds the top k_each pieces).
+    dense: float | None = None  # cosine similarity
+    rrf: float | None = None
+    rerank: float | None = None

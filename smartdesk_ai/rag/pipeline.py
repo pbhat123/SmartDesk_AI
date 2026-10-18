@@ -43,9 +43,12 @@ def retrieve(
     health = health or get_registry()
     r = cfg.retrieval
     dense = dense_search(index, query, r.k_each, domain)  # always: its top cosine is the escalation signal
+    rrf_scores: dict[str, float] = {}
+    rerank_scores: dict[str, float] = {}
     if r.strategy in ("hybrid", "hybrid_rerank"):
         bm25 = bm25_search(index, query, r.k_each, domain)
         ranked, ordered_by = rrf([bm25, dense], k=r.rrf_k), "rrf"
+        rrf_scores = {s.chunk.chunk_id: s.score for s in ranked}
     else:
         ranked, ordered_by = dense, "dense"
 
@@ -59,11 +62,16 @@ def retrieve(
                 if ranked:  # an empty call proves nothing about the model
                     health.mark_ok(Component.RERANKER)
                 ranked, ordered_by = reranked, "rerank"
+                rerank_scores = {s.chunk.chunk_id: s.score for s in reranked}
         elif health.get(Component.RERANKER).status is not Status.DEGRADED:
             health.mark_degraded(Component.RERANKER, "reranker not loaded")
 
+    dense_scores = {s.chunk.chunk_id: s.score for s in dense}
     entries = [
-        RetrievedEntry(**index.entries[s.chunk.entry_id].model_dump(), score=s.score, chunk_id=s.chunk.chunk_id)
+        RetrievedEntry(
+            **index.entries[s.chunk.entry_id].model_dump(), score=s.score, chunk_id=s.chunk.chunk_id,
+            dense=dense_scores.get(s.chunk.chunk_id), rrf=rrf_scores.get(s.chunk.chunk_id),
+            rerank=rerank_scores.get(s.chunk.chunk_id))
         for s in collapse_to_entries(ranked, r.top_n)
     ]
     top_cosine = dense[0].score if dense else 0.0

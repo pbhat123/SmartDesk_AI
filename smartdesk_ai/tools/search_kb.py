@@ -24,6 +24,9 @@ class KBChunk(BaseModel):
     header: str
     text: str
     score: float
+    dense: float | None = None  # per-stage scores for the debug view (see RetrievedEntry)
+    rrf: float | None = None
+    rerank: float | None = None
 
 
 class SearchKBResult(BaseModel):
@@ -49,7 +52,7 @@ def make_search_kb(
         return SearchKBResult(
             chunks=[
                 KBChunk(entry_id=e.entry_id, domain=e.domain, title=e.title, header=e.header,
-                        text=e.text, score=e.score)
+                        text=e.text, score=e.score, dense=e.dense, rrf=e.rrf, rerank=e.rerank)
                 for e in found.entries
             ],
             ordered_by=found.ordered_by,

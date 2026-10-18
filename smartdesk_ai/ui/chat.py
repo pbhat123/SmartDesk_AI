@@ -15,11 +15,29 @@ GREETING = "Ask an IT or HR question, report a problem, or ask about one of your
 
 
 def chunk_table(chunks: list[dict[str, Any]]) -> pd.DataFrame:
-    """Retrieved chunks in rank order, as the debug panel shows them."""
+    """Retrieved chunks in rank order with each stage's score. An empty cell means the stage did not run for it
+    (no reranker, or the piece was outside the dense list)."""
     return pd.DataFrame(
-        [{"rank": rank, "entry_id": c["entry_id"], "title": c["title"], "score": round(float(c["score"]), 4)}
+        [{"rank": rank, "entry_id": c["entry_id"], "title": c["title"],
+          "dense cosine": _score(c.get("dense")), "RRF score": _score(c.get("rrf")),
+          "rerank score": _score(c.get("rerank"))}
          for rank, c in enumerate(chunks, 1)],
-        columns=["rank", "entry_id", "title", "score"])
+        columns=["rank", "entry_id", "title", "dense cosine", "RRF score", "rerank score"])
+
+
+def _score(value: float | None) -> float:
+    return float("nan") if value is None else round(float(value), 4)
+
+
+def escalation_line(retrieval: dict[str, Any]) -> str:
+    cosine, threshold = retrieval.get("top_cosine"), retrieval.get("threshold")
+    parts = []
+    if threshold is not None:
+        parts.append(f"Escalation threshold: {threshold:.2f}")
+    if cosine is not None:
+        parts.append(f"top dense cosine: {cosine:.3f}")
+    parts.append(f"Escalated this turn: {'yes' if retrieval.get('escalated') else 'no'}")
+    return " · ".join(parts)
 
 
 def _new_conversation() -> None:
@@ -27,7 +45,11 @@ def _new_conversation() -> None:
     st.session_state["messages"] = []
 
 
-def _render_panel(message: dict[str, Any]) -> None:
+MOCK_CAPTION = ("Mock mode uses fake embeddings (hashing) and no reranker, so mock retrieval is not meaningful: "
+                "the scores and the order only show that the plumbing works.")
+
+
+def _render_panel(message: dict[str, Any], ctx: UiContext) -> None:
     chunks = message.get("chunks")
     if chunks is None:  # the turn did no retrieval (small talk, a ticket step)
         return
@@ -36,6 +58,10 @@ def _render_panel(message: dict[str, Any]) -> None:
             st.dataframe(chunk_table(chunks), hide_index=True, width="stretch")
         else:
             st.caption("No chunks were retrieved.")
+        if message.get("retrieval"):
+            st.caption(escalation_line(message["retrieval"]))
+        if ctx.settings.modes.llm == "mock":
+            st.caption(MOCK_CAPTION)
         if message.get("steps"):
             st.caption("Steps: " + " → ".join(message["steps"]))
 
@@ -58,7 +84,7 @@ def render_chat(ctx: UiContext) -> None:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
             if message["role"] == "assistant" and show_debug:
-                _render_panel(message)
+                _render_panel(message, ctx)
     exchange = st.container()  # the new messages go here, above the input
     prompt = st.chat_input("Type your message")  # a top-level element: pinned to the bottom of the window
     if prompt:
@@ -71,7 +97,7 @@ def render_chat(ctx: UiContext) -> None:
                     reply = ctx.service.handle(st.session_state["thread_id"], prompt)
                 st.markdown(reply.text)
                 entry = {"role": "assistant", "content": reply.text, "chunks": reply.debug.get("chunks"),
-                         "steps": reply.debug.get("steps")}
+                         "steps": reply.debug.get("steps"), "retrieval": reply.debug.get("retrieval")}
                 messages.append(entry)
                 if show_debug:
-                    _render_panel(entry)
+                    _render_panel(entry, ctx)

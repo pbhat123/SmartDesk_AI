@@ -31,10 +31,10 @@ def test_the_debug_panel_lists_chunks_with_scores_in_rank_order(tmp_path):
     panel = [e for e in at.expander if "Retrieval debug" in e.label]
     assert len(panel) == 1
     rows = panel[0].dataframe[0].value
-    assert list(rows.columns) == ["rank", "entry_id", "title", "score"]
+    assert list(rows.columns) == ["rank", "entry_id", "title", "dense cosine", "RRF score", "rerank score"]
     assert rows["rank"].tolist() == list(range(1, len(rows) + 1))
     assert rows["entry_id"].iloc[0] == "IT-PWD-01"
-    assert (rows["score"] > 0).all()
+    assert (rows["RRF score"] > 0).all()
     assert "kb_responder" not in str(panel[0].markdown)  # the panel shows retrieval, not internals
 
 

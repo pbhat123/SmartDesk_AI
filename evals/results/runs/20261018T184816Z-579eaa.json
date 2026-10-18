@@ -1,0 +1,93 @@
+{
+  "run_id": "20261018T184816Z-579eaa",
+  "started_at": "2026-10-18T18:48:16.287880+00:00",
+  "mock": false,
+  "steps": [
+    "rag"
+  ],
+  "models": {
+    "main": "gpt-5.4-mini",
+    "light": "gpt-4o-mini",
+    "embedding": "text-embedding-3-small",
+    "reranker": "BAAI/bge-reranker-base"
+  },
+  "tier_map": {
+    "ORCHESTRATOR": "main",
+    "WORKER_ANSWER": "main",
+    "SYNTHESIZER": "main",
+    "GROUNDING_JUDGE": "main",
+    "TOOL_SELECT": "light",
+    "TICKET_DRAFT": "light",
+    "INJECTION_CLASSIFIER": "light",
+    "COMPACTION": "light",
+    "CONFIRM_PARSE": "light",
+    "CHITCHAT": "light"
+  },
+  "prompts": {
+    "orchestrator": {
+      "version": 3,
+      "file": "orchestrator_v3.md"
+    },
+    "answer": {
+      "version": 3,
+      "file": "answer_v3.md"
+    },
+    "synthesizer": {
+      "version": 1,
+      "file": null
+    },
+    "grounding_judge": {
+      "version": 3,
+      "file": "grounding_judge_v3.md"
+    },
+    "ticket_summary": {
+      "version": 1,
+      "file": "ticket_summary_v1.md"
+    },
+    "tool_select": {
+      "version": 1,
+      "file": "tool_select_v1.md"
+    },
+    "injection_classifier": {
+      "version": 1,
+      "file": "injection_classifier_v1.md"
+    },
+    "compaction": {
+      "version": 1,
+      "file": "compaction_v1.md"
+    },
+    "confirm_parse": {
+      "version": 2,
+      "file": "confirm_parse_v2.md"
+    },
+    "chitchat": {
+      "version": 1,
+      "file": "chitchat_v1.md"
+    }
+  },
+  "thresholds": {
+    "escalation": 0.4,
+    "routing_confidence": 0.6,
+    "semantic_cache_cutoff": 0.95,
+    "injection_heuristic": 0.3,
+    "escalation_mock": 0.1,
+    "duplicate_title": 0.72
+  },
+  "retrieval": {
+    "strategy": "hybrid_rerank",
+    "k_each": 20,
+    "rrf_k": 60,
+    "top_n": 5
+  },
+  "chunking": {
+    "target_min_tokens": 200,
+    "target_max_tokens": 500,
+    "split_above_tokens": 600,
+    "overlap_pct": 15
+  },
+  "git_commit": "fc53e8b",
+  "python": "3.12.15",
+  "result_files": [
+    "rag_metrics.json"
+  ]
+}

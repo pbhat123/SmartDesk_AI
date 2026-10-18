@@ -9,9 +9,11 @@ from smartdesk_ai.ui.context import UiContext, build_ui_context
 APP = Path(__file__).resolve().parents[1] / "smartdesk_ai" / "ui" / "app.py"
 
 
-def mock_context(tmp_path: Path) -> UiContext:
+def mock_context(tmp_path: Path, **kwargs: object) -> UiContext:
     """Mock models, mock tickets, no .env, every runtime file under tmp_path (never the repo's data/)."""
-    return build_ui_context(environ={}, dotenv_path=None, data_dir=tmp_path, registry=HealthRegistry())
+    kwargs.setdefault("registry", HealthRegistry())
+    kwargs.setdefault("results_dir", tmp_path / "results")
+    return build_ui_context(environ={}, dotenv_path=None, data_dir=tmp_path, **kwargs)
 
 
 def app_test(ctx: UiContext, **session: object) -> AppTest:
@@ -20,3 +22,12 @@ def app_test(ctx: UiContext, **session: object) -> AppTest:
     for key, value in session.items():
         at.session_state[key] = value
     return at.run()
+
+
+def element_text(node) -> str:
+    """Everything a rendered block shows as text: markdown, captions, metrics and the cells of data frames."""
+    parts: list[str] = []
+    for kind in ("markdown", "caption", "text", "metric", "subheader", "header", "warning", "info", "error", "success"):
+        parts.extend(str(getattr(e, "value", e)) for e in getattr(node, kind, []))
+    parts.extend(frame.value.to_csv() for frame in node.dataframe)
+    return "\n".join(parts)

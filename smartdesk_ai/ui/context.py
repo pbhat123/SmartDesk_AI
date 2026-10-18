@@ -10,7 +10,10 @@ from smartdesk_ai.agent.factory import build_responder, resolve_data_dir
 from smartdesk_ai.config.env import DEFAULT_DOTENV
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
-from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR
+from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ROOT
+from smartdesk_ai.tickets import TicketClient
+
+DEFAULT_RESULTS_DIR = ROOT / "evals" / "results"  # where `python -m evals.run --out-dir` writes (agent metrics)
 
 
 @dataclass(frozen=True)
@@ -20,6 +23,7 @@ class UiContext:
     data_dir: Path
     registry: HealthRegistry
     kb_dir: Path
+    results_dir: Path = DEFAULT_RESULTS_DIR
 
 
 def build_ui_context(
@@ -30,12 +34,16 @@ def build_ui_context(
     registry: HealthRegistry | None = None,
     config_path: Path = DEFAULT_CONFIG,
     kb_dir: Path = DEFAULT_KB_DIR,
+    results_dir: Path = DEFAULT_RESULTS_DIR,
+    client: TicketClient | None = None,
 ) -> UiContext:
     registry = registry if registry is not None else get_registry()
     resolved = resolve_data_dir(data_dir, environ)
     service = build_service(
         environ=environ, dotenv_path=dotenv_path, registry=registry, config_path=config_path, kb_dir=kb_dir,
         responder_factory=lambda settings: build_responder(
-            settings, environ=environ, dotenv_path=dotenv_path, data_dir=resolved, kb_dir=kb_dir, registry=registry),
+            settings, environ=environ, dotenv_path=dotenv_path, data_dir=resolved, kb_dir=kb_dir, registry=registry,
+            client=client),
     )
-    return UiContext(service=service, settings=service.settings, data_dir=resolved, registry=registry, kb_dir=kb_dir)
+    return UiContext(service=service, settings=service.settings, data_dir=resolved, registry=registry, kb_dir=kb_dir,
+                     results_dir=results_dir)

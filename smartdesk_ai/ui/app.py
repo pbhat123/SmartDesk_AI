@@ -11,6 +11,7 @@ import streamlit as st  # noqa: E402
 from smartdesk_ai.agent.factory import LiveModeUnavailable  # noqa: E402
 from smartdesk_ai.ui.chat import render_chat  # noqa: E402
 from smartdesk_ai.ui.context import UiContext, build_ui_context  # noqa: E402
+from smartdesk_ai.ui.monitoring import render_monitoring  # noqa: E402
 
 
 @st.cache_resource(show_spinner="Starting SmartDesk AI")
@@ -32,7 +33,11 @@ def main() -> None:
     except LiveModeUnavailable as error:  # never quietly run as mock when live was asked for
         st.error(f"Cannot start in live mode: {error}")
         st.stop()
-    render_chat(ctx)
+    chat_tab, monitoring_tab = st.tabs(["Chat", "Monitoring"])
+    with chat_tab:
+        render_chat(ctx)
+    with monitoring_tab:
+        render_monitoring(ctx)
 
 
 main()

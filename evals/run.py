@@ -10,6 +10,7 @@ from pathlib import Path
 
 from evals import agent_metrics, chunking_ablation, gap_eval, rag_metrics, retrieval_eval, tune_duplicate, tune_routing, tune_threshold
 from evals.harness import DEFAULT_INDEX_DIR, ROOT, Resources, make_resources
+from evals.judge_run import STALL_SECONDS
 from evals.run_record import build_record, write_record
 from smartdesk_ai.rag.index import IndexNotBuilt, KBIndex, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ingest
@@ -45,6 +46,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None, help="write results JSON here")
     parser.add_argument("--ceiling-usd", type=float, default=None, help="rag step with --judge ragas: stop past this judge spend")
+    parser.add_argument("--judge-only", action="store_true", help="rag step with --judge ragas: judge the saved rag_outputs.json in --out-dir, no pipeline rerun; resumes from judge_checkpoint.json")
+    parser.add_argument("--stall-seconds", type=float, default=STALL_SECONDS, help="rag step with --judge ragas: abort after this long with no progress")
     parser.add_argument("--judge", choices=("mock", "ragas"), default="mock", help="rag step: the metric judge")
     parser.add_argument("--trace", action="store_true", help="gap step (live): send the run to Langfuse and LangSmith, masked")
     parser.add_argument("--confirm-spend", action="store_true", help="allow a real run that calls paid models")
@@ -72,22 +75,27 @@ def main(argv: list[str] | None = None) -> int:
     if "rag" in steps and args.judge == "ragas" and not args.confirm_spend:
         print("error: --judge ragas calls paid models; add --confirm-spend once you have approved the cost", file=sys.stderr)
         return 1
+    if args.judge_only and not ("rag" in steps and args.judge == "ragas" and args.out_dir):
+        print("error: --judge-only needs --only rag --judge ragas --out-dir <dir holding rag_outputs.json>", file=sys.stderr)
+        return 1
     if args.write_config and args.mock and args.config.resolve() == (ROOT / "config.yaml").resolve():
         print("error: refusing to write mock values into the real config.yaml; pass --config <other file>", file=sys.stderr)
         return 1
 
     try:
-        res = make_resources(mock=args.mock, need_reranker=bool({"retrieval", "chunking", "threshold", "rag"} & set(steps)))
+        res = make_resources(mock=args.mock, need_reranker=bool({"retrieval", "chunking", "threshold", "rag"} & set(steps)) and not args.judge_only)
         if "ingest" in steps and not args.mock:
             build_index(res, args.index_dir or DEFAULT_INDEX_DIR)
         index = None
-        if {"retrieval", "chunking", "threshold", "rag"} & set(steps):
+        if {"retrieval", "chunking", "threshold", "rag"} & set(steps) and not args.judge_only:
             index = get_index(res, args.index_dir)
         if "retrieval" in steps:
             retrieval_eval.run(res, index, args.out_dir)
         if "rag" in steps:
-            if args.judge == "ragas":
-                rag_metrics.run_real(res, index, args.out_dir, ceiling_usd=args.ceiling_usd)
+            if args.judge == "ragas" and args.judge_only:
+                rag_metrics.run_judge_only(res, args.out_dir, ceiling_usd=args.ceiling_usd, stall_seconds=args.stall_seconds)
+            elif args.judge == "ragas":
+                rag_metrics.run_real(res, index, args.out_dir, ceiling_usd=args.ceiling_usd, stall_seconds=args.stall_seconds)
             else:
                 rag_metrics.run(res, index, args.out_dir)
         if "agent" in steps:

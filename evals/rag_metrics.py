@@ -7,6 +7,7 @@ hallucination rate) and factual precision come from a judge. `MockJudge` is a fr
 """
 import json
 import math
+import threading
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -15,6 +16,17 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from evals.common import words
 from evals.harness import Resources, kb_rows
+from evals.judge_run import (
+    CHECKPOINT_FILE,
+    PROGRESS_LOG,
+    STALL_SECONDS,
+    CheckpointedJudge,
+    FatalJudgeError,
+    SpendCeilingExceeded,
+    is_fatal,
+    outputs_signature,
+    planned_calls,
+)
 from evals.schemas import KBQuestion
 from smartdesk_ai.agent.answer import make_answerer, should_escalate
 from smartdesk_ai.agent.grounding import make_grounding_judge
@@ -26,6 +38,7 @@ from smartdesk_ai.tools.definitions import SearchKBArgs
 from smartdesk_ai.tools.search_kb import make_search_kb
 
 KS = (1, 3, 5)
+OUTPUTS_FILE = "rag_outputs.json"
 MIN_WORD = 4
 
 
@@ -174,10 +187,6 @@ def build_ragas_metrics(llm: Any, embeddings: Any) -> dict[str, Any]:
         }
 
 
-class SpendCeilingExceeded(RuntimeError):
-    """The judge's spend passed the ceiling the run was given; the run stops."""
-
-
 class RagasJudge:
     name = "ragas"
     SYSTEMATIC_AFTER = 3  # this many calls in a row failing for one metric means it is broken, not flaky
@@ -212,9 +221,11 @@ class RagasJudge:
         self._calls[name] = self._calls.get(name, 0) + 1
         try:
             return self._score(metric.single_turn_score(self._sample(**fields)))
-        except SpendCeilingExceeded:
+        except (SpendCeilingExceeded, FatalJudgeError):
             raise
         except Exception as error:
+            if is_fatal(error):  # no credits or a bad key: every later call fails the same way
+                raise FatalJudgeError(f"Ragas metric {name}: {type(error).__name__}: {error}") from error
             self.errors[name] = self.errors.get(name, 0) + 1
             if self.errors[name] >= self.SYSTEMATIC_AFTER and self.errors[name] == self._calls[name]:
                 raise RuntimeError(f"Ragas metric {name} failed {self.errors[name]} times in a row: "
@@ -324,21 +335,25 @@ def mock_answerer(settings: Settings) -> Callable[..., Any]:
     return make_answerer(settings, builder=lambda model_id, cfg: MockAnswerModel(), judge=judge)
 
 
-def run(
-    res: Resources, index: KBIndex, out_dir: Path | None, *, judge: Judge | None = None,
-    answer_fn: AnswerFn | None = None, split: str | None = None,
-) -> RagReport:
+def collect_outputs(
+    res: Resources, index: KBIndex, out_dir: Path | None, *, answer_fn: AnswerFn | None = None, split: str | None = None,
+) -> tuple[list[RagOutput], list[KBQuestion]]:
+    """Answer every KB question through the agent's path. The paid part of a real run is saved right away."""
     settings = res.settings
     if res.mock:  # hashing vectors score lower than real ones, so retrieval uses its mock threshold (as the app does)
         settings = settings.model_copy(update={"thresholds": settings.thresholds.model_copy(
             update={"escalation": settings.thresholds.escalation_mock})})
     rows = kb_rows(split)
     answer_fn = answer_fn or make_answer_fn(settings, index, res.reranker, mock_answerer(settings))
-    judge = judge or MockJudge()
     outputs = [answer_fn(r) for r in rows]
-    if out_dir:  # the paid part of a real run is kept even if the judge then fails
+    if out_dir:
         out_dir.mkdir(parents=True, exist_ok=True)
-        (out_dir / "rag_outputs.json").write_text(json.dumps([o.model_dump() for o in outputs], indent=2))
+        (out_dir / OUTPUTS_FILE).write_text(json.dumps([o.model_dump() for o in outputs], indent=2))
+    return outputs, rows
+
+
+def score_and_report(res: Resources, outputs: Sequence[RagOutput], rows: Sequence[KBQuestion], judge: Judge,
+                     out_dir: Path | None) -> RagReport:
     report = compute_metrics(outputs, rows, judge)
     _print(report)
     if out_dir:
@@ -347,6 +362,14 @@ def run(
                    "per_question": [o.model_dump() for o in report.outputs]}
         (out_dir / "rag_metrics.json").write_text(json.dumps(payload, indent=2, default=str))
     return report
+
+
+def run(
+    res: Resources, index: KBIndex, out_dir: Path | None, *, judge: Judge | None = None,
+    answer_fn: AnswerFn | None = None, split: str | None = None,
+) -> RagReport:
+    outputs, rows = collect_outputs(res, index, out_dir, answer_fn=answer_fn, split=split)
+    return score_and_report(res, outputs, rows, judge or MockJudge(), out_dir)
 
 
 def _fmt(value: float | None) -> str:
@@ -370,27 +393,68 @@ def _print(report: RagReport) -> None:
 
 class UsageCounter:
     """A LangChain callback that adds up the tokens of every model call it sees (the Ragas judge's calls).
-    With `ceiling_usd` it raises once the spend passes it (`raise_error` makes LangChain let that through)."""
+    With `ceiling_usd` it raises once the spend passes it (`raise_error` makes LangChain let that through).
+    It also sets `exceeded`, which `check()` re-raises, so a breach swallowed in a worker thread still stops
+    the run. `base_usd` is the spend of earlier attempts, loaded from the checkpoint, so the ceiling is cumulative."""
 
     raise_error = True
 
     def __init__(self, settings: Settings | None = None, ceiling_usd: float | None = None) -> None:
         self.calls = self.input_tokens = self.output_tokens = 0
+        self.base_usd = 0.0
+        self.exceeded = False
+        self.on_call: Callable[[], None] | None = None
         self._settings, self._ceiling = settings, ceiling_usd
+        self._lock = threading.Lock()
 
     def on_llm_end(self, response: Any, **kwargs: Any) -> None:
-        for generations in response.generations:
-            for generation in generations:
-                usage = getattr(getattr(generation, "message", None), "usage_metadata", None) or {}
-                self.calls += 1
-                self.input_tokens += usage.get("input_tokens", 0)
-                self.output_tokens += usage.get("output_tokens", 0)
+        with self._lock:
+            for generations in response.generations:
+                for generation in generations:
+                    usage = getattr(getattr(generation, "message", None), "usage_metadata", None) or {}
+                    self.calls += 1
+                    self.input_tokens += usage.get("input_tokens", 0)
+                    self.output_tokens += usage.get("output_tokens", 0)
+        if self.on_call is not None:
+            self.on_call()
+        self.check()
+
+    def check(self) -> None:
         if self._ceiling is not None and self._settings is not None and self.cost_usd(self._settings) > self._ceiling:
+            self.exceeded = True
+        if self.exceeded:
             raise SpendCeilingExceeded(f"judge spend ${self.cost_usd(self._settings):.2f} is over the ${self._ceiling:.2f} ceiling")
 
-    def cost_usd(self, settings: Settings) -> float:
+    def run_usd(self, settings: Settings) -> float:
+        """Spend of this attempt only."""
         price = settings.models.main.price
         return (self.input_tokens * price.input + self.output_tokens * price.output) / 1_000_000
+
+    def cost_usd(self, settings: Settings) -> float:
+        return self.base_usd + self.run_usd(settings)
+
+
+JUDGE_TIMEOUT_S = 60  # per model call
+JUDGE_MAX_RETRIES = 3  # attempts per call (Ragas' default is 10, and it retries a "no credits" 429 too)
+JUDGE_MAX_WAIT_S = 10  # longest backoff between attempts
+
+
+def judge_run_config() -> Any:
+    """The Ragas RunConfig for the real judge: 60s per call, at most 3 attempts, timeouts and connection errors
+    retried like rate limits (Ragas retries only RateLimitError for an OpenAI model)."""
+    from evals.ragas_compat import import_ragas
+
+    import_ragas()
+    from ragas.run_config import RunConfig
+
+    return RunConfig(timeout=JUDGE_TIMEOUT_S, max_retries=JUDGE_MAX_RETRIES, max_wait=JUDGE_MAX_WAIT_S)
+
+
+def apply_retry_policy(run_config: Any) -> None:
+    """Ragas' wrapper resets `exception_types` to RateLimitError when it is built; widen it afterwards."""
+    from openai import APIConnectionError, RateLimitError
+
+    run_config.exception_types = (RateLimitError, APIConnectionError)  # APITimeoutError is an APIConnectionError
 
 
 def build_real_judge(settings: Settings, ceiling_usd: float | None = None) -> tuple[RagasJudge, UsageCounter]:
@@ -411,14 +475,48 @@ def build_real_judge(settings: Settings, ceiling_usd: float | None = None) -> tu
         raise RuntimeError("OPENAI_API_KEY is not set (see .env.example)")
     counter = type("UsageHandler", (UsageCounter, BaseCallbackHandler), {})(settings, ceiling_usd)
     model = settings.models.main
+    run_config = judge_run_config()
+    # max_retries=0: the OpenAI SDK would retry on its own, on top of Ragas' capped retries
     chat = ChatOpenAI(model=model.id, api_key=env.openai_api_key, reasoning_effort=model.reasoning_effort,
-                      callbacks=[counter])
-    metrics = build_ragas_metrics(LangchainLLMWrapper(chat), LangchainEmbeddingsWrapper(get_embeddings(settings, env)))
-    return RagasJudge(**metrics), counter
+                      callbacks=[counter], timeout=JUDGE_TIMEOUT_S, max_retries=0)
+    llm = LangchainLLMWrapper(chat, run_config=run_config)
+    embeddings = LangchainEmbeddingsWrapper(get_embeddings(settings, env), run_config=run_config)
+    apply_retry_policy(run_config)
+    return RagasJudge(**build_ragas_metrics(llm, embeddings)), counter
+
+
+def judge_saved(res: Resources, outputs: Sequence[RagOutput], rows: Sequence[KBQuestion], out_dir: Path | None, *,
+                ceiling_usd: float | None = None, stall_seconds: float = STALL_SECONDS) -> RagReport:
+    """Score saved pipeline answers with the Ragas judge. Progress goes to judge_progress.log, scores to
+    judge_checkpoint.json every few items, so rerunning the same command resumes. The spend is printed even on failure."""
+    settings = res.settings
+    judge, counter = build_real_judge(settings, ceiling_usd)
+    checked = CheckpointedJudge(
+        judge, total=planned_calls(outputs), signature=outputs_signature(outputs), counter=counter, settings=settings,
+        checkpoint=out_dir / CHECKPOINT_FILE if out_dir else None, progress_log=out_dir / PROGRESS_LOG if out_dir else None,
+        stall_seconds=stall_seconds)
+    try:
+        with checked:
+            return score_and_report(res, outputs, rows, checked, out_dir)
+    finally:
+        print(f"judge spend: ${counter.run_usd(settings):.4f} this attempt, ${counter.cost_usd(settings):.4f} in total "
+              f"({counter.calls} calls, {counter.input_tokens} in / {counter.output_tokens} out tokens); "
+              f"{checked.done}/{checked.total} items done ({checked.resumed} from the checkpoint)"
+              + (f"; checkpoint {out_dir / CHECKPOINT_FILE}" if out_dir else ""))
+
+
+def run_judge_only(res: Resources, out_dir: Path, *, ceiling_usd: float | None = None,
+                   stall_seconds: float = STALL_SECONDS) -> RagReport:
+    """Judge the answers a previous run saved in `rag_outputs.json`; the pipeline is not run again."""
+    path = out_dir / OUTPUTS_FILE
+    if not path.exists():
+        raise RuntimeError(f"{path} not found; run the rag step first, without --judge-only")
+    outputs = [RagOutput(**o) for o in json.loads(path.read_text())]
+    return judge_saved(res, outputs, kb_rows(None), out_dir, ceiling_usd=ceiling_usd, stall_seconds=stall_seconds)
 
 
 def run_real(res: Resources, index: KBIndex, out_dir: Path | None, *, split: str | None = None,
-             ceiling_usd: float | None = None) -> RagReport:
+             ceiling_usd: float | None = None, stall_seconds: float = STALL_SECONDS) -> RagReport:
     """The KB set through the live answer step and grounding judge, scored by the Ragas judge. Every model
     call is made under the cost task "eval" (FR-H8), and the spend is printed at the end."""
     from smartdesk_ai.llm.factory import openai_builder
@@ -426,13 +524,12 @@ def run_real(res: Resources, index: KBIndex, out_dir: Path | None, *, split: str
     from smartdesk_ai.ops.runtime import RequestContext, Services, request_scope
 
     settings = res.settings
-    judge, counter = build_real_judge(settings, ceiling_usd)
     cost = CostTracker(settings, priced=True)
     index.embeddings = CostedEmbeddings(index.embeddings, cost, settings)
     answerer = make_answerer(settings, builder=openai_builder, judge=make_grounding_judge(settings, builder=openai_builder))
     answer_fn = make_answer_fn(settings, index, res.reranker, answerer)
     with request_scope(RequestContext(session_id="eval", request_id="rag-eval", task="eval"), Services(cost=cost)):
-        report = run(res, index, out_dir, judge=judge, answer_fn=answer_fn, split=split)
-    print(f"spend: pipeline ${cost.total:.4f} ({len(cost.entries)} steps); Ragas judge ${counter.cost_usd(settings):.4f} "
-          f"({counter.calls} calls, {counter.input_tokens} in / {counter.output_tokens} out tokens)")
-    return report
+        outputs, rows = collect_outputs(res, index, out_dir, answer_fn=answer_fn, split=split)
+    print(f"pipeline spend: ${cost.total:.4f} ({len(cost.entries)} steps); answers saved"
+          + (f" to {out_dir / OUTPUTS_FILE}" if out_dir else ""))
+    return judge_saved(res, outputs, rows, out_dir, ceiling_usd=ceiling_usd, stall_seconds=stall_seconds)

@@ -49,6 +49,18 @@ Moderation API and models (tickets stay mock).
 A real judge run (`--judge ragas --confirm-spend`) makes many model calls. It is never run by the tests
 and needs the user's explicit OK first (see TASKS.md, T6.2).
 
+The judge stage is built to survive failure (`judge_run.py`, FR-H12):
+
+- `python -m evals.run --only rag --judge ragas --judge-only --confirm-spend --ceiling-usd N --out-dir evals/results`
+  judges the saved `rag_outputs.json` and does not rerun the pipeline.
+- Each model call has a 60s timeout and at most 3 attempts (Ragas defaults are 180s and 10; it also retried a
+  "no credits" 429 for hours). Out-of-credits and bad-key errors stop the run on the first call.
+- `judge_progress.log` gets a line per scored item (done/total, spend so far). `judge_checkpoint.json` is saved
+  every 10 new items; rerunning the same command resumes, and the ceiling counts the earlier attempts' spend.
+  A checkpoint is ignored if `rag_outputs.json` has changed. Delete it to start over.
+- The spend ceiling stops the run even when the exception is swallowed in a worker thread.
+- A watchdog aborts (exit code 3) after `--stall-seconds` (default 300) with no model call or item finished.
+
 ## Known failure cases
 
 Live gap/KB runs (threshold 0.40, `evals/results/gap_sweep.json`): gap pass 100%, KB answer 98.1%. The one KB

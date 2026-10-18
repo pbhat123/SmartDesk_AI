@@ -16,6 +16,7 @@ _STOPWORDS = frozenset(
     "how why who whom whose".split()
 )
 MIN_OVERLAP = 3  # content words the question must share with the top entry for the mock to answer
+MIN_TITLE_OVERLAP = 2  # or this many with its title: "reset my password" against "Reset your password yourself"
 
 
 def _content_words(text: str) -> set[str]:
@@ -34,7 +35,8 @@ class MockAnswerModel:
         reply = {"answer": "", "insufficient": True, "citations": []}
         if entry and question:
             entry_id, title, text = entry.groups()
-            if len(_content_words(question.group(1)) & _content_words(f"{title} {text}")) >= MIN_OVERLAP:
+            asked = _content_words(question.group(1))
+            if len(asked & _content_words(f"{title} {text}")) >= MIN_OVERLAP or len(asked & _content_words(title)) >= MIN_TITLE_OVERLAP:
                 first_sentence = re.split(r"(?<=[.!?])\s", text.strip(), maxsplit=1)[0]
                 reply = {"answer": first_sentence, "insufficient": False, "citations": [entry_id]}
         return SimpleNamespace(content=json.dumps(reply))

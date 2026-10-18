@@ -5,6 +5,7 @@ fr:
 - FR-F7
 - FR-A15
 setup:
+  email_known: priya.k@smartdesk.example
   degraded:
   - reranker
   - redis

@@ -8,14 +8,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-from evals import chunking_ablation, rag_metrics, retrieval_eval, tune_threshold
+from evals import agent_metrics, chunking_ablation, rag_metrics, retrieval_eval, tune_threshold
 from evals.harness import DEFAULT_INDEX_DIR, ROOT, Resources, make_resources
 from evals.run_record import build_record, write_record
 from smartdesk_ai.rag.index import IndexNotBuilt, KBIndex, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ingest
 
-STEPS = ("ingest", "retrieval", "chunking", "threshold", "rag")
-RESULT_FILES = {"rag": "rag_metrics.json", "retrieval": "retrieval.json", "chunking": "chunking.json", "threshold": "threshold.json"}
+STEPS = ("ingest", "retrieval", "chunking", "threshold", "rag", "agent")
+RESULT_FILES = {"rag": "rag_metrics.json", "agent": "agent_metrics.json", "retrieval": "retrieval.json", "chunking": "chunking.json", "threshold": "threshold.json"}
 
 
 def build_index(res: Resources, index_dir: Path, kb_dir: Path = DEFAULT_KB_DIR) -> None:
@@ -50,6 +50,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=ROOT / "config.yaml", help="file --write-config edits")
     args = parser.parse_args(argv)
     steps = [args.only] if args.only else [s for s in STEPS if s != "rag" or args.judge == "mock" or args.mock]
+    if "agent" in steps and not args.mock:
+        print("error: the agent metrics run only in --mock mode for now (a live run needs a cost plan first)", file=sys.stderr)
+        return 1
     if "rag" in steps and args.judge == "ragas" and not args.confirm_spend:
         print("error: --judge ragas calls paid models; add --confirm-spend once you have approved the cost", file=sys.stderr)
         return 1
@@ -71,6 +74,8 @@ def main(argv: list[str] | None = None) -> int:
                 rag_metrics.run_real(res, index, args.out_dir)
             else:
                 rag_metrics.run(res, index, args.out_dir)
+        if "agent" in steps:
+            agent_metrics.run(res, args.out_dir, Path(tempfile.mkdtemp(prefix="eval_agent_")))
         if "chunking" in steps:
             fixed_dir = Path(tempfile.mkdtemp(prefix="eval_fixed_")) if args.mock else DEFAULT_INDEX_DIR.parent / "index_fixed"
             chunking_ablation.run(res, index, fixed_dir, args.out_dir)

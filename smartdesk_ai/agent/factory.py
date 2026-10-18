@@ -6,6 +6,7 @@ tickets mock: an in-memory client, no GitHub calls. Anything that makes live mod
 `LiveModeUnavailable`, and the caller falls back to mock with a notice (FR-F7).
 """
 import os
+from dataclasses import dataclass
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -67,6 +68,16 @@ TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab 
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
 
+@dataclass(frozen=True)
+class AgentStack:
+    graph: Any
+    client: TicketClient
+    store: TicketStore
+    executor: ToolExecutor
+    services: Services
+    registry: HealthRegistry
+
+
 class LiveModeUnavailable(RuntimeError):
     """modes.llm or modes.tickets is `live` but something it needs is missing. The message names
     what is missing and how to fix it; there is no silent fallback to mock."""
@@ -83,7 +94,7 @@ def _builder_for(model: Any) -> ModelBuilder:
     return lambda model_id, cfg: model
 
 
-def build_responder(
+def build_stack(
     settings: Settings,
     *,
     environ: Mapping[str, str] | None = None,
@@ -93,7 +104,9 @@ def build_responder(
     registry: HealthRegistry | None = None,
     client: TicketClient | None = None,
     tracing_factories: TracingFactories | None = None,
-) -> Responder:
+) -> "AgentStack":
+    """Everything the app is made of: the compiled graph with its ticket client, ticket map, executor and ops
+    services. `build_responder` wraps it for the CLI and the UI; the evals use the parts directly."""
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     data_dir = resolve_data_dir(data_dir, environ)
@@ -178,6 +191,13 @@ def build_responder(
         budget_level=current_budget_level,
         compactor=Compactor(settings, make_summarizer(settings, builder=compact_b), overhead_tokens=prompt_tokens),
     )
-    responder = make_kb_responder(graph)
-    responder.services = services  # build_service hands them to ChatService, which opens the request scopes
+    return AgentStack(graph=graph, client=client, store=store, executor=executor, services=services,
+                      registry=registry)
+
+
+def build_responder(settings: Settings, **kwargs: Any) -> Responder:
+    """The ChatService responder over `build_stack` (same arguments)."""
+    stack = build_stack(settings, **kwargs)
+    responder = make_kb_responder(stack.graph)
+    responder.services = stack.services  # build_service hands them to ChatService, which opens the request scopes
     return responder

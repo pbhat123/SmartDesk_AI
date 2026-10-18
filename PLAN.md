@@ -536,10 +536,13 @@ Live runs were approved by you and metered; mock tickets throughout. Numbers are
 | Gap 2 | 0.40, answer v2, judge v2 | 100% | 79.2% | $0.29 |
 | Gap 3 | as Gap 2 plus `GROUNDING_JUDGE` reasoning_effort low | 95.2% (gap-006) | 98.1% | $0.22 |
 | Gap 4 | Gap 3 plus answer v3 and judge v3 | **100%** | **98.1%** (52/53; kb-041 escalated) | $0.2558 |
+| Gap 5 | Gap 4 with **answer v4** (judge v3, effort low) | **100%** | **98.1%** (52/53; kb-041 escalated) | $0.3401 (ledger; the cost tracker says $0.2952, see 14.4) |
 | Routing | `routing_confidence` 0.60 | accuracy 1.000 (41) | n/a | cents |
 | Safety | 27 cases, real classifier and Moderation | leakage 0.00, breach 0.00 | n/a | $0.0285 |
 
-Ragas (live, 2026-10-18, `evals/results/rag_metrics.json`):
+**The Ragas numbers below were measured with answer v3** (the answers in `rag_outputs.json`); v4 became active afterwards. The final Ragas, gap and safety reruns happen after Phase 7, with the final prompts, retrieval and config, and those numbers replace these.
+
+Ragas (live, 2026-10-18, `evals/results/rag_metrics.json`, answer v3):
 
 | Metric | Score | Note |
 |---|---|---|
@@ -629,3 +632,23 @@ Reading it: dense alone has the expected entry at rank 1 for 49 of 53 questions 
 2. Citations (**done**: v4 cites only entries used, and the RAG report prints "expected entry cited n/answered" beside citation accuracy). Longer term, judge each cited chunk for support instead of comparing ids.
 3. Retrieval order (**reported above, no change**; for the Phase 7 retrieval review).
 4. Metrics: the short references understate correctness and factual precision. Decision: no key-facts lists; the limitation is noted in `evals/README.md` and the two numbers are read with that in mind.
+
+#### 14.4 Answer v4 (active) and its live gap rerun
+
+Answer v4 keeps every v3 rule and adds three: never say "the context" or "the policy says"; after the item asked about is found, include the steps, deadlines, contacts and conditions of that entry that bear on the question; cite only entries actually used (`tests/test_prompt_versions.py` checks that all six unchanged v3 rules, including the gap-006 guard, are in v4).
+
+Live gap run, metered (ledger run `evals/results/runs/20261018T192050Z-c60196.json`, 21 gap and 53 KB questions): **gap pass 100%, KB answer 98.1% (kb-041 only), escalation precision 0.955, recall 1.000, gap-006 escalated.** Same numbers as Gap 4 (v3): the guard held and nothing else moved.
+
+A six-question live check of the v3 weaknesses (answers only, no judge, $0.024):
+| Id | v3 problem | With v4 |
+|---|---|---|
+| kb-019 | Left out the Security call | **Fixed.** Says "call Security on extension 4999 straight away, then raise a request within 24 hours", plus police report if stolen |
+| kb-037 | Left out the pay cut-off and receipt rule | **Partly.** Now includes "approved by the 20th ... paid with the next salary run"; still says "attach the receipt for each line" without the ₹500 threshold |
+| kb-007 | "the context says", over-citation | Wording fixed; still cites IT-HELP-01 as well as IT-VPN-02 |
+| kb-050 | "The context does not state ..." | **Fixed.** Ends with the Pay > Compensation path and the Payroll contact, both in the KB |
+| kb-002 | Cited IT-MFA-01 | Cites IT-PWD-01 and IT-PWD-02 (rules it used); adds the 15-minute unlock, which is in the KB |
+| kb-030 | Cited HR-LEAVE-02 | Still cites it; the answer's content is all in HR-LEAVE-05 |
+
+So "the context" wording and the dropped steps are fixed in these samples, and over-citation is only partly reduced. Every added claim was checked against the KB. The full effect on the Ragas metrics is measured in the final rerun after Phase 7, not now.
+
+**Cost accounting finding.** For this run the spend ledger says $0.3401 (217 chat calls, 348,948 input and 18,895 output tokens) and the per-request cost tracker says $0.2952 (300,609 input, 17,181 output). The 14% difference is the intent classifier: `agent/intents.py` and `agent/router.py` call the model through `get_llm(...)` directly, so those calls never reach the cost tracker, the LLM records or the daily budget. The ledger sees every call. Consequence: earlier "spend" figures from the tracker (the gap runs, the sweep) were low by about this share, and the app's $5/$10 cutoffs undercount the same way. Proposed fix, not applied: send those two calls through the same observer as the other LLM calls (FR-H7, H8).

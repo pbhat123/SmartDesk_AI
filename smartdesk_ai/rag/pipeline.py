@@ -63,7 +63,7 @@ def retrieve(
                     health.mark_ok(Component.RERANKER)
                 ranked, ordered_by = reranked, "rerank"
                 rerank_scores = {s.chunk.chunk_id: s.score for s in reranked}
-        elif health.get(Component.RERANKER).status is not Status.DEGRADED:
+        elif health.get(Component.RERANKER).status not in (Status.DEGRADED, Status.SKIPPED):
             health.mark_degraded(Component.RERANKER, "reranker not loaded")
 
     dense_scores = {s.chunk.chunk_id: s.score for s in dense}

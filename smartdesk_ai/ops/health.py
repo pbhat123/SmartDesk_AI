@@ -7,6 +7,7 @@ switch to the substitute. The Monitoring tab reads `degraded_modes()`.
 """
 import logging
 import threading
+import time
 from collections.abc import Callable
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -34,6 +35,7 @@ class Status(StrEnum):
     UNKNOWN = "unknown"  # not checked yet
     OK = "ok"
     DEGRADED = "degraded"
+    SKIPPED = "skipped"  # left out on purpose (mock mode, or a strategy that does not use it); not a fault
 
 
 # What runs instead when a component is unavailable (FR-F7).
@@ -54,6 +56,7 @@ class ComponentHealth(BaseModel):
     mode: str | None = None  # substitute in use, set only while degraded
     reason: str | None = None
     since: datetime | None = None  # when the current status began
+    load_seconds: float | None = None  # how long the last load attempt took (try_load)
 
 
 def _utcnow() -> datetime:
@@ -77,25 +80,34 @@ class HealthRegistry:
     def degraded_modes(self) -> list[ComponentHealth]:
         return [h for h in self.all() if h.status is Status.DEGRADED]
 
-    def mark_ok(self, component: Component) -> None:
+    def mark_skipped(self, component: Component, reason: str) -> None:
+        """The component is not used in this run, by design. It is listed, but it is not a degraded mode."""
+        with self._lock:
+            self._items[component] = ComponentHealth(
+                component=component, status=Status.SKIPPED, reason=reason[:_MAX_REASON], since=self._clock())
+
+    def mark_ok(self, component: Component, load_seconds: float | None = None) -> None:
         with self._lock:
             current = self._items[component]
             if current.status is Status.OK:
+                if load_seconds is not None:
+                    self._items[component] = current.model_copy(update={"load_seconds": load_seconds})
                 return
             self._items[component] = ComponentHealth(
-                component=component, status=Status.OK, since=self._clock()
+                component=component, status=Status.OK, since=self._clock(), load_seconds=load_seconds
             )
         if current.status is Status.DEGRADED:
             logger.info("component %s recovered", component.value)
 
-    def mark_degraded(self, component: Component, reason: str) -> None:
+    def mark_degraded(self, component: Component, reason: str, load_seconds: float | None = None) -> None:
         reason = reason[:_MAX_REASON]
         mode = SUBSTITUTES[component]
         with self._lock:
             current = self._items[component]
             if current.status is Status.DEGRADED:
                 # Already degraded: keep the original start time, do not warn again.
-                self._items[component] = current.model_copy(update={"reason": reason})
+                update = {"reason": reason} | ({"load_seconds": load_seconds} if load_seconds is not None else {})
+                self._items[component] = current.model_copy(update=update)
                 return
             self._items[component] = ComponentHealth(
                 component=component,
@@ -103,6 +115,7 @@ class HealthRegistry:
                 mode=mode,
                 reason=reason,
                 since=self._clock(),
+                load_seconds=load_seconds,
             )
         logger.warning("component %s degraded (%s); using: %s", component.value, reason, mode)
 
@@ -112,12 +125,13 @@ class HealthRegistry:
         On any Exception record the degraded mode, log one warning and return None.
         KeyboardInterrupt and SystemExit still propagate.
         """
+        started = time.perf_counter()
         try:
             value = loader()
         except Exception as exc:
-            self.mark_degraded(component, f"{type(exc).__name__}: {exc}")
+            self.mark_degraded(component, f"{type(exc).__name__}: {exc}", time.perf_counter() - started)
             return None
-        self.mark_ok(component)
+        self.mark_ok(component, time.perf_counter() - started)
         return value
 
     def register_env(self, env: EnvSettings) -> None:

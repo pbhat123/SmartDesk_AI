@@ -41,7 +41,7 @@ from smartdesk_ai.guardrails.pii import PiiRedactor
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
 from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.compaction import Compactor, make_summarizer
-from smartdesk_ai.ops.health import HealthRegistry, get_registry
+from smartdesk_ai.ops.health import Component, HealthRegistry, get_registry
 from smartdesk_ai.ops.hitl_counters import HitlCounters
 from smartdesk_ai.ops.metrics import MetricsRecorder
 from smartdesk_ai.ops.rate_limit import RateLimiter
@@ -67,6 +67,7 @@ CHECKPOINT_DB = "checkpoints.db"
 TRACE_LOG = "trace.jsonl"
 COST_LOG = "cost.jsonl"
 OPS_DB = "ops.db"  # daily spend and rate-limit counters
+SKIPPED_IN_MOCK = "skipped in mock mode"
 HITL_LOG = "hitl.jsonl"  # approvals, rejections and edits at the ticket gate (FR-H4); the Monitoring tab reads it
 TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab reads them
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
@@ -171,8 +172,12 @@ def build_stack(
         raise LiveModeUnavailable(
             f"the KB index is missing in {index_dir}. Build it with: python -m smartdesk_ai.rag.ingest"
         ) from None
-    if live:
+    if not live:
+        registry.mark_skipped(Component.RERANKER, SKIPPED_IN_MOCK)  # on purpose: mock retrieval is a plumbing check
+    elif settings.retrieval.strategy.endswith("_rerank"):
         reranker = load_reranker(settings, registry)  # degrades to RRF order, never fails (FR-F7)
+    else:
+        registry.mark_skipped(Component.RERANKER, f"not used by retrieval.strategy={settings.retrieval.strategy}")
     if client is None:  # a caller may hand in its own client, e.g. the safety eval to inspect tickets
         try:
             client = create_ticket_client(settings, env)

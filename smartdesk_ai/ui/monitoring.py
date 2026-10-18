@@ -66,6 +66,14 @@ class DegradedRow(BaseModel):
     since: str | None
 
 
+class ComponentRow(BaseModel):
+    component: str
+    status: str  # ok, degraded, skipped or unknown (not checked yet)
+    running_instead: str  # the substitute in use while degraded
+    detail: str  # why it is degraded or skipped
+    load_seconds: float | None
+
+
 class TierRow(BaseModel):
     tier: str
     models: list[str] = Field(default_factory=list)
@@ -102,6 +110,7 @@ class AgentMetrics(BaseModel):
 
 class MonitoringData(BaseModel):
     tools: list[ToolRow]
+    components: list[ComponentRow]
     degraded: list[DegradedRow]
     tiers: list[TierRow]
     ledger_total_usd: float
@@ -198,6 +207,9 @@ def load_monitoring(
     tiers, ledger_total, ledger_today = _tier_rows(settings, ledger or ledger_path(), data_dir / COST_FILE)
     return MonitoringData(
         tools=_tool_rows(data_dir / TOOL_METRICS_FILE),
+        components=[ComponentRow(component=h.component.value, status=h.status.value, running_instead=h.mode or "",
+                                 detail=mask_emails_in(h.reason or ""), load_seconds=h.load_seconds)
+                    for h in registry.all()],
         degraded=[DegradedRow(component=h.component.value, mode=h.mode or "", reason=mask_emails_in(h.reason or ""),
                               since=h.since.isoformat(timespec="seconds") if h.since else None)
                   for h in registry.degraded_modes()],
@@ -229,13 +241,14 @@ def _render_tools(data: MonitoringData) -> None:
 
 
 def _render_degraded(data: MonitoringData) -> None:
-    st.subheader("Degraded modes")
-    if not data.degraded:
-        st.caption("Every optional component is running normally.")
-        return
-    st.dataframe(pd.DataFrame([{"component": d.component, "running instead": d.mode, "reason": d.reason,
-                                "since": d.since or ""} for d in data.degraded]),
-                 hide_index=True, width="stretch")
+    st.subheader("Components and degraded modes")
+    st.dataframe(pd.DataFrame([{
+        "component": c.component, "status": "not checked yet" if c.status == "unknown" else c.status,
+        "load time (s)": None if c.load_seconds is None else round(c.load_seconds, 2),
+        "running instead": c.running_instead or "-", "detail": c.detail or "-"} for c in data.components]),
+        hide_index=True, width="stretch")
+    st.caption("Skipped means left out on purpose (the reranker in mock mode); it is not a fault. "
+               "Degraded means a component failed or is not configured, and the substitute shown is running.")
 
 
 def _render_cost(data: MonitoringData) -> None:

@@ -284,11 +284,19 @@ def _print(report: RagReport) -> None:
 
 # --- the real run (paid models; only after the user approved the plan) -----------------------------------------------
 
-class UsageCounter:
-    """A LangChain callback that adds up the tokens of every model call it sees (the Ragas judge's calls)."""
+class SpendCeilingExceeded(RuntimeError):
+    """The judge's spend passed the ceiling the run was given; the run stops."""
 
-    def __init__(self) -> None:
+
+class UsageCounter:
+    """A LangChain callback that adds up the tokens of every model call it sees (the Ragas judge's calls).
+    With `ceiling_usd` it raises once the spend passes it (`raise_error` makes LangChain let that through)."""
+
+    raise_error = True
+
+    def __init__(self, settings: Settings | None = None, ceiling_usd: float | None = None) -> None:
         self.calls = self.input_tokens = self.output_tokens = 0
+        self._settings, self._ceiling = settings, ceiling_usd
 
     def on_llm_end(self, response: Any, **kwargs: Any) -> None:
         for generations in response.generations:
@@ -297,13 +305,15 @@ class UsageCounter:
                 self.calls += 1
                 self.input_tokens += usage.get("input_tokens", 0)
                 self.output_tokens += usage.get("output_tokens", 0)
+        if self._ceiling is not None and self._settings is not None and self.cost_usd(self._settings) > self._ceiling:
+            raise SpendCeilingExceeded(f"judge spend ${self.cost_usd(self._settings):.2f} is over the ${self._ceiling:.2f} ceiling")
 
     def cost_usd(self, settings: Settings) -> float:
         price = settings.models.main.price
         return (self.input_tokens * price.input + self.output_tokens * price.output) / 1_000_000
 
 
-def build_real_judge(settings: Settings) -> tuple[RagasJudge, UsageCounter]:
+def build_real_judge(settings: Settings, ceiling_usd: float | None = None) -> tuple[RagasJudge, UsageCounter]:
     """Ragas judged by the Main-Model with the configured embedding model. Calling it spends money."""
     from langchain_core.callbacks import BaseCallbackHandler
     from langchain_openai import ChatOpenAI
@@ -319,7 +329,7 @@ def build_real_judge(settings: Settings) -> tuple[RagasJudge, UsageCounter]:
     env = load_env()
     if env.openai_api_key is None:
         raise RuntimeError("OPENAI_API_KEY is not set (see .env.example)")
-    counter = type("UsageHandler", (UsageCounter, BaseCallbackHandler), {})()
+    counter = type("UsageHandler", (UsageCounter, BaseCallbackHandler), {})(settings, ceiling_usd)
     model = settings.models.main
     chat = ChatOpenAI(model=model.id, api_key=env.openai_api_key, reasoning_effort=model.reasoning_effort,
                       callbacks=[counter])
@@ -327,7 +337,8 @@ def build_real_judge(settings: Settings) -> tuple[RagasJudge, UsageCounter]:
     return RagasJudge(**metrics), counter
 
 
-def run_real(res: Resources, index: KBIndex, out_dir: Path | None, *, split: str | None = None) -> RagReport:
+def run_real(res: Resources, index: KBIndex, out_dir: Path | None, *, split: str | None = None,
+             ceiling_usd: float | None = None) -> RagReport:
     """The KB set through the live answer step and grounding judge, scored by the Ragas judge. Every model
     call is made under the cost task "eval" (FR-H8), and the spend is printed at the end."""
     from smartdesk_ai.llm.factory import openai_builder
@@ -335,7 +346,7 @@ def run_real(res: Resources, index: KBIndex, out_dir: Path | None, *, split: str
     from smartdesk_ai.ops.runtime import RequestContext, Services, request_scope
 
     settings = res.settings
-    judge, counter = build_real_judge(settings)
+    judge, counter = build_real_judge(settings, ceiling_usd)
     cost = CostTracker(settings, priced=True)
     index.embeddings = CostedEmbeddings(index.embeddings, cost, settings)
     answerer = make_answerer(settings, builder=openai_builder, judge=make_grounding_judge(settings, builder=openai_builder))

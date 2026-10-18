@@ -44,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--mock", action="store_true", help="hashing embeddings and a mock reranker: free, offline")
     parser.add_argument("--index-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None, help="write results JSON here")
+    parser.add_argument("--ceiling-usd", type=float, default=None, help="rag step with --judge ragas: stop past this judge spend")
     parser.add_argument("--judge", choices=("mock", "ragas"), default="mock", help="rag step: the metric judge")
     parser.add_argument("--trace", action="store_true", help="gap step (live): send the run to Langfuse and LangSmith, masked")
     parser.add_argument("--confirm-spend", action="store_true", help="allow a real run that calls paid models")
@@ -86,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
             retrieval_eval.run(res, index, args.out_dir)
         if "rag" in steps:
             if args.judge == "ragas":
-                rag_metrics.run_real(res, index, args.out_dir)
+                rag_metrics.run_real(res, index, args.out_dir, ceiling_usd=args.ceiling_usd)
             else:
                 rag_metrics.run(res, index, args.out_dir)
         if "agent" in steps:

@@ -213,16 +213,38 @@ def test_the_usage_counter_adds_up_tokens_and_prices_them_with_the_main_model(se
     assert counter.cost_usd(settings) == pytest.approx((2000 * price.input + 400 * price.output) / 1e6)
 
 
+def test_the_usage_counter_stops_the_run_past_its_spend_ceiling(settings):
+    from types import SimpleNamespace
+
+    counter = rm.UsageCounter(settings, ceiling_usd=0.001)
+    message = SimpleNamespace(usage_metadata={"input_tokens": 1000, "output_tokens": 200})
+    response = SimpleNamespace(generations=[[SimpleNamespace(message=message)]])
+    with pytest.raises(rm.SpendCeilingExceeded):
+        counter.on_llm_end(response)
+    assert counter.raise_error is True  # LangChain would otherwise swallow the exception
+
+
 def test_a_confirmed_real_run_goes_to_run_real(monkeypatch, tmp_path):
     from evals import run as run_module
 
     seen = {}
     monkeypatch.setattr(run_module.rag_metrics, "run_real",
-                        lambda res, index, out_dir, **kw: seen.update(out_dir=out_dir) or None)
+                        lambda res, index, out_dir, **kw: seen.update(out_dir=out_dir, **kw) or None)
     monkeypatch.setattr(run_module, "make_resources", lambda **kw: make_resources(mock=True))
     monkeypatch.setattr(run_module, "get_index", lambda res, d: None)
     assert run_module.main(["--only", "rag", "--judge", "ragas", "--confirm-spend", "--out-dir", str(tmp_path)]) == 0
-    assert seen["out_dir"] == tmp_path
+    assert seen["out_dir"] == tmp_path and seen["ceiling_usd"] is None
+
+
+def test_the_ceiling_option_reaches_the_real_run(monkeypatch, tmp_path):
+    from evals import run as run_module
+
+    seen = {}
+    monkeypatch.setattr(run_module.rag_metrics, "run_real", lambda res, index, out_dir, **kw: seen.update(kw) or None)
+    monkeypatch.setattr(run_module, "make_resources", lambda **kw: make_resources(mock=True))
+    monkeypatch.setattr(run_module, "get_index", lambda res, d: None)
+    run_module.main(["--only", "rag", "--judge", "ragas", "--confirm-spend", "--ceiling-usd", "1.4", "--out-dir", str(tmp_path)])
+    assert seen["ceiling_usd"] == 1.4
 
 
 def test_a_real_rag_run_with_the_mock_judge_is_refused(capsys):

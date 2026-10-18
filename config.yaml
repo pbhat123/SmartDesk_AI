@@ -120,7 +120,7 @@ prompts:
   orchestrator: 3
   answer: 1
   synthesizer: 1
-  grounding_judge: 1
+  grounding_judge: 2
   ticket_summary: 1
   tool_select: 1
   injection_classifier: 1

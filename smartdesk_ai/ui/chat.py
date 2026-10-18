@@ -59,17 +59,19 @@ def render_chat(ctx: UiContext) -> None:
             st.markdown(message["content"])
             if message["role"] == "assistant" and show_debug:
                 _render_panel(message)
-    prompt = st.chat_input("Type your message")
+    exchange = st.container()  # the new messages go here, above the input
+    prompt = st.chat_input("Type your message")  # a top-level element: pinned to the bottom of the window
     if prompt:
         messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking"):
-                reply = ctx.service.handle(st.session_state["thread_id"], prompt)
-            st.markdown(reply.text)
-            entry = {"role": "assistant", "content": reply.text, "chunks": reply.debug.get("chunks"),
-                     "steps": reply.debug.get("steps")}
-            messages.append(entry)
-            if show_debug:
-                _render_panel(entry)
+        with exchange:
+            with st.chat_message("user"):
+                st.markdown(prompt)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking"):
+                    reply = ctx.service.handle(st.session_state["thread_id"], prompt)
+                st.markdown(reply.text)
+                entry = {"role": "assistant", "content": reply.text, "chunks": reply.debug.get("chunks"),
+                         "steps": reply.debug.get("steps")}
+                messages.append(entry)
+                if show_debug:
+                    _render_panel(entry)

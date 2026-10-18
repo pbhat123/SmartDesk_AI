@@ -24,7 +24,7 @@ from smartdesk_ai.ops.drift import (
 )
 from smartdesk_ai.ops.health import HealthRegistry
 from smartdesk_ai.ui.monitoring import load_monitoring
-from tests.ui_helpers import app_test, charts, element_text, mock_context
+from tests.ui_helpers import monitoring_app, charts, element_text, mock_context
 
 FIXED = datetime(2026, 10, 18, 12, 0, tzinfo=timezone.utc)
 PASSWORD = "How do I reset my forgotten password?"
@@ -230,7 +230,7 @@ def test_yes_on_the_command_line_is_refused_for_live_runs(tmp_path, live_config,
 # --- the button in the Monitoring tab -----------------------------------------------------------------
 
 def _tab(at):
-    return next(t for t in at.tabs if t.label == "Monitoring")
+    return at.main
 
 
 def _button(at, label):
@@ -248,7 +248,7 @@ class Runner:
 
 def test_the_button_shows_the_estimate_and_runs_nothing_until_confirmed(tmp_path):
     runner = Runner()
-    at = app_test(mock_context(tmp_path), drift_runner=runner)
+    at = monitoring_app(mock_context(tmp_path), drift_runner=runner)
     _button(at, "Check for drift").click().run()
     shown = element_text(_tab(at))
     assert "74 golden questions" in shown and "$0.00" in shown and "mock" in shown.lower()
@@ -260,7 +260,7 @@ def test_the_button_shows_the_estimate_and_runs_nothing_until_confirmed(tmp_path
 def test_confirming_runs_once_stores_the_point_and_charts_it(tmp_path):
     runner = Runner()
     ctx = mock_context(tmp_path)
-    at = app_test(ctx, drift_runner=runner)
+    at = monitoring_app(ctx, drift_runner=runner)
     _button(at, "Check for drift").click().run()
     _button(at, "Confirm and run").click().run()
     assert runner.calls == 1 and not at.exception
@@ -279,7 +279,7 @@ def test_a_failed_run_stores_nothing_and_says_so_without_details(tmp_path):
     def failing():
         raise RuntimeError("boom with priya.k@smartdesk.example inside")
 
-    at = app_test(mock_context(tmp_path), drift_runner=failing)
+    at = monitoring_app(mock_context(tmp_path), drift_runner=failing)
     _button(at, "Check for drift").click().run()
     _button(at, "Confirm and run").click().run()
     shown = element_text(_tab(at)) + " ".join(str(e.value) for e in at.error)
@@ -291,7 +291,7 @@ def test_a_run_that_hit_the_ceiling_says_how_much_was_spent(tmp_path):
     def over():
         raise DriftCeilingExceeded(0.7, 0.5)
 
-    at = app_test(mock_context(tmp_path), drift_runner=over)
+    at = monitoring_app(mock_context(tmp_path), drift_runner=over)
     _button(at, "Check for drift").click().run()
     _button(at, "Confirm and run").click().run()
     shown = element_text(_tab(at)) + " ".join(str(e.value) for e in at.error)
@@ -302,24 +302,24 @@ def test_the_chart_shows_only_points_of_the_current_mode(tmp_path):
     ctx = mock_context(tmp_path)
     DriftHistory(tmp_path / "drift.jsonl").append(_point(mode="live", ts="2026-10-17T00:00:00+00:00"))
     DriftHistory(tmp_path / "drift.jsonl").append(_point(mode="mock", ts="2026-10-18T00:00:00+00:00"))
-    at = app_test(ctx)
+    at = monitoring_app(ctx)
     assert len(charts(_tab(at))[0]) == 1
     assert "1 point" in element_text(_tab(at)) and "live" in element_text(_tab(at))
 
 
 def test_run_details_list_versions_and_models(tmp_path):
     DriftHistory(tmp_path / "drift.jsonl").append(_point())
-    shown = element_text(_tab(app_test(mock_context(tmp_path))))
+    shown = element_text(_tab(monitoring_app(mock_context(tmp_path))))
     assert "answer_v4" in shown or "answer v4" in shown
 
 
 def test_without_history_the_tab_says_there_is_none(tmp_path):
-    assert "No drift checks yet" in element_text(_tab(app_test(mock_context(tmp_path))))
+    assert "No drift checks yet" in element_text(_tab(monitoring_app(mock_context(tmp_path))))
 
 
 def test_the_default_runner_does_a_real_mock_run_end_to_end(tmp_path):
     ctx = mock_context(tmp_path)
-    at = app_test(ctx)
+    at = monitoring_app(ctx)
     _button(at, "Check for drift").click().run()
     _button(at, "Confirm and run").click().run()
     assert not at.exception

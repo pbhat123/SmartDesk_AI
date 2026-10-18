@@ -76,3 +76,29 @@ def test_a_typed_email_and_phone_never_reach_the_trace_log(tmp_path):
     _ask(at, "I am priya.k@smartdesk.example, phone 98765 43210. " + ASK)
     blob = (Path(tmp_path) / "trace.jsonl").read_text()
     assert "priya.k@smartdesk.example" not in blob and not has_phone(blob)
+
+
+# --- two pages, the input pinned (UI review fix 1) ---------------------------------------------------
+
+def test_the_chat_input_is_pinned_and_the_messages_are_in_the_page_body(tmp_path):
+    at = _ask(app_test(mock_context(tmp_path)), ASK)
+    assert len(at.tabs) == 0  # inside a tab Streamlit would not pin it to the bottom of the window
+    top_level = [block.children for block in at._tree.children.values() if len(block.children)]
+    bar = [blocks for blocks in top_level if [c.type for c in blocks.values()] == ["chat_input"]]
+    assert len(bar) == 1  # the input is alone in Streamlit's bottom bar, outside the page body
+    assert len(at.chat_message) == 2 and len(at.main.chat_input) == 0
+    assert [m.name for m in at.chat_message] == ["user", "assistant"]  # in order, above the bar
+
+
+def test_the_chat_page_has_no_monitoring_content_and_the_other_page_has_no_chat_input(tmp_path):
+    ctx = mock_context(tmp_path)
+    chat, monitoring = app_test(ctx), app_test(ctx, page="monitoring")
+    assert "Tool stats" not in " ".join(str(s.value) for s in chat.subheader)
+    assert len(monitoring.chat_input) == 0 and "Tool stats" in " ".join(str(s.value) for s in monitoring.subheader)
+
+
+def test_the_conversation_survives_a_visit_to_the_monitoring_page(tmp_path):
+    at = _ask(app_test(mock_context(tmp_path)), ASK)
+    at.switch_page("views/monitoring_page.py").run()
+    at.switch_page("views/chat_page.py").run()
+    assert len(_chat_texts(at)) == 2

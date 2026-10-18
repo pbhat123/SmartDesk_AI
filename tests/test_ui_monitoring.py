@@ -8,7 +8,7 @@ from smartdesk_ai.ops.health import Component, HealthRegistry
 from smartdesk_ai.ops.spend_ledger import ledger_path
 from smartdesk_ai.tickets import MockTicketClient
 from smartdesk_ai.ui.monitoring import load_monitoring
-from tests.ui_helpers import app_test, element_text, mock_context
+from tests.ui_helpers import monitoring_app, element_text, mock_context
 
 EMAIL = "priya.k@smartdesk.example"
 
@@ -48,18 +48,18 @@ def test_the_tab_renders_those_numbers_and_no_raw_email(tmp_path):
     ctx = mock_context(tmp_path, client=client)
     client.unreachable = True
     _run_failing_ticket_flow(ctx)
-    at = app_test(ctx)
+    at = monitoring_app(ctx)
     assert not at.exception
-    tab = next(t for t in at.tabs if t.label == "Monitoring")
+    tab = at.main
     shown = element_text(tab)
     assert "create_ticket" in shown and "unavailable" in shown
     assert EMAIL not in shown and EMAIL not in _load(ctx).model_dump_json()
 
 
 def test_a_fresh_install_shows_empty_states_not_errors(tmp_path):
-    at = app_test(mock_context(tmp_path))
+    at = monitoring_app(mock_context(tmp_path))
     assert not at.exception
-    shown = element_text(next(t for t in at.tabs if t.label == "Monitoring"))
+    shown = element_text(at.main)
     assert "No tool calls yet" in shown and "No agent metrics yet" in shown
 
 
@@ -79,7 +79,7 @@ def test_degraded_components_are_listed_with_the_substitute_in_use(tmp_path):
     rows = {d.component: d for d in _load(ctx).degraded}
     assert rows["reranker"].mode.startswith("RRF order") and "not loaded" in rows["reranker"].reason
     assert "redis" in rows  # REDIS_URL is not set in the mock context
-    shown = element_text(next(t for t in app_test(ctx).tabs if t.label == "Monitoring"))
+    shown = element_text(monitoring_app(ctx).main)
     assert "reranker" in shown and "RRF order" in shown
 
 
@@ -122,7 +122,7 @@ def test_the_tracker_log_adds_its_own_column_per_tier(tmp_path):
 def test_cost_table_is_on_screen(tmp_path):
     ctx = mock_context(tmp_path)
     _ledger({"kind": "chat", "model": "gpt-4o-mini", "calls": 1, "input_tokens": 5, "output_tokens": 5, "usd": 0.0123})
-    shown = element_text(next(t for t in app_test(ctx).tabs if t.label == "Monitoring"))
+    shown = element_text(monitoring_app(ctx).main)
     assert "0.0123" in shown and "light" in shown
 
 
@@ -136,7 +136,7 @@ def test_stale_chunks_are_listed_after_a_kb_file_changes(tmp_path, kb_copy):
     stale = _load(ctx).stale
     assert stale.stale_files == ["it_support.md"] and stale.stale_chunk_ids
     assert all(cid.startswith("IT-") for cid in stale.stale_chunk_ids)
-    shown = element_text(next(t for t in app_test(ctx).tabs if t.label == "Monitoring"))
+    shown = element_text(monitoring_app(ctx).main)
     assert "it_support.md" in shown
 
 
@@ -151,7 +151,7 @@ def test_agent_metrics_are_read_from_the_saved_eval_result(tmp_path):
         "turn_p95_ms": 90.0, "usd_per_task": 0.0, "tokens_per_task": 1500.0, "error_rate": 0.0333, "tasks": []}))
     metrics = _load(ctx).agent_metrics
     assert metrics.n_tasks == 12 and metrics.mock and metrics.completion_rate == 0.9167
-    shown = element_text(next(t for t in app_test(ctx).tabs if t.label == "Monitoring"))
+    shown = element_text(monitoring_app(ctx).main)
     assert "0.917" in shown or "91.7" in shown
     assert "load_test" in shown  # throughput is not measured by this tab
 

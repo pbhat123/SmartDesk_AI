@@ -12,7 +12,7 @@ from smartdesk_ai.ui.monitoring import load_monitoring
 from tests.agent_helpers import assemble
 from tests.llm_fakes import FakeAnswerLLM
 from tests.test_approval_gate import EDITS, EMAIL, ISSUE, scripted
-from tests.ui_helpers import app_test, element_text, mock_context
+from tests.ui_helpers import monitoring_app, element_text, mock_context
 from smartdesk_ai.llm.mock import MockDraftModel
 
 
@@ -138,13 +138,13 @@ def test_scripted_yes_no_edit_runs_through_the_app_show_in_the_tab(tmp_path):
     data = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir)
     assert data.hitl == HitlCounts(approvals=2, rejections=1, edits=1)
     assert EMAIL not in (tmp_path / "hitl.jsonl").read_text()
-    tab = next(t for t in app_test(ctx).tabs if t.label == "Monitoring")
+    tab = monitoring_app(ctx).main
     metrics = {m.label: m.value for m in tab.metric}
     assert metrics["Approvals"] == "2" and metrics["Rejections"] == "1" and metrics["Edits"] == "1"
     assert "approval gate" in element_text(tab)
 
 
 def test_the_tab_shows_zeros_before_any_ticket_flow(tmp_path):
-    tab = next(t for t in app_test(mock_context(tmp_path)).tabs if t.label == "Monitoring")
+    tab = monitoring_app(mock_context(tmp_path)).main
     metrics = {m.label: m.value for m in tab.metric}
     assert metrics["Approvals"] == metrics["Rejections"] == metrics["Edits"] == "0"

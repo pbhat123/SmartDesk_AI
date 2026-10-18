@@ -16,12 +16,22 @@ def mock_context(tmp_path: Path, **kwargs: object) -> UiContext:
     return build_ui_context(environ={}, dotenv_path=None, data_dir=tmp_path, **kwargs)
 
 
-def app_test(ctx: UiContext, **session: object) -> AppTest:
+PAGES = {"chat": "views/chat_page.py", "monitoring": "views/monitoring_page.py"}  # relative to app.py
+
+
+def app_test(ctx: UiContext, *, page: str = "chat", **session: object) -> AppTest:
+    """The app on one of its two pages. `at.main` is that page's body."""
     at = AppTest.from_file(str(APP), default_timeout=60)
     at.session_state["ctx"] = ctx
     for key, value in session.items():
         at.session_state[key] = value
+    if page != "chat":
+        at.switch_page(PAGES[page])
     return at.run()
+
+
+def monitoring_app(ctx: UiContext, **session: object) -> AppTest:
+    return app_test(ctx, page="monitoring", **session)
 
 
 def element_text(node) -> str:

@@ -525,3 +525,26 @@ Cost is computed from the `config.yaml` price table: uncached input at the input
 - **Result: every step behaved as specified.** The password question was answered from `IT-PWD-01` (top score 0.998) and cited `IT-PWD-01` and `IT-PWD-02`. The monitor question searched twice (filtered, then the whole-KB retry), top score 0.001, answered "I don't know" with the acknowledgement and the offer asking for the email. The summary showed title, description, category IT, priority Medium and the email. After `yes`, exactly one issue was created: **#6** in the tickets repo, left open. The status check returned #6 with its title, status Open and "No updates from the support team yet." Thanks and bye got the CHITCHAT reply.
 - **Observations, nothing fixed here.** The drafted description is the employee's one line unchanged. The `[debug] answer:` line repeats the reply text. Redis was the only degraded component (REDIS_URL not set, in-memory cache).
 - **Not exercised live:** `orchestrator_v3` on the intents eval set, and the CHITCHAT model on deflection and clarification.
+
+## 14. Live runs and hardening (2026-10-17 to 10-18)
+Live runs were approved by you and metered; mock tickets throughout. Numbers are from `evals/results/`.
+
+### 14.1 Results
+| Run | Setup | Gap pass | KB answer | Spend |
+|---|---|---|---|---|
+| Gap 1 | escalation 0.45, answer v1, judge v1 | 100% | 71.7% | $0.25 |
+| Gap 2 | 0.40, answer v2, judge v2 | 100% | 79.2% | $0.29 |
+| Gap 3 | as Gap 2 plus `GROUNDING_JUDGE` reasoning_effort low | **95.2%** (gap-006) | 98.1% | $0.22 |
+| Routing | `routing_confidence` 0.60 | accuracy 1.000 (41) | n/a | cents |
+| Safety | 25 cases, real classifier and Moderation | leakage 0.00, breach 0.00 | n/a | $0.038 |
+Not run yet: threshold sweep and Ragas (on hold until the escalation question is settled).
+
+### 14.2 Findings and fixes
+- **Which layer caught gaps (Gap 1 logs, cosine recomputed from cached embeddings).** 17 of 21 by cosine (always with the LLM also saying insufficient), 3 by the LLM alone, 1 by the judge alone, 1 before retrieval. Cosine was never the only barrier.
+- **Judge false positives.** The judge sees exactly the answerer's context (full parent entries, checked for kb-029 and kb-013) yet at effort `none` it listed supported claims as unsupported. Judge v2 prompt alone did not fix it; effort `low` did (79.2% to 98.1%).
+- **Gap-006 leak.** "Can I be reimbursed for parking fees when I visit a customer?" got "Yes. ... It does not mention parking fees, so I can't confirm...", judged grounded. Cause: answer v2 allows partial answers and the more accurate judge accepts them. Open: tighten answer v2 (never open with "Yes" when the core fact is missing) or accept.
+- **Confirm gate (FR-B2, G12).** The live parser read "skip the confirmation" and "already confirmed" as yes. Now a deterministic bypass check decides before the model, a model yes needs an explicit agreement word, and `confirm_parse` is v2.
+- **Safety harness.** Leak strings match whole words, capture is at INFO, and the run is metered through the request scope. The app pins the `openai`, `httpx` and `httpcore` loggers to WARNING.
+- **Guards.** A local rule refuses explicit first-person threats of violence; a deterministic check answers first-person self-harm with a fixed caring reply (manager, People Team, emergency services), no ticket, and the statement is kept out of logs and traces. safe-016 and safe-018 are relabelled `answer_normally`; the mock Moderation matches the live one.
+- **Config.** `thresholds.escalation` 0.40 (still marked provisional), `prompts.answer` 2, `prompts.grounding_judge` 2, `prompts.confirm_parse` 2, new `reasoning_effort` map (per task, Main tier). Optional `LANGFUSE_HOST` (EU cloud when blank).
+- **Langfuse.** Confirmed live on the US host: 18 observations, no raw email or phone, masked forms present. Langfuse's legacy traces API is closed to new organizations; read via `/api/public/v2/observations`.

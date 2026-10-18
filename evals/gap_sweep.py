@@ -15,6 +15,7 @@ from pathlib import Path
 from evals.gap_eval import build_live_stack, run_cases, summarize
 from smartdesk_ai.agent.factory import AgentStack, build_stack
 from smartdesk_ai.config.settings import load_settings
+from smartdesk_ai.ops.spend_ledger import end_run, start_run
 
 WATCHED_GAP = "gap-006"  # the parking-fees question that leaked once
 
@@ -69,7 +70,12 @@ def main(argv: list[str] | None = None) -> int:
             return build_stack(tuned, environ={}, dotenv_path=None, data_dir=folder, mock_answer_model=FakeAnswerLLM("insufficient"))
         return build_live_stack(tuned, folder)
 
-    rows = sweep(args.thresholds, stack_for, ceiling_usd=args.ceiling_usd)
+    if not args.mock:
+        start_run(settings, ["python", "-m", "evals.gap_sweep", *(sys.argv[1:] if argv is None else argv)], "eval")
+    try:
+        rows = sweep(args.thresholds, stack_for, ceiling_usd=args.ceiling_usd)
+    finally:
+        end_run("ok")
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
         (args.out_dir / "gap_sweep.json").write_text(json.dumps({"mock": args.mock, "rows": rows}, indent=2))

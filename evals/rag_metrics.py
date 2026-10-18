@@ -33,6 +33,7 @@ from smartdesk_ai.agent.grounding import make_grounding_judge
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.mock import MockAnswerModel, MockGroundingModel
 from smartdesk_ai.ops.health import HealthRegistry
+from smartdesk_ai.ops.spend_ledger import make_callback, usage_from_result
 from smartdesk_ai.rag.index import STOPWORDS, KBIndex
 from smartdesk_ai.tools.definitions import SearchKBArgs
 from smartdesk_ai.tools.search_kb import make_search_kb
@@ -400,7 +401,7 @@ class UsageCounter:
     raise_error = True
 
     def __init__(self, settings: Settings | None = None, ceiling_usd: float | None = None) -> None:
-        self.calls = self.input_tokens = self.output_tokens = 0
+        self.calls = self.input_tokens = self.cached_tokens = self.output_tokens = 0
         self.base_usd = 0.0
         self.exceeded = False
         self.on_call: Callable[[], None] | None = None
@@ -408,13 +409,12 @@ class UsageCounter:
         self._lock = threading.Lock()
 
     def on_llm_end(self, response: Any, **kwargs: Any) -> None:
+        usage = usage_from_result(response)  # each billed call once, reasoning tokens inside the output tokens
         with self._lock:
-            for generations in response.generations:
-                for generation in generations:
-                    usage = getattr(getattr(generation, "message", None), "usage_metadata", None) or {}
-                    self.calls += 1
-                    self.input_tokens += usage.get("input_tokens", 0)
-                    self.output_tokens += usage.get("output_tokens", 0)
+            self.calls += usage.calls
+            self.input_tokens += usage.input_tokens
+            self.cached_tokens += usage.cached_tokens
+            self.output_tokens += usage.output_tokens
         if self.on_call is not None:
             self.on_call()
         self.check()
@@ -428,7 +428,8 @@ class UsageCounter:
     def run_usd(self, settings: Settings) -> float:
         """Spend of this attempt only."""
         price = settings.models.main.price
-        return (self.input_tokens * price.input + self.output_tokens * price.output) / 1_000_000
+        fresh = max(self.input_tokens - self.cached_tokens, 0)
+        return (fresh * price.input + self.cached_tokens * price.cached_input + self.output_tokens * price.output) / 1_000_000
 
     def cost_usd(self, settings: Settings) -> float:
         return self.base_usd + self.run_usd(settings)
@@ -478,7 +479,7 @@ def build_real_judge(settings: Settings, ceiling_usd: float | None = None) -> tu
     run_config = judge_run_config()
     # max_retries=0: the OpenAI SDK would retry on its own, on top of Ragas' capped retries
     chat = ChatOpenAI(model=model.id, api_key=env.openai_api_key, reasoning_effort=model.reasoning_effort,
-                      callbacks=[counter], timeout=JUDGE_TIMEOUT_S, max_retries=0)
+                      callbacks=[counter, make_callback(model.id)], timeout=JUDGE_TIMEOUT_S, max_retries=0)
     llm = LangchainLLMWrapper(chat, run_config=run_config)
     embeddings = LangchainEmbeddingsWrapper(get_embeddings(settings, env), run_config=run_config)
     apply_retry_policy(run_config)

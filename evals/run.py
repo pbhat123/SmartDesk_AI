@@ -11,6 +11,7 @@ from pathlib import Path
 from evals import agent_metrics, chunking_ablation, gap_eval, rag_metrics, retrieval_eval, tune_duplicate, tune_routing, tune_threshold
 from evals.harness import DEFAULT_INDEX_DIR, ROOT, Resources, make_resources
 from evals.judge_run import STALL_SECONDS
+from smartdesk_ai.ops.spend_ledger import end_run, start_run
 from evals.run_record import build_record, write_record
 from smartdesk_ai.rag.index import IndexNotBuilt, KBIndex, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ingest
@@ -82,8 +83,11 @@ def main(argv: list[str] | None = None) -> int:
         print("error: refusing to write mock values into the real config.yaml; pass --config <other file>", file=sys.stderr)
         return 1
 
+    status = "crashed"  # what the ledger records if an exception escapes
     try:
         res = make_resources(mock=args.mock, need_reranker=bool({"retrieval", "chunking", "threshold", "rag"} & set(steps)) and not args.judge_only)
+        if not args.mock:  # a real run can spend: it gets a ledger run, ended even on a crash
+            start_run(res.settings, ["python", "-m", "evals.run", *(sys.argv[1:] if argv is None else argv)], "eval")
         if "ingest" in steps and not args.mock:
             build_index(res, args.index_dir or DEFAULT_INDEX_DIR)
         index = None
@@ -122,9 +126,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"run record: {write_record(record, args.out_dir, written)}")
         else:
             print(record.model_dump_json(indent=2))
+        status = "ok"
     except (IndexNotBuilt, RuntimeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
+        status = "failed"
         return 1
+    finally:
+        end_run(status)
     if not args.mock:
         e = res.embeddings
         print(f"embedding usage this run: {e.api_calls} API calls, {e.tokens} tokens, ${e.cost_usd:.6f}")

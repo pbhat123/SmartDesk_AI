@@ -44,6 +44,7 @@ from smartdesk_ai.ops.compaction import Compactor, make_summarizer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.metrics import MetricsRecorder
 from smartdesk_ai.ops.rate_limit import RateLimiter
+from smartdesk_ai.ops.spend_ledger import start_run
 from smartdesk_ai.ops.runtime import Services, configure_mask_salt, current_budget_level
 from smartdesk_ai.ops.tracing import TracingFactories, build_tracing
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
@@ -133,6 +134,7 @@ def build_stack(
             raise LiveModeUnavailable(
                 "OPENAI_API_KEY is not set. Add it to .env (see .env.example) or export it."
             )
+        start_run(settings, source="app")  # no-op if an eval already started this process's run
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
         answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = judge_b = compact_b = openai_builder

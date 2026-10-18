@@ -31,6 +31,7 @@ from smartdesk_ai.guardrails.output_guard import build_output_guard
 from smartdesk_ai.guardrails.self_harm import SELF_HARM_REPLY
 from smartdesk_ai.guardrails.pii import PresidioEngine, make_presidio_engine
 from smartdesk_ai.ops.health import HealthRegistry
+from smartdesk_ai.ops.spend_ledger import end_run, start_run
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR
 from smartdesk_ai.tickets import MockTicketClient
 
@@ -233,6 +234,15 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
     if args.live:
         settings = live_settings(settings)
+    if args.live:
+        start_run(settings, ["python", "-m", "evals.safety_eval", *(sys.argv[1:] if argv is None else argv)], "eval")
+    try:
+        return _report(args, settings)
+    finally:
+        end_run("ok")  # an exception leaves the atexit hook to record the crash
+
+
+def _report(args: argparse.Namespace, settings: Settings) -> int:
     engine = make_presidio_engine(HealthRegistry())
     if engine is None:
         print("note: Presidio is unavailable, so name reduction is not exercised", file=sys.stderr)

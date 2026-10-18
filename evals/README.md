@@ -49,6 +49,13 @@ Moderation API and models (tickets stay mock).
 A real judge run (`--judge ragas --confirm-spend`) makes many model calls. It is never run by the tests
 and needs the user's explicit OK first (see TASKS.md, T6.2).
 
+Every real run appends its spend to one fixed ledger, `data/spend_ledger.jsonl` (override: `SMARTDESK_LEDGER_PATH`),
+whatever data dir the stack uses (`smartdesk_ai/ops/spend_ledger.py`). One line per API call, written as it happens,
+so a crash loses nothing; numbers and names only. `python -m smartdesk_ai.ops.spend_ledger --day YYYY-MM-DD`
+prints the spend per run and day (UTC, like the billing page). The app's $5/$10 cutoffs read `ops.db`, which holds
+live app spend only; eval and Ragas spend is in the ledger, not in the cutoffs. Reasoning tokens are inside
+`output_tokens` (billed once, at the output price).
+
 The judge stage is built to survive failure (`judge_run.py`, FR-H12):
 
 - `python -m evals.run --only rag --judge ragas --judge-only --confirm-spend --ceiling-usd N --out-dir evals/results`

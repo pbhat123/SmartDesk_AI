@@ -221,4 +221,7 @@ class CheckpointedJudge:
     def _abort_process() -> None:
         print("error: the Ragas judge made no progress and was aborted; the checkpoint is saved, rerun to resume",
               file=sys.stderr, flush=True)
+        from smartdesk_ai.ops.spend_ledger import end_run
+
+        end_run("stalled")  # os._exit skips atexit
         os._exit(EXIT_STALLED)  # a thread blocked in a network call cannot be interrupted any other way

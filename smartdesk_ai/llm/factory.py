@@ -33,7 +33,9 @@ def openai_builder(model_id: str, model_cfg: ChatModel) -> Any:
     effort = getattr(model_cfg, "reasoning_effort", None)  # only the Main tier has one
     if effort is not None:
         kwargs["reasoning_effort"] = effort
-    return ChatOpenAI(model=model_id, api_key=env.openai_api_key, **kwargs)
+    from smartdesk_ai.ops.spend_ledger import make_callback
+
+    return ChatOpenAI(model=model_id, api_key=env.openai_api_key, callbacks=[make_callback(model_id)], **kwargs)
 
 
 def get_llm_for_tier(

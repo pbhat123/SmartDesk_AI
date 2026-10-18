@@ -64,7 +64,10 @@ def get_embeddings(settings: Settings, env: EnvSettings | None = None) -> Embedd
         raise RuntimeError("OPENAI_API_KEY is not set (see .env.example)")
     from langchain_openai import OpenAIEmbeddings
 
-    return OpenAIEmbeddings(model=settings.models.embedding.id, api_key=env.openai_api_key)
+    from smartdesk_ai.ops.spend_ledger import LedgeredEmbeddings
+
+    real = OpenAIEmbeddings(model=settings.models.embedding.id, api_key=env.openai_api_key)
+    return LedgeredEmbeddings(real, settings.models.embedding.id)  # every real request goes to the spend ledger
 
 
 def embedder_id(embeddings: Embeddings) -> str:

@@ -11,6 +11,17 @@ from smartdesk_ai.rag.ingest import ingest
 from tests.kb_helpers import KB_DIR
 
 
+@pytest.fixture(autouse=True)
+def ledger_never_touches_the_repo(tmp_path, monkeypatch):
+    """Any ledger write in a test goes to a temp file, never to the repo's data/spend_ledger.jsonl."""
+    from smartdesk_ai.ops import spend_ledger
+
+    monkeypatch.setenv(spend_ledger.LEDGER_ENV, str(tmp_path / "test_ledger.jsonl"))
+    spend_ledger.reset_for_tests()
+    yield
+    spend_ledger.reset_for_tests()
+
+
 @pytest.fixture(scope="session")
 def settings():
     return load_settings()

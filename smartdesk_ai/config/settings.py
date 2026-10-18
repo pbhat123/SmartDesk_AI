@@ -59,6 +59,9 @@ class ChatModel(_Strict):
     price: ChatPrice
 
 
+Effort = Literal["none", "low", "medium", "high", "xhigh"]
+
+
 class MainModel(ChatModel):
     reasoning_effort: str
 
@@ -218,6 +221,15 @@ class Settings(_Strict):
     retrieval: Retrieval
     chunking: Chunking
     prompts: dict[str, Annotated[int, Field(ge=1)]]
+    reasoning_effort: dict[str, Effort]  # per-task override on the Main tier
+
+    @field_validator("reasoning_effort")
+    @classmethod
+    def _effort_tasks_known(cls, value: dict[str, Effort]) -> dict[str, Effort]:
+        unknown = [t for t in value if t not in REQUIRED_TASKS]
+        if unknown:
+            raise ValueError(f"reasoning_effort: unknown tasks {unknown}")
+        return value
 
     @field_validator("tiers")
     @classmethod

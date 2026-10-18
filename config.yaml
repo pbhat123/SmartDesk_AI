@@ -33,6 +33,10 @@ tiers:
   CONFIRM_PARSE: light       # yes / no / edit at the ticket gate (FR-G12)
   CHITCHAT: light            # small talk, deflection, clarifying questions
 
+# Reasoning effort per task, Main tier only; a task not listed uses models.main.reasoning_effort.
+reasoning_effort:
+  GROUNDING_JUDGE: low       # the judge at "none" rejected claims that are in the context (live gap run 3)
+
 # LLM call retry (FR-F2): attempts per model before the outage fallback, doubling backoff.
 llm:
   retry_attempts: 3

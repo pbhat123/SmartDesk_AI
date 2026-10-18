@@ -41,6 +41,8 @@ def get_llm_for_tier(
 ) -> LLMHandle:
     """A handle on an explicit tier; used by outage fallback (FR-F2), which overrides the map."""
     model_cfg = getattr(settings.models, tier)
+    if tier == "main" and task in settings.reasoning_effort:  # a per-task override of the Main tier's default
+        model_cfg = model_cfg.model_copy(update={"reasoning_effort": settings.reasoning_effort[task]})
     return LLMHandle(task, tier, model_cfg.id, builder(model_cfg.id, model_cfg))
 
 

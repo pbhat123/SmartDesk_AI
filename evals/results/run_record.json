@@ -1,6 +1,6 @@
 {
-  "run_id": "20261018T030401Z-b43a6f",
-  "started_at": "2026-10-18T03:04:01.213305+00:00",
+  "run_id": "20261018T031827Z-76d703",
+  "started_at": "2026-10-18T03:18:27.119490+00:00",
   "mock": false,
   "steps": [
     "gap"
@@ -85,7 +85,7 @@
     "split_above_tokens": 600,
     "overlap_pct": 15
   },
-  "git_commit": "247a607",
+  "git_commit": "7fe1515",
   "python": "3.12.15",
   "result_files": [
     "gap_eval.json"

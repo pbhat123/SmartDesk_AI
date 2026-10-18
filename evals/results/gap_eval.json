@@ -2,22 +2,24 @@
   "mock": false,
   "n_gap": 21,
   "n_kb": 53,
-  "gap_pass_rate": 1.0,
-  "kb_answer_rate": 0.7924528301886793,
-  "escalation_precision": 0.65625,
-  "escalation_recall": 1.0,
+  "gap_pass_rate": 0.9523809523809523,
+  "kb_answer_rate": 0.9811320754716981,
+  "escalation_precision": 0.9523809523809523,
+  "escalation_recall": 0.9523809523809523,
   "by_split": {
     "dev": {
-      "gap_pass_rate": 1.0,
-      "kb_answer_rate": 0.7777777777777778
+      "gap_pass_rate": 0.9230769230769231,
+      "kb_answer_rate": 0.9629629629629629
     },
     "test": {
       "gap_pass_rate": 1.0,
-      "kb_answer_rate": 0.8076923076923077
+      "kb_answer_rate": 1.0
     }
   },
-  "grey_zone_pass_rate": 1.0,
-  "failures": [],
+  "grey_zone_pass_rate": 0.8888888888888888,
+  "failures": [
+    "gap-006: answered"
+  ],
   "cases": [
     {
       "id": "gap-001",
@@ -59,7 +61,7 @@
       "label": "gap",
       "split": "dev",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "gap-007",
@@ -192,7 +194,7 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-005",
@@ -241,21 +243,21 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-012",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-013",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-014",
@@ -304,14 +306,14 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-021",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-022",
@@ -367,7 +369,7 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-030",
@@ -402,14 +404,14 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-035",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-036",
@@ -444,7 +446,7 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-041",
@@ -538,5 +540,5 @@
       "outcome": "answered"
     }
   ],
-  "run_id": "20261018T030401Z-b43a6f"
+  "run_id": "20261018T031827Z-76d703"
 }

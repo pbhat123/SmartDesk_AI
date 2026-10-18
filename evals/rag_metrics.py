@@ -107,6 +107,13 @@ def citation_accuracy(outputs: Sequence[RagOutput], rows: Sequence[KBQuestion]) 
     return (correct / cited if cited else None), cited
 
 
+def expected_entry_cited(outputs: Sequence[RagOutput], rows: Sequence[KBQuestion]) -> int:
+    """Answers that cite the entry the question was built from, extra citations or not. Read it beside
+    `citation_accuracy`, which counts every other cited entry as wrong although it may support the answer too."""
+    expected = {r.id: r.expected_entry_id for r in rows}
+    return sum(expected[o.question_id] in o.citations for o in outputs if not o.insufficient)
+
+
 # --- judges ---------------------------------------------------------------------------------------
 
 def _content(text: str) -> set[str]:
@@ -266,6 +273,7 @@ class RagReport(BaseModel):
     grounded_answer_rate: float | None
     citation_accuracy: float | None
     n_cited: int
+    expected_cited: int = 0  # answers (of n_answered) that cite the expected entry
     factual_precision: float | None
     answer_relevancy: float | None = None
     context_precision: float | None = None
@@ -301,6 +309,7 @@ def compute_metrics(
         retrieval=retrieval_scores(outputs, rows, ks), answer_correctness=_mean(correct),
         hallucination_rate=(sum(f < 1.0 for f in scored) / len(scored)) if scored else None,
         grounded_answer_rate=_mean(faith), citation_accuracy=accuracy, n_cited=cited,
+        expected_cited=expected_entry_cited(answered, rows),
         factual_precision=_mean(precision), answer_relevancy=_mean(relevancy), context_precision=_mean(ctx_precision),
         context_recall=_mean(ctx_recall), judge_errors=dict(getattr(judge, "errors", {})), outputs=list(outputs),
     )
@@ -387,7 +396,7 @@ def _print(report: RagReport) -> None:
           f"  context recall {_fmt(report.context_recall)}"
           + (f"  judge errors {report.judge_errors}" if report.judge_errors else ""))
     print(f"  citation accuracy {_fmt(report.citation_accuracy)} over {report.n_cited} cited  "
-          f"factual precision {_fmt(report.factual_precision)}")
+          f"expected entry cited {report.expected_cited}/{report.n_answered}  factual precision {_fmt(report.factual_precision)}")
 
 
 # --- the real run (paid models; only after the user approved the plan) -----------------------------------------------

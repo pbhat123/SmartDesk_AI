@@ -18,6 +18,7 @@ counts in the retrieval metrics but not in the answer metrics.
 | Hallucination rate | Share of answers with any unsupported claim (Faithfulness below 1) | Ragas `Faithfulness` |
 | Grounded-answer rate | Mean Faithfulness, target 0.8 or higher | Ragas `Faithfulness` |
 | Citation accuracy | Cited entry IDs that were retrieved **and** support the answer (the entry the question is built from), divided by all cited IDs | computed here |
+| Expected entry cited | Answers (out of those answered) that cite the entry the question is built from, whatever else they cite | computed here |
 | Factual precision | Share of the answer's claims supported by the reference | Ragas `FactualCorrectness`, `mode="precision"` |
 
 Substitutions and caveats:

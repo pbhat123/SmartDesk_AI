@@ -337,3 +337,23 @@ def test_the_pipeline_answers_are_saved_before_the_judge_runs(settings, tmp_path
         rm.run(res, None, tmp_path, judge=Boom(), answer_fn=answer_fn, split="dev")
     saved = json.loads((tmp_path / "rag_outputs.json").read_text())
     assert len(saved) >= 1  # the paid part of the run is not lost when the judge fails
+
+
+# --- expected entry cited (FR-H12) -----------------------------------------------------------------------------
+
+def test_expected_entry_cited_counts_answers_that_cite_the_entry_the_question_was_built_from():
+    rows = [row(1, "A"), row(2, "B"), row(3, "C"), row(4, "D")]
+    outs = [out(1, ["A", "X"], citations=["A", "X"], answer="a"),   # also cites an extra entry: still counts
+            out(2, ["B"], citations=["X"], answer="a"),             # cites something else
+            out(3, ["C"], citations=[], answer="a"),                # cites nothing
+            out(4, ["D"])]                                          # escalated: no answer, not counted
+    assert rm.expected_entry_cited(outs, rows) == 1
+    assert rm.citation_accuracy(outs, rows)[0] == pytest.approx(1 / 3)  # 3 cited ids, 1 is the expected entry: the strict metric penalises the extras
+
+
+def test_the_report_and_the_result_file_carry_expected_entry_cited_next_to_citation_accuracy(mock_run, capsys):
+    report, out_dir = mock_run
+    data = json.loads((out_dir / "rag_metrics.json").read_text())
+    assert 0 <= report.expected_cited <= report.n_answered and data["expected_cited"] == report.expected_cited
+    rm._print(report)
+    assert f"expected entry cited {report.expected_cited}/{report.n_answered}" in capsys.readouterr().out

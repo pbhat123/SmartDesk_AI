@@ -1,9 +1,9 @@
 {
-  "run_id": "20261018T184816Z-579eaa",
-  "started_at": "2026-10-18T18:48:16.287880+00:00",
+  "run_id": "20261018T192050Z-c60196",
+  "started_at": "2026-10-18T19:20:50.887981+00:00",
   "mock": false,
   "steps": [
-    "rag"
+    "gap"
   ],
   "models": {
     "main": "gpt-5.4-mini",
@@ -29,8 +29,8 @@
       "file": "orchestrator_v3.md"
     },
     "answer": {
-      "version": 3,
-      "file": "answer_v3.md"
+      "version": 4,
+      "file": "answer_v4.md"
     },
     "synthesizer": {
       "version": 1,
@@ -85,9 +85,9 @@
     "split_above_tokens": 600,
     "overlap_pct": 15
   },
-  "git_commit": "fc53e8b",
+  "git_commit": "dddae3b",
   "python": "3.12.15",
   "result_files": [
-    "rag_metrics.json"
+    "gap_eval.json"
   ]
 }

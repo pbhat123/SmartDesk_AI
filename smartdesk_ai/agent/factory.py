@@ -42,6 +42,7 @@ from smartdesk_ai.ops.budget import BudgetController, SpendStore
 from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.compaction import Compactor, make_summarizer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
+from smartdesk_ai.ops.hitl_counters import HitlCounters
 from smartdesk_ai.ops.metrics import MetricsRecorder
 from smartdesk_ai.ops.rate_limit import RateLimiter
 from smartdesk_ai.ops.spend_ledger import start_run
@@ -66,6 +67,7 @@ CHECKPOINT_DB = "checkpoints.db"
 TRACE_LOG = "trace.jsonl"
 COST_LOG = "cost.jsonl"
 OPS_DB = "ops.db"  # daily spend and rate-limit counters
+HITL_LOG = "hitl.jsonl"  # approvals, rejections and edits at the ticket gate (FR-H4); the Monitoring tab reads it
 TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab reads them
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
@@ -195,6 +197,7 @@ def build_stack(
         executor=executor,
         parse_confirm=make_confirm_parser(settings, builder=confirm_b),
         duplicate_threshold=settings.thresholds.duplicate_title,
+        hitl=HitlCounters(Path(data_dir) / HITL_LOG),
     )
     prompt_tokens = len(load_prompt("compaction", settings).text) // 3  # a generous size estimate
     answerer = make_answerer(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))

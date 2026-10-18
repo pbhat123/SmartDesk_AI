@@ -33,7 +33,7 @@ def _render_panel(message: dict[str, Any]) -> None:
         return
     with st.expander(PANEL_LABEL, expanded=False):
         if chunks:
-            st.dataframe(chunk_table(chunks), hide_index=True, use_container_width=True)
+            st.dataframe(chunk_table(chunks), hide_index=True, width="stretch")
         else:
             st.caption("No chunks were retrieved.")
         if message.get("steps"):

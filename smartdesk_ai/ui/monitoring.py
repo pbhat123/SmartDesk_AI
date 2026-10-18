@@ -21,6 +21,7 @@ from smartdesk_ai.guardrails.pii import mask_emails_in
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
 from smartdesk_ai.ops.cost import CostEntry
 from smartdesk_ai.ops.health import HealthRegistry
+from smartdesk_ai.ops.hitl_counters import HitlCounts, load_counts
 from smartdesk_ai.ops.metrics import ToolCallRecord, load_records, summarize_tools
 from smartdesk_ai.ops.spend_ledger import ledger_path, read_events
 from smartdesk_ai.rag.embeddings import HashingEmbeddings, embedder_id
@@ -29,6 +30,7 @@ from smartdesk_ai.ui.context import UiContext
 
 TOOL_METRICS_FILE = "tool_metrics.jsonl"
 COST_FILE = "cost.jsonl"
+HITL_FILE = "hitl.jsonl"
 OPS_DB_FILE = "ops.db"
 AGENT_METRICS_FILE = "agent_metrics.json"
 TIER_ORDER = ("main", "light", "embedding", "other")
@@ -95,6 +97,7 @@ class MonitoringData(BaseModel):
     ledger_today_usd: float
     budget: BudgetRow
     stale: StaleReport
+    hitl: HitlCounts
     agent_metrics: AgentMetrics | None
 
 
@@ -189,6 +192,7 @@ def load_monitoring(
         tiers=tiers, ledger_total_usd=ledger_total, ledger_today_usd=ledger_today,
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
+        hitl=load_counts(data_dir / HITL_FILE),
         agent_metrics=_agent_metrics(Path(results_dir)),
     )
 
@@ -208,7 +212,7 @@ def _render_tools(data: MonitoringData) -> None:
         "tool": r.tool, "calls": r.calls, "success rate": round(r.success_rate, 3), "failures": r.failures,
         "failed by": ", ".join(f"{k}: {v}" for k, v in sorted(r.failure_types.items())) or "-",
         "retries": r.retries, "retry rate": round(r.retry_rate, 3), "p50 ms": round(r.p50_ms, 1),
-        "p95 ms": round(r.p95_ms, 1)} for r in data.tools]), hide_index=True, use_container_width=True)
+        "p95 ms": round(r.p95_ms, 1)} for r in data.tools]), hide_index=True, width="stretch")
 
 
 def _render_degraded(data: MonitoringData) -> None:
@@ -218,7 +222,7 @@ def _render_degraded(data: MonitoringData) -> None:
         return
     st.dataframe(pd.DataFrame([{"component": d.component, "running instead": d.mode, "reason": d.reason,
                                 "since": d.since or ""} for d in data.degraded]),
-                 hide_index=True, use_container_width=True)
+                 hide_index=True, width="stretch")
 
 
 def _render_cost(data: MonitoringData) -> None:
@@ -233,7 +237,7 @@ def _render_cost(data: MonitoringData) -> None:
     st.dataframe(pd.DataFrame([{
         "tier": t.tier, "models": ", ".join(t.models) or "-", "ledger calls": t.ledger_calls,
         "ledger USD": t.ledger_usd, "tracker steps": t.tracker_steps, "tracker USD": t.tracker_usd}
-        for t in data.tiers]), hide_index=True, use_container_width=True)
+        for t in data.tiers]), hide_index=True, width="stretch")
     st.caption("The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
                "per-request analytics. Mock runs price nothing, so both stay at 0 there. 'other' is a model "
                "missing from config.yaml (priced as the Main model).")
@@ -250,11 +254,21 @@ def _render_stale(data: MonitoringData) -> None:
                        f"{', '.join(stale.stale_files + stale.deleted_files)}. "
                        "Re-run `python -m smartdesk_ai.rag.ingest` to refresh them.")
             st.dataframe(pd.DataFrame({"stale chunk": stale.stale_chunk_ids}), hide_index=True,
-                         use_container_width=True)
+                         width="stretch")
         if stale.new_files:
             st.info(f"Not yet ingested: {', '.join(stale.new_files)}.")
     else:
         st.caption("No stale chunks: every indexed file matches the hash stored at ingest.")
+
+
+def _render_hitl(data: MonitoringData) -> None:
+    st.subheader("Human checks at the ticket approval gate")
+    counts = data.hitl
+    for column, (label, value) in zip(st.columns(3), [("Approvals", counts.approvals),
+                                                      ("Rejections", counts.rejections), ("Edits", counts.edits)]):
+        column.metric(label, str(value))
+    st.caption("Counted when an employee answers the approval gate: yes, no, or a change to the draft. "
+               "Unclear replies are not decisions, so they are not counted.")
 
 
 def _render_agent_metrics(data: MonitoringData) -> None:
@@ -287,4 +301,5 @@ def render_monitoring(ctx: UiContext) -> None:
     _render_degraded(data)
     _render_cost(data)
     _render_stale(data)
+    _render_hitl(data)
     _render_agent_metrics(data)

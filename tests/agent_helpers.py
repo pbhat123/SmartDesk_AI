@@ -34,7 +34,7 @@ class SearchSpy:
 
 
 def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", routed=False,
-             drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None, compactor=None):
+             drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None, compactor=None, hitl=None):
     """Everything the tests need: the compiled graph plus the spy, the tickets client and the store."""
     index = open_index(built_index_dir, HashingEmbeddings())
     spy = SearchSpy(make_search_kb(index, settings, reranker=None, health=HealthRegistry()))
@@ -56,6 +56,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
             executor=executor,
             parse_confirm=parse_confirm or rule_parser,
             duplicate_threshold=settings.thresholds.duplicate_title,
+            hitl=hitl,
         )
     graph = build_kb_graph(KBDeps(executor=executor, answer=answer), saver, route=route, tickets=tickets,
                              status_max_listed=settings.status.max_listed, chitchat=chitchat, compactor=compactor)

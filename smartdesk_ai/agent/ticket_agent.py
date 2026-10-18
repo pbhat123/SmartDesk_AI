@@ -39,6 +39,7 @@ from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, FallbackChat
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
+from smartdesk_ai.ops.hitl_counters import HitlCounters
 from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
 from smartdesk_ai.tools.executor import Outcome
 
@@ -190,6 +191,7 @@ class TicketDeps(BaseModel):
     executor: Any  # ToolExecutor with create_ticket and get_tickets registered; every tool call goes through it
     parse_confirm: ConfirmParser
     duplicate_threshold: float  # config: thresholds.duplicate_title
+    hitl: HitlCounters | None = None  # approvals, rejections and edits at the gate (FR-H4)
 
 
 CONFIRM_QUESTION = "Shall I go ahead and create this?"
@@ -484,6 +486,8 @@ def make_t_confirm_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, An
         if decision.decision == "edit" and not apply_edit(state.ticket, decision)[1]:
             decision = ConfirmDecision(decision="unclear")  # an edit that changes nothing is no answer
         unclear = state.gate_unclear + 1 if decision.decision == "unclear" else state.gate_unclear
+        if deps.hitl is not None and decision.decision != "unclear":  # after the interrupt, so once per decision
+            deps.hitl.record(decision.decision)
         return {"steps": state.steps + ["t_confirm"], "gate": decision, "gate_unclear": unclear}
 
     return t_confirm

@@ -40,12 +40,61 @@ Substitutions and caveats:
   quality. Read them as relative numbers between prompt versions, not as accuracy. Faithfulness, context recall and the
   gap set are the better quality signals. Key-fact references were considered and not adopted.
 
-## Retrieval report (offline)
+## Retrieval ablation (offline)
 
 `python -m evals.retrieval_report [--mock] [--out-dir DIR]` gives hit@1/3/5 and MRR per strategy (dense, BM25, hybrid,
 hybrid + rerank, dense + rerank) overall, per split, per question type and for the low and high lexical-overlap halves
 of the questions, which shows paraphrase bias. A real run reads only `data/embedding_cache.json`; an uncached text raises,
-so it makes no API call. Findings are in PLAN.md section 14.5.
+so it makes no API call. `python -m evals.lexical_report` scores the same five strategies on the held-out exact-term set
+`lexical_set.jsonl` (15 queries typed the way a user types a literal; no tuning on it). It also runs offline; add
+`--embed-new` once to embed queries that are not cached (the only paid call, a few thousand tokens at most, recorded in the ledger).
+
+**KB questions (53, paraphrased on purpose, FR-A18)**
+
+| Strategy | hit@1 | hit@3 | hit@5 | MRR |
+|---|---|---|---|---|
+| dense | **0.925** | **1.000** | **1.000** | **0.956** |
+| BM25 | 0.509 | 0.774 | 0.830 | 0.663 |
+| hybrid (RRF) | 0.774 | 0.925 | 0.943 | 0.861 |
+| hybrid+rerank (production) | 0.736 | 0.981 | **1.000** | 0.847 |
+| dense+rerank | 0.755 | 0.981 | **1.000** | 0.862 |
+
+**Exact-term queries (15, held out)**
+
+| Strategy | hit@1 | hit@3 | hit@5 | MRR |
+|---|---|---|---|---|
+| dense | 0.800 | 0.867 | 0.867 | 0.843 |
+| BM25 | **1.000** | **1.000** | **1.000** | **1.000** |
+| hybrid (RRF) | 0.867 | 0.933 | 0.933 | 0.904 |
+| hybrid+rerank (production) | **1.000** | **1.000** | **1.000** | **1.000** |
+| dense+rerank | 0.933 | 0.933 | 0.933 | 0.933 |
+
+The 15 queries (all with a literal that exists in only one KB entry):
+
+1. `VPN error 691` → IT-VPN-02
+2. `windows error 809 server unreachable` → IT-VPN-02
+3. `what do I put in Server for vpn.smartdesk.example` → IT-VPN-01
+4. `SmartDesk-Corp profile missing after update` → IT-VPN-01
+5. `SmartDesk-Secure keeps asking for password` → IT-WIFI-02
+6. `guest sign-in page not showing neverssl.com` → IT-WIFI-01
+7. `outlook "device not compliant"` → IT-MAIL-01
+8. `phishing@smartdesk.example screenshot` → IT-SEC-01
+9. `travel@smartdesk.example flight booking` → HR-REIMB-02
+10. `icc@smartdesk.example` → HR-HARASS-02
+11. `gift register` → HR-COND-02
+12. `comp-off 45 days lapse` → HR-LEAVE-08
+13. `benefits@smartdesk.example enrol` → HR-ONB-02
+14. `Download PDF payslip` → HR-PAY-02
+15. `vesting grant date 1/48 per month` → HR-STOCK-01
+
+**Paraphrase bias.** The KB questions share on average 44% of their content words with the expected entry. BM25 hit@1 is
+0.385 on the lower-overlap half and 0.630 on the upper half; dense is flat (0.923 and 0.926); the correlation of overlap
+with a rank-1 hit is 0.40 for BM25, 0.09 for dense, 0.28 for hybrid+rerank. So the paraphrased set handicaps BM25 and
+favours dense, and the exact-term set does the opposite: dense drops to 0.800 hit@1 and misses `icc@smartdesk.example`
+entirely, while BM25 and hybrid+rerank get 1.000. Read together: dense is better at paraphrases, keyword search at literals,
+and hybrid+rerank is the only strategy with hit@5 = 1.000 on both sets. The decision rule was "dense, if it is at least as
+good as hybrid+rerank on both sets"; it is not, so the production strategy stays. Details and the recommendation are in
+PLAN.md section 14.5. Caveat: 15 queries, one author; one query is 6.7 points.
 
 ## Other steps
 

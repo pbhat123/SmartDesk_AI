@@ -1,0 +1,15 @@
+{"id": "lex-001", "question": "VPN error 691", "expected_entry_id": "IT-VPN-02", "literal": "691", "heldout": true}
+{"id": "lex-002", "question": "windows error 809 server unreachable", "expected_entry_id": "IT-VPN-02", "literal": "809", "heldout": true}
+{"id": "lex-003", "question": "what do I put in Server for vpn.smartdesk.example", "expected_entry_id": "IT-VPN-01", "literal": "vpn.smartdesk.example", "heldout": true}
+{"id": "lex-004", "question": "SmartDesk-Corp profile missing after update", "expected_entry_id": "IT-VPN-01", "literal": "SmartDesk-Corp", "heldout": true}
+{"id": "lex-005", "question": "SmartDesk-Secure keeps asking for password", "expected_entry_id": "IT-WIFI-02", "literal": "SmartDesk-Secure", "heldout": true}
+{"id": "lex-006", "question": "guest sign-in page not showing neverssl.com", "expected_entry_id": "IT-WIFI-01", "literal": "neverssl.com", "heldout": true}
+{"id": "lex-007", "question": "outlook \"device not compliant\"", "expected_entry_id": "IT-MAIL-01", "literal": "device not compliant", "heldout": true}
+{"id": "lex-008", "question": "phishing@smartdesk.example screenshot", "expected_entry_id": "IT-SEC-01", "literal": "phishing@smartdesk.example", "heldout": true}
+{"id": "lex-009", "question": "travel@smartdesk.example flight booking", "expected_entry_id": "HR-REIMB-02", "literal": "travel@smartdesk.example", "heldout": true}
+{"id": "lex-010", "question": "icc@smartdesk.example", "expected_entry_id": "HR-HARASS-02", "literal": "icc@smartdesk.example", "heldout": true}
+{"id": "lex-011", "question": "gift register", "expected_entry_id": "HR-COND-02", "literal": "Gift register", "heldout": true}
+{"id": "lex-012", "question": "comp-off 45 days lapse", "expected_entry_id": "HR-LEAVE-08", "literal": "comp-off", "heldout": true}
+{"id": "lex-013", "question": "benefits@smartdesk.example enrol", "expected_entry_id": "HR-ONB-02", "literal": "benefits@smartdesk.example", "heldout": true}
+{"id": "lex-014", "question": "Download PDF payslip", "expected_entry_id": "HR-PAY-02", "literal": "Download PDF", "heldout": true}
+{"id": "lex-015", "question": "vesting grant date 1/48 per month", "expected_entry_id": "HR-STOCK-01", "literal": "grant date", "heldout": true}

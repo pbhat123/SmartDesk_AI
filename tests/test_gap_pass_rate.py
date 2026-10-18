@@ -92,7 +92,7 @@ def test_a_confirmed_live_gap_run_uses_the_live_stack_with_mock_tickets(monkeypa
     from evals import gap_eval, run as run_module
 
     seen = {}
-    monkeypatch.setattr(gap_eval, "build_live_stack", lambda settings, work: seen.update(live=True) or stack_with(
+    monkeypatch.setattr(gap_eval, "build_live_stack", lambda settings, work, tracing=False: seen.update(live=True) or stack_with(
         settings, tmp_path, FakeAnswerLLM("insufficient")))
     monkeypatch.setattr(run_module, "make_resources", lambda **kw: make_resources(mock=True).__class__(
         settings=make_resources(mock=True).settings, embeddings=make_resources(mock=True).embeddings,

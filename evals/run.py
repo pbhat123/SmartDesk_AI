@@ -45,6 +45,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-dir", type=Path, default=None)
     parser.add_argument("--out-dir", type=Path, default=None, help="write results JSON here")
     parser.add_argument("--judge", choices=("mock", "ragas"), default="mock", help="rag step: the metric judge")
+    parser.add_argument("--trace", action="store_true", help="gap step (live): send the run to Langfuse and LangSmith, masked")
     parser.add_argument("--confirm-spend", action="store_true", help="allow a real run that calls paid models")
     parser.add_argument("--chosen", type=float, default=None, help="threshold step: record this escalation value's dev and test numbers")
     parser.add_argument("--write-config", action="store_true", help="threshold step: write --chosen (or the proposal) into --config")
@@ -99,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
         if "duplicate" in steps:
             tune_duplicate.run(res.settings, args.out_dir)
         if "gap" in steps:
-            gap_eval.run(res, args.out_dir, Path(tempfile.mkdtemp(prefix="eval_gap_")))
+            gap_eval.run(res, args.out_dir, Path(tempfile.mkdtemp(prefix="eval_gap_")), trace=args.trace)
         if "chunking" in steps:
             fixed_dir = Path(tempfile.mkdtemp(prefix="eval_fixed_")) if args.mock else DEFAULT_INDEX_DIR.parent / "index_fixed"
             chunking_ablation.run(res, index, fixed_dir, args.out_dir)

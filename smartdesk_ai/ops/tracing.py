@@ -91,6 +91,9 @@ class LangfuseSink:
     def __init__(self, client: Any) -> None:
         self._client = client
 
+    def flush(self) -> None:
+        self._client.flush()
+
     def emit(self, event: dict[str, Any]) -> None:
         from langfuse import propagate_attributes
 
@@ -114,6 +117,9 @@ class LangfuseSink:
 class LangSmithSink:
     def __init__(self, client: Any) -> None:
         self._client = client
+
+    def flush(self) -> None:
+        self._client.flush()
 
     def emit(self, event: dict[str, Any]) -> None:
         kind = event["kind"]

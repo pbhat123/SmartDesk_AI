@@ -75,6 +75,16 @@ class TraceLog:
     def mask(self) -> Masker:
         return self._mask
 
+    def flush(self) -> None:
+        """Push anything the optional sinks still hold (Langfuse and LangSmith send in the background)."""
+        for sink in self.sinks:
+            flush = getattr(sink, "flush", None)
+            if flush is not None:
+                try:
+                    flush()
+                except Exception as error:
+                    logger.warning("trace sink %s flush failed (%s)", type(sink).__name__, type(error).__name__)
+
     def add_sink(self, sink: Any) -> None:
         """Forward every masked record to `sink` as well (Langfuse, LangSmith). A failing sink is skipped."""
         self.sinks.append(sink)

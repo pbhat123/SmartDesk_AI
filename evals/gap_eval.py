@@ -97,23 +97,38 @@ def run_cases(stack: AgentStack, split: str | None = None) -> list[Case]:
     return cases
 
 
-def build_live_stack(settings: Settings, work_dir: Path) -> AgentStack:
-    """The real models and embeddings over the real index, with mock tickets (no GitHub calls)."""
+PROBE = ("My email is probe.user@example.com and my phone is +91 98765 43210. "
+         "How do I reset my forgotten password?")  # fake values: shows what the tracing sinks receive
+
+
+def send_probe(stack: AgentStack) -> None:
+    """One extra turn whose text holds a fake email and phone, so a tracing run can check masking."""
+    session = new_thread_id()
+    with request_scope(RequestContext(session_id=session, request_id="gap-probe", task="eval"), stack.services):
+        run_turn(stack.graph, session, PROBE)
+
+
+def build_live_stack(settings: Settings, work_dir: Path, *, tracing: bool = False) -> AgentStack:
+    """The real models and embeddings over the real index, with mock tickets (no GitHub calls). Optional
+    Langfuse and LangSmith tracing is on only when asked for."""
     from smartdesk_ai.config.env import DEFAULT_DOTENV
     from smartdesk_ai.tickets import MockTicketClient
 
     link_live_index(work_dir)
     return build_stack(live_settings(settings), environ=None, dotenv_path=DEFAULT_DOTENV, data_dir=work_dir,
-                       client=MockTicketClient())
+                       client=MockTicketClient(), tracing=tracing)
 
 
 def run(res: Resources, out_dir: Path | None, work_dir: Path, *, settings: Settings | None = None,
-        stack: AgentStack | None = None) -> GapReport:
+        stack: AgentStack | None = None, trace: bool = False) -> GapReport:
     if stack is None:
         settings = settings or res.settings
         stack = (build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir) if res.mock
-                 else build_live_stack(settings, work_dir))
+                 else build_live_stack(settings, work_dir, tracing=trace))
     report = summarize(run_cases(stack))
+    if trace:
+        send_probe(stack)
+        stack.services.trace.flush()
     print(f"gap eval ({'mock' if res.mock else 'live'}): gap pass rate {report.gap_pass_rate:.3f} "
           f"({report.n_gap} questions), KB answer rate {report.kb_answer_rate:.3f} ({report.n_kb} questions)")
     precision = "n/a" if report.escalation_precision is None else f"{report.escalation_precision:.3f}"

@@ -105,6 +105,7 @@ def build_stack(
     client: TicketClient | None = None,
     tracing_factories: TracingFactories | None = None,
     mock_answer_model: Any | None = None,
+    tracing: bool = True,
 ) -> "AgentStack":
     """Everything the app is made of: the compiled graph with its ticket client, ticket map, executor and ops
     services. `build_responder` wraps it for the CLI and the UI; the evals use the parts directly."""
@@ -141,7 +142,8 @@ def build_stack(
     # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
     trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)),
                      prompt_versions=settings.prompts)
-    build_tracing(env, trace, registry, tracing_factories)  # optional Langfuse and LangSmith; the local log stays
+    if tracing:
+        build_tracing(env, trace, registry, tracing_factories)  # optional Langfuse and LangSmith; the local log stays
     spend = SpendStore(Path(data_dir) / OPS_DB)
     budget = BudgetController(settings, spend)
     # Mock runs count tokens but price nothing, so they never touch the real daily budget.

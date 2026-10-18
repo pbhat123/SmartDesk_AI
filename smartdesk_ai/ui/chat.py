@@ -41,7 +41,9 @@ def escalation_line(retrieval: dict[str, Any]) -> str:
 
 
 def _new_conversation() -> None:
-    st.session_state["thread_id"] = uuid.uuid4().hex
+    thread_id = uuid.uuid4().hex
+    st.session_state["thread_id"] = thread_id
+    st.session_state["thread_ids"] = [*st.session_state.get("thread_ids", []), thread_id]  # for the session's cost
     st.session_state["messages"] = []
 
 

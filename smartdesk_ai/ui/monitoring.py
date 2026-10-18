@@ -9,8 +9,10 @@ Read-only. It never creates or changes a file: a missing log is an empty section
 - agent metrics: the last `agent_metrics.json` an eval run saved (FR-H11)
 """
 import json
+from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import streamlit as st
@@ -74,9 +76,24 @@ class ComponentRow(BaseModel):
     load_seconds: float | None
 
 
+class SourceRow(BaseModel):
+    """Today's ledger spend of one kind of run: the app, an eval run, a script, a drift check."""
+
+    source: str
+    usd: float = 0.0
+    calls: int = 0
+
+
+class SessionCost(BaseModel):
+    usd: float = 0.0
+    llm_calls: int = 0
+    tokens: int = 0
+
+
 class TierRow(BaseModel):
     tier: str
-    models: list[str] = Field(default_factory=list)
+    model: str = "-"  # the configured model id of the tier
+    seen_as: list[str] = Field(default_factory=list)  # dated names the provider billed under it
     ledger_calls: int = 0
     ledger_usd: float = 0.0
     tracker_steps: int = 0
@@ -115,6 +132,7 @@ class MonitoringData(BaseModel):
     tiers: list[TierRow]
     ledger_total_usd: float
     ledger_today_usd: float
+    sources_today: list[SourceRow]
     budget: BudgetRow
     stale: StaleReport
     hitl: HitlCounts
@@ -152,21 +170,34 @@ def _tracker_entries(path: Path) -> list[CostEntry]:
     return entries
 
 
-def _tier_rows(settings: Settings, ledger: Path, tracker: Path) -> tuple[list[TierRow], float, float]:
-    rows = {tier: TierRow(tier=tier) for tier in TIER_ORDER}
+SOURCE_ORDER = ("app", "eval", "script")
+
+
+def _configured_model(tier: str, settings: Settings) -> str:
+    return {"main": settings.models.main.id, "light": settings.models.light.id,
+            "embedding": settings.models.embedding.id}.get(tier, "-")
+
+
+def _ledger_view(settings: Settings, ledger: Path, tracker: Path) -> tuple[list[TierRow], float, float, list[SourceRow]]:
+    rows = {tier: TierRow(tier=tier, model=_configured_model(tier, settings)) for tier in TIER_ORDER}
+    sources: dict[str, SourceRow] = {}
     today = datetime.now(timezone.utc).date().isoformat()  # the ledger counts days in UTC, as the billing page does
     total = today_usd = 0.0
     for event in read_events(ledger):
         if event.get("event") != "spend":
             continue
-        row = rows[_tier_of(event.get("model"), settings)]
+        model = event.get("model")
+        row = rows[_tier_of(model, settings)]
         row.ledger_calls += event.get("calls", 0)
         row.ledger_usd += event.get("usd", 0.0)
-        if event.get("model") and event["model"] not in row.models:
-            row.models.append(event["model"])
+        if model and model != row.model and model not in row.seen_as:
+            row.seen_as.append(model)  # a dated name, or for "other" the model missing from config
         total += event.get("usd", 0.0)
         if str(event.get("ts", ""))[:10] == today:
             today_usd += event.get("usd", 0.0)
+            source = sources.setdefault(str(event.get("source", "unknown")), SourceRow(source=str(event.get("source", "unknown"))))
+            source.usd += event.get("usd", 0.0)
+            source.calls += event.get("calls", 0)
     for entry in _tracker_entries(tracker):
         if entry.step == "tool":
             continue  # tool steps have no tier and no price
@@ -176,7 +207,22 @@ def _tier_rows(settings: Settings, ledger: Path, tracker: Path) -> tuple[list[Ti
         row.tracker_usd += entry.usd
     for row in rows.values():
         row.ledger_usd, row.tracker_usd = round(row.ledger_usd, 6), round(row.tracker_usd, 6)
-    return list(rows.values()), round(total, 6), round(today_usd, 6)
+        row.seen_as.sort()
+    ordered = sorted(sources.values(), key=lambda s: (SOURCE_ORDER.index(s.source) if s.source in SOURCE_ORDER
+                                                      else len(SOURCE_ORDER), s.source))
+    for source in ordered:
+        source.usd = round(source.usd, 6)
+    return list(rows.values()), round(total, 6), round(today_usd, 6), ordered
+
+
+def session_cost(tracker: Any, thread_ids: Sequence[str]) -> SessionCost:
+    """The request cost tracker's total for this browser session's conversations (an estimate: the ledger is the audit
+    trail, but it does not know sessions)."""
+    if tracker is None or not thread_ids:
+        return SessionCost()
+    mine = [e for e in tracker.entries if e.session_id in set(thread_ids)]
+    return SessionCost(usd=round(sum(e.usd for e in mine), 6), llm_calls=sum(e.step == "llm" for e in mine),
+                       tokens=sum(e.input_tokens + e.output_tokens for e in mine))
 
 
 def _budget_row(settings: Settings, ops_db: Path) -> BudgetRow:
@@ -204,7 +250,7 @@ def load_monitoring(
     live = settings.modes.llm == "live"
     index_dir = data_dir / ("index" if live else "index_mock")  # the folders `build_stack` uses
     embedder = settings.models.embedding.id if live else embedder_id(HashingEmbeddings())
-    tiers, ledger_total, ledger_today = _tier_rows(settings, ledger or ledger_path(), data_dir / COST_FILE)
+    tiers, ledger_total, ledger_today, sources = _ledger_view(settings, ledger or ledger_path(), data_dir / COST_FILE)
     return MonitoringData(
         tools=_tool_rows(data_dir / TOOL_METRICS_FILE),
         components=[ComponentRow(component=h.component.value, status=h.status.value, running_instead=h.mode or "",
@@ -214,6 +260,7 @@ def load_monitoring(
                               since=h.since.isoformat(timespec="seconds") if h.since else None)
                   for h in registry.degraded_modes()],
         tiers=tiers, ledger_total_usd=ledger_total, ledger_today_usd=ledger_today,
+        sources_today=sources,
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
         hitl=load_counts(data_dir / HITL_FILE),
@@ -251,22 +298,33 @@ def _render_degraded(data: MonitoringData) -> None:
                "Degraded means a component failed or is not configured, and the substitute shown is running.")
 
 
-def _render_cost(data: MonitoringData) -> None:
+def _render_cost(ctx: UiContext, data: MonitoringData) -> None:
     st.subheader("Cost by tier")
     left, middle, right = st.columns(3)
-    left.metric("Ledger, all time", f"${data.ledger_total_usd:.4f}")
-    middle.metric("Ledger, today (UTC)", f"${data.ledger_today_usd:.4f}")
+    left.metric("Today (UTC), all sources", f"${data.ledger_today_usd:.4f}",
+                help="Everything the spend ledger recorded today: this app, eval runs, scripts and drift checks.")
+    session = session_cost(ctx.service.services.cost, st.session_state.get("thread_ids", []))
+    middle.metric("This session (tracker estimate)", f"${session.usd:.4f}",
+                  help=f"{session.llm_calls} model calls and {session.tokens:,} tokens in this browser session's "
+                       "conversations, from the request cost tracker. Mock runs price nothing, so it stays at $0.")
     spent = data.budget.spent_today_usd
     right.metric("Daily budget used", "no spend recorded" if spent is None else f"${spent:.4f}",
                  help=f"Cutoff 1 at ${data.budget.cutoff_1_usd:.2f} (Light-Model only), "
                       f"cutoff 2 at ${data.budget.cutoff_2_usd:.2f} (service stops). Level now: {data.budget.level}.")
+    st.caption(f"Ledger, all time: ${data.ledger_total_usd:.4f}.")
+    if data.sources_today:
+        st.dataframe(pd.DataFrame([{"today, by source": s.source, "ledger USD": s.usd, "ledger calls": s.calls}
+                                   for s in data.sources_today]), hide_index=True, width="stretch")
+    else:
+        st.caption("Nothing in the ledger today.")
     st.dataframe(pd.DataFrame([{
-        "tier": t.tier, "models": ", ".join(t.models) or "-", "ledger calls": t.ledger_calls,
-        "ledger USD": t.ledger_usd, "tracker steps": t.tracker_steps, "tracker USD": t.tracker_usd}
-        for t in data.tiers]), hide_index=True, width="stretch")
+        "tier": t.tier, "model": t.model, "also billed as": ", ".join(t.seen_as) or "-",
+        "ledger calls (all time)": t.ledger_calls, "ledger USD (all time)": t.ledger_usd,
+        "tracker steps": t.tracker_steps, "tracker USD": t.tracker_usd} for t in data.tiers]),
+        hide_index=True, width="stretch")
     st.caption("The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
-               "per-request analytics. Mock runs price nothing, so both stay at 0 there. 'other' is a model "
-               "missing from config.yaml (priced as the Main model).")
+               "per-request analytics. Dated model names are grouped under the model configured for their tier. "
+               "'other' is a model missing from config.yaml (priced as the Main model).")
 
 
 def _render_stale(data: MonitoringData) -> None:
@@ -400,7 +458,7 @@ def render_monitoring(ctx: UiContext) -> None:
     data = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir)
     _render_tools(data)
     _render_degraded(data)
-    _render_cost(data)
+    _render_cost(ctx, data)
     _render_stale(data)
     _render_hitl(data)
     _render_agent_metrics(data)

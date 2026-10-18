@@ -83,6 +83,10 @@ class ChatService:
         self._output_guard = output_guard
         self._services = services or Services()
 
+    @property
+    def services(self) -> Services:
+        return self._services
+
     def _edge_case(self, text: str) -> ChatReply | None:
         if not text.strip():
             return ChatReply(text=EMPTY_REPLY, debug={"edge": "empty"})

@@ -14,7 +14,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.state import AgentState, Awaiting, Category, Intent, IntentResult
 from smartdesk_ai.config.settings import Settings
-from smartdesk_ai.llm.factory import ModelBuilder, get_llm, openai_builder
+from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
+from smartdesk_ai.llm.fallback import FallbackChat
 from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
 
 Route = Literal["it_worker", "hr_worker", "misc", "ticket_agent", "none"]
@@ -109,12 +110,13 @@ def make_classifier(
     """A classifier bound to the ORCHESTRATOR model and the active orchestrator prompt.
 
     The live client (the default builder) uses the model's structured-output mode with
-    `ClassifierReply`; a custom builder, i.e. the mock path, gets plain JSON unless
+    `ClassifierReply` (through `FallbackChat`, so each call is retried, budget-gated and observed); a custom builder, i.e. the mock path, gets plain JSON unless
     `structured=True` is passed.
     """
-    llm = get_llm("ORCHESTRATOR", settings, budget_level=budget_level, builder=builder).model
-    if structured if structured is not None else builder is openai_builder:
-        llm = llm.with_structured_output(ClassifierReply)
+    use_schema = structured if structured is not None else builder is openai_builder
+    # Through FallbackChat like every other task: retry, Main/Light fallback, the budget gate, cost, trace and records.
+    llm = FallbackChat("ORCHESTRATOR", settings, builder=builder, budget_level=budget_level,
+                       schema=ClassifierReply if use_schema else None)
     prompt = load_prompt("orchestrator", settings).text
 
     def classify(text: str, awaiting: Awaiting = "none", last_topic: str | None = None) -> IntentResult:

@@ -68,6 +68,7 @@ class LLMResult:
     text: str
     tier: Tier | None  # tier that answered; None when nothing did
     fell_back: bool
+    tool_calls: tuple[dict[str, Any], ...] = ()  # set when the call was made with `tools`
 
 
 def count_tokens(prompt: Any, model_id: str) -> int:
@@ -105,10 +106,12 @@ def invoke_with_fallback(
     schema: type[BaseModel] | None = None,
     tier: Tier | None = None,
     observer: LLMObserver | None = None,
+    tools: list[Any] | None = None,
 ) -> LLMResult:
     """Run `prompt` with retry and the Main/Light fallback. With `schema`, the model's
     structured-output mode is used and the parsed reply comes back as JSON text. A reply that
-    fails the schema is not an outage: its raw text is returned for the caller to reject."""
+    fails the schema is not an outage: its raw text is returned for the caller to reject. With `tools`
+    the model gets them bound and the requested tool calls come back in `LLMResult.tool_calls`."""
     primary = resolve_tier(task, settings, budget_level)
     if tier is not None and budget_level < 1:  # an explicit tier, never above what the budget allows
         primary = tier
@@ -128,7 +131,10 @@ def invoke_with_fallback(
         attempt_start = time.perf_counter()
         try:
             handle = get_llm_for_tier(task, candidate, settings, builder=builder)
-            model = handle.model.with_structured_output(schema, include_raw=True) if schema else handle.model
+            if tools:
+                model = handle.model.bind_tools(tools)
+            else:
+                model = handle.model.with_structured_output(schema, include_raw=True) if schema else handle.model
             reply = call_with_retry(
                 lambda: model.invoke(prompt),
                 attempts=settings.llm.retry_attempts,
@@ -142,7 +148,8 @@ def invoke_with_fallback(
         text = _reply_text(reply, schema)
         if observer is not None:
             _observe(observer, task, candidate, settings, prompt, text, reply, schema, steps, started, is_fallback)
-        return LLMResult(True, text, candidate, is_fallback)
+        calls = tuple(getattr(reply, "tool_calls", None) or ()) if tools else ()
+        return LLMResult(True, text, candidate, is_fallback, calls)
     if observer is not None:
         model_id = getattr(settings.models, primary).id
         _safely(observer, LLMCall(task, primary, model_id, None, prompt, "", 0, 0, 0,
@@ -208,10 +215,11 @@ class FallbackChat:
         schema: type[BaseModel] | None = None,
         sleep: Callable[[float], None] = time.sleep,
         tier: Tier | None = None,
+        tools: list[Any] | None = None,
     ) -> None:
         self._args = (task, settings)
         self._budget_level = budget_level
-        self._kwargs = {"builder": builder, "sleep": sleep, "schema": schema, "tier": tier}
+        self._kwargs = {"builder": builder, "sleep": sleep, "schema": schema, "tier": tier, "tools": tools}
         self.agent = task.lower()
 
     def invoke(self, messages: Any) -> SimpleNamespace:
@@ -229,4 +237,4 @@ class FallbackChat:
             self._args[0], messages, self._args[1], budget_level=level, observer=observer, **self._kwargs)
         if not result.ok:
             raise LLMUnavailableError(result.text)
-        return SimpleNamespace(content=result.text)
+        return SimpleNamespace(content=result.text, tool_calls=list(result.tool_calls))

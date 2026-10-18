@@ -18,7 +18,8 @@ from smartdesk_ai.agent.intents import ClassifierError, Route, route_for
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.state import Awaiting, Intent, IntentResult, RouteSource
 from smartdesk_ai.config.settings import Settings
-from smartdesk_ai.llm.factory import ModelBuilder, get_llm, openai_builder
+from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
+from smartdesk_ai.llm.fallback import FallbackChat
 from smartdesk_ai.tools.definitions import TOOLS, openai_tool_schemas
 
 ToolName = Literal["search_kb", "create_ticket", "get_tickets"]
@@ -130,14 +131,14 @@ def make_tool_picker(
     settings: Settings, *, builder: ModelBuilder = openai_builder, budget_level: int = 0
 ) -> ToolPicker:
     """Tool pick on the TOOL_SELECT model with the three tool schemas bound (FR-G2)."""
-    llm = get_llm("TOOL_SELECT", settings, budget_level=budget_level, builder=builder).model
-    bound = llm.bind_tools(openai_tool_schemas())
+    # Through FallbackChat: the three tool schemas are bound on every call, which is retried, budget-gated and observed.
+    llm = FallbackChat("TOOL_SELECT", settings, builder=builder, budget_level=budget_level, tools=openai_tool_schemas())
     prompt = load_prompt("tool_select", settings).text
     known = {t.name for t in TOOLS}
 
     def pick(text: str, awaiting: Awaiting = "none") -> ToolPick:
         try:
-            response: Any = bound.invoke([SystemMessage(prompt), HumanMessage(f"Awaiting: {awaiting}\nMessage: {text}")])
+            response: Any = llm.invoke([SystemMessage(prompt), HumanMessage(f"Awaiting: {awaiting}\nMessage: {text}")])
         except Exception as error:
             raise ToolPickError(f"tool pick failed: {type(error).__name__}") from error
         calls = getattr(response, "tool_calls", None) or []

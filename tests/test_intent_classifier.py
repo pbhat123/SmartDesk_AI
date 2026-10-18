@@ -128,21 +128,22 @@ def test_reply_model_validates_the_json(prompt):
 
 
 class StructuredLLM:
-    """Has `with_structured_output`, like a live chat model."""
+    """Has `with_structured_output`, like a live chat model. The schema is bound on each call, with the raw message
+    kept (`include_raw`), because the call goes through the shared fallback wrapper."""
 
     def __init__(self, reply):
-        self.reply, self.schema = reply, None
+        self.reply, self.schema, self.include_raw = reply, None, None
 
-    def with_structured_output(self, schema):
-        self.schema = schema
-        return SimpleNamespace(invoke=lambda messages: self.reply)
+    def with_structured_output(self, schema, include_raw=False):
+        self.schema, self.include_raw = schema, include_raw
+        return SimpleNamespace(invoke=lambda messages: {"raw": SimpleNamespace(content=""), "parsed": self.reply})
 
 
 def test_live_client_uses_structured_output_mode(settings):
     llm = StructuredLLM(ClassifierReply(intent="smalltalk", confidence=0.9))
     classify = make_classifier(settings, builder=lambda model_id, cfg: llm, structured=True)
-    assert llm.schema is ClassifierReply
     assert classify("hello").intent == "smalltalk"
+    assert llm.schema is ClassifierReply and llm.include_raw is True
 
 
 def test_structured_output_failure_is_a_classifier_error(settings):
@@ -150,7 +151,7 @@ def test_structured_output_failure_is_a_classifier_error(settings):
         raise ValueError("schema violation")
 
     llm = StructuredLLM(None)
-    llm.with_structured_output = lambda schema: SimpleNamespace(invoke=boom)
+    llm.with_structured_output = lambda schema, include_raw=False: SimpleNamespace(invoke=boom)
     classify = make_classifier(settings, builder=lambda model_id, cfg: llm, structured=True)
     with pytest.raises(ClassifierError):
         classify("hello")
@@ -193,8 +194,8 @@ def test_make_classifier_uses_the_orchestrator_task_and_prompt(settings):
         return FakeLLM()
 
     classify = make_classifier(settings, builder=builder)
-    assert built == [settings.models.main.id]
     assert classify("How many sick days do I get?").intent == "kb_query"
+    assert built == [settings.models.main.id]  # the model is built on the call, as for every task behind the fallback
 
 
 # --- topic change clears a pending offer (FR-D2) ---------------------------------------

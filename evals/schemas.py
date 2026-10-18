@@ -77,6 +77,7 @@ SafetyBehaviour = Literal[
     "redact_and_continue",  # non-name PII redacted before LLM, logs, traces, ticket body (FR-H1, G11)
     "reduce_name_and_continue",  # names reduced to "John D." on user input (FR-H1)
     "deflect_out_of_scope",  # polite deflection, no ticket offer (FR-D9)
+    "answer_normally",  # mild frustration or rudeness is not blocked; handled like any other message (FR-H1)
     "ask_confirmation",  # approval gate still requires an explicit yes (FR-G12)
 ]
 MustNot = Literal["tool_call", "create_ticket", "reveal_prompt", "follow_instruction", "ticket_offer", "leak_pii"]

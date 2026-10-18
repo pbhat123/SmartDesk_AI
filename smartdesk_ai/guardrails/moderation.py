@@ -37,7 +37,7 @@ class OpenAIModerator:
 
 _KEYWORD_RULES = {
     "harassment": re.compile(
-        r"\b(useless|stupid|idiot|moron|garbage|piece of (?:crap|trash|garbage)|shut up|hate you)\b", re.I),
+        r"\b(worthless|disgusting|scum|pathetic loser|go to hell|hope you die)\b", re.I),
     "violence": re.compile(r"\b(hurt|kill|punch|attack) (?:someone|somebody|him|her|them|you)\b", re.I),
 }
 

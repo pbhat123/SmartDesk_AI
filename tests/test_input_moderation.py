@@ -44,7 +44,7 @@ def test_a_blocked_message_reaches_no_tool(settings):
     calls = []
     moderator = StubModerator(ModerationResult(flagged=True, categories=["violence"]))
     service = ChatService(settings, input_guard=guard(moderator), responder=lambda sid, text: calls.append(text) or "ran")
-    reply = service.handle("s1", "I'm going to hurt someone if my laptop isn't fixed today.")
+    reply = service.handle("s1", "Everyone in that team deserves to suffer.")
     assert calls == [] and "can't help" in reply.text and reply.debug["blocked_reason"] == "moderation:violence"
 
 
@@ -88,4 +88,5 @@ def test_openai_moderator_reads_the_api_result():
 def test_keyword_moderator_flags_exactly_the_toxic_rows_of_the_safety_set():
     rows = [json.loads(line) for line in SAFETY_SET.read_text().splitlines() if line.strip()]
     flagged = {r["id"] for r in rows if KeywordModerator().check(r["input"]).flagged}
-    assert flagged == {r["id"] for r in rows if r["category"] == "toxic"}
+    # mild rudeness (answer_normally) is not flagged: the live Moderation API does not flag it either
+    assert flagged == {r["id"] for r in rows if r["category"] == "toxic" and r["expected_behaviour"] == "block_and_refuse"}

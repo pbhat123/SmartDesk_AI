@@ -66,7 +66,7 @@ def test_build_service_wires_the_real_guard_by_default(settings):
 
 def test_a_toxic_message_never_reaches_the_graph(settings):
     spy = Spy()
-    reply = service(settings, spy).handle("s1", "You are a useless piece of garbage bot and I hate you.")
+    reply = service(settings, spy).handle("s1", "You are worthless scum and I hope you die.")
     assert spy.seen == [] and reply.debug["blocked_reason"].startswith("moderation:")
 
 

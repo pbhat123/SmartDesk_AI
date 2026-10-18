@@ -48,3 +48,13 @@ Moderation API and models (tickets stay mock).
 
 A real judge run (`--judge ragas --confirm-spend`) makes many model calls. It is never run by the tests
 and needs the user's explicit OK first (see TASKS.md, T6.2).
+
+## Known failure cases
+
+Live gap/KB runs (threshold 0.40, `evals/results/gap_sweep.json`): gap pass 100%, KB answer 98.1%. The one KB
+question that is still escalated:
+
+- **kb-041** ("A vendor wants to send me a festival hamper. Can I accept it?", expected HR-COND-02). The KB covers
+  gifts, but nothing links "hamper" to "gift": the dense cosine is 0.342 (under 0.40) and answer v3 asks for the
+  specific item named in the question, so the answerer marks it insufficient. The question is escalated to a ticket
+  offer, the safe direction. Not fixed on purpose: adding "hamper" to the KB would tune the KB to the eval (FR-A18).

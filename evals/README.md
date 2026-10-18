@@ -44,6 +44,27 @@ Substitutions and caveats:
 `python -m evals.safety_eval --live --confirm-spend` repeats the safety set with the real classifier,
 Moderation API and models (tickets stay mock).
 
+## Live Ragas results (2026-10-18)
+
+| Metric | Score | Note |
+|---|---|---|
+| Faithfulness (grounded-answer rate) | 0.971 | Ragas flagged 4 of 51 answers (hallucination rate 0.078); reading them, none is a real hallucination (14.3) |
+| Answer relevancy | 0.636 | Embedding similarity of questions regenerated from a short, direct answer; low by construction |
+| Context precision | 0.862 | Reference-based |
+| Context recall | 0.965 | Reference-based |
+| Answer correctness | 0.695 | Pulled down by reference scope, not by wrong facts (14.3) |
+| Factual precision | 0.508 | Answers average 41 words against 21 in the references, so correct extra claims count against it |
+| Citation accuracy | 0.879 (58 cited) | The expected entry is cited in 51 of 51 answers; 7 answers also cite a second entry (14.3) |
+| Retrieval @1 / @3 / @5 | recall 0.736 / 0.981 / 1.000 | precision 0.736 / 0.327 / 0.200 |
+
+Judge `gpt-5.4-mini` (effort none) over 53 KB questions, 51 answered, 310 judged items, 0 failed samples. Cost **$0.94 for the judge-only run** (726 chat calls, 411 embedding calls; the ledger says $0.9381, the token counter $0.9380). Total for the day with the one-sample smoke check: $0.9562 (`python -m smartdesk_ai.ops.spend_ledger --day 2026-10-18`). The answers came from the earlier attempt and were not rerun.
+
+Reading them: see PLAN.md section 14.3 for the four flagged answers (none is a real hallucination), the seven
+extra citations (four valid second sources, three over-citations) and five low-correctness samples (three are
+reference scope, two are real omissions). Low answer relevancy and factual precision come from how the metrics
+treat short, direct answers against short references, so judge the answer quality by faithfulness, context
+recall and the gap set rather than by those two.
+
 ## Real runs cost money
 
 A real judge run (`--judge ragas --confirm-spend`) makes many model calls. It is never run by the tests
@@ -77,3 +98,14 @@ question that is still escalated:
   gifts, but nothing links "hamper" to "gift": the dense cosine is 0.342 (under 0.40) and answer v3 asks for the
   specific item named in the question, so the answerer marks it insufficient. The question is escalated to a ticket
   offer, the safe direction. Not fixed on purpose: adding "hamper" to the KB would tune the KB to the eval (FR-A18).
+- **Dropped next steps** (kb-019, kb-037, from the Ragas run). The answer is grounded but leaves out an actionable step
+  or deadline that sits in the retrieved entry (call Security on extension 4999 for a lost laptop; receipts over ₹500 and
+  the 20th-of-the-month pay cut-off for an expense claim). Answer v3 asks for the item named in the question, which trims
+  these. Proposed fix: answer v4 (not applied).
+- **"The context" in user-facing text** (kb-007, kb-019, kb-050). Three answers say "the context says", "the policy also says"
+  or "the context does not state". Proposed fix: answer v4 forbids it (not applied).
+- **Extra citations** (kb-002, kb-007, kb-030 are over-citations; kb-001, 021, 025, 043 are valid second sources). The expected
+  entry is cited in all 51 answers; citation accuracy 0.879 counts any other entry as wrong. Proposed fix: cite only entries
+  used, report "expected entry cited", judge each cited chunk (not applied).
+- **Expected entry not ranked first** in 13 of 51 answered questions (for example kb-043, where two unrelated entries rank above it).
+  Look at it in the retrieval ablation before changing anything.

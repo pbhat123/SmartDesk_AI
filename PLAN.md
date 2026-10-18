@@ -537,8 +537,22 @@ Live runs were approved by you and metered; mock tickets throughout. Numbers are
 | Gap 3 | as Gap 2 plus `GROUNDING_JUDGE` reasoning_effort low | 95.2% (gap-006) | 98.1% | $0.22 |
 | Gap 4 | Gap 3 plus answer v3 and judge v3 | **100%** | **98.1%** (52/53; kb-041 escalated) | $0.2558 |
 | Routing | `routing_confidence` 0.60 | accuracy 1.000 (41) | n/a | cents |
-| Safety | 25 cases, real classifier and Moderation | leakage 0.00, breach 0.00 | n/a | $0.038 |
-Not run yet: threshold sweep and Ragas (on hold until the escalation question is settled).
+| Safety | 27 cases, real classifier and Moderation | leakage 0.00, breach 0.00 | n/a | $0.0285 |
+
+Ragas (live, 2026-10-18, `evals/results/rag_metrics.json`):
+
+| Metric | Score | Note |
+|---|---|---|
+| Faithfulness (grounded-answer rate) | 0.971 | Ragas flagged 4 of 51 answers (hallucination rate 0.078); reading them, none is a real hallucination (14.3) |
+| Answer relevancy | 0.636 | Embedding similarity of questions regenerated from a short, direct answer; low by construction |
+| Context precision | 0.862 | Reference-based |
+| Context recall | 0.965 | Reference-based |
+| Answer correctness | 0.695 | Pulled down by reference scope, not by wrong facts (14.3) |
+| Factual precision | 0.508 | Answers average 41 words against 21 in the references, so correct extra claims count against it |
+| Citation accuracy | 0.879 (58 cited) | The expected entry is cited in 51 of 51 answers; 7 answers also cite a second entry (14.3) |
+| Retrieval @1 / @3 / @5 | recall 0.736 / 0.981 / 1.000 | precision 0.736 / 0.327 / 0.200 |
+
+Judge `gpt-5.4-mini` (effort none) over 53 KB questions, 51 answered, 310 judged items, 0 failed samples. Cost **$0.94 for the judge-only run** (726 chat calls, 411 embedding calls; the ledger says $0.9381, the token counter $0.9380). Total for the day with the one-sample smoke check: $0.9562 (`python -m smartdesk_ai.ops.spend_ledger --day 2026-10-18`). The answers came from the earlier attempt and were not rerun.
 
 Threshold sweep (`evals/gap_sweep.py`, `evals/results/gap_sweep.json`, $0.676 for four fresh runs; 0.40 is Gap 4): gap pass 100% at 0.30, 0.35, 0.40, 0.45 and 0.50; KB answer 100%, 98.1%, 98.1%, 86.8% and 71.7%; precision 1.000, 0.955, 0.955, 0.750, 0.583; recall 1.000 throughout. **gap-006 escalated in all five runs.**
 
@@ -550,7 +564,54 @@ Threshold sweep (`evals/gap_sweep.py`, `evals/results/gap_sweep.json`, $0.676 fo
 - **Safety harness.** Leak strings match whole words, capture is at INFO, and the run is metered through the request scope. The app pins the `openai`, `httpx` and `httpcore` loggers to WARNING.
 - **Self-harm detector.** Adding safe-026/027 showed that "I feel suicidal" was not matched; feeling statements are now covered. The safety set has 27 rows; the metric checks for the exact fixed reply.
 - **Guards.** A local rule refuses explicit first-person threats of violence; a deterministic check answers first-person self-harm with a fixed caring reply (manager, People Team, emergency services), no ticket, and the statement is kept out of logs and traces. safe-016 and safe-018 are relabelled `answer_normally`; the mock Moderation matches the live one.
-- **Config.** `thresholds.escalation` 0.40 (still marked provisional), `prompts.answer` 2, `prompts.grounding_judge` 2, `prompts.confirm_parse` 2, new `reasoning_effort` map (per task, Main tier). Optional `LANGFUSE_HOST` (EU cloud when blank).
+- **Config.** `thresholds.escalation` 0.40 (final, cites `gap_sweep.json`), `prompts.answer` 2, `prompts.grounding_judge` 2, `prompts.confirm_parse` 2, new `reasoning_effort` map (per task, Main tier). Optional `LANGFUSE_HOST` (EU cloud when blank).
 - **Langfuse.** Confirmed live on the US host: 18 observations, no raw email or phone, masked forms present. Langfuse's legacy traces API is closed to new organizations; read via `/api/public/v2/observations`.
 - **Escalation threshold final at 0.40.** Same gap pass and KB answer as 0.35, with more margin; 0.30 reaches 100% KB answer only because the cosine check stops constraining anything.
 - **Known miss: kb-041.** "A vendor wants to send me a festival hamper. Can I accept it?" The KB covers gifts (HR-COND-02) but nothing links "hamper" to "gift" in the embeddings (top cosine 0.342) or for answer v3 (needs the specific item named), so the answerer returns insufficient and the question is escalated. Fix rejected: a KB edit that adds the word would tune the KB to the eval (FR-A18). Listed in `evals/README.md`.
+
+#### 14.3 Ragas findings (saved results, no live calls)
+
+**1. The four flagged answers (faithfulness below 1). None is a real hallucination.** Ragas' per-statement output was not saved, so the unsupported claim is found by comparing each answer with its five retrieved chunks. Our grounding judge passed all four (an answer is only shown when it is grounded).
+
+| Id | Score | Claim Ragas most likely rejected | Cited chunk | Class |
+|---|---|---|---|---|
+| kb-007 | 0.83 | "That sounds like a 'Server unreachable' VPN error": an inference from the user's words. The hotspot advice and the screenshot-and-time advice are in IT-VPN-02. | IT-VPN-02, IT-HELP-01 | Ragas false positive (inference) |
+| kb-010 | 0.50 | "a torrent client falls into that category": the bridge from "peer-to-peer file-sharing software" (IT-SW-02) to a torrent client | IT-SW-02 | Paraphrase / inference; the answer is right |
+| kb-046 | 0.67 | "final appraisal" where HR-PERF-03 says "final rating"; the rest is verbatim | HR-PERF-03 | Paraphrase |
+| kb-050 | 0.50 | "The context does not state what share ... beyond that CTC-based split": a statement about the context, not a fact. "Basic pay is 40% of your annual CTC" is exact. | HR-SAL-01 | Ragas false positive; also a style problem (meta hedge) |
+
+By this reading the true hallucination rate is about 0, and the grounded-answer rate is understated.
+
+**2. The seven wrong citations.** Citation accuracy counts a cited entry as supporting only if it is the entry the question was built from. In all seven, the expected entry is also cited; none is a made-up or badly formatted id (so no citation-formatting cause). The extra entry is:
+
+| Id | Extra entry cited | What it actually does | Cause |
+|---|---|---|---|
+| kb-001 | HR-ABOUT-01 | Its key-contacts list repeats the same hours and extension | Duplicate KB content; the citation is valid |
+| kb-002 | IT-MFA-01 | Background only; every step is in IT-PWD-01 | Over-citation |
+| kb-007 | IT-HELP-01 | Says "include error text and the time"; the screenshot advice is in IT-VPN-02 | Over-citation |
+| kb-021 | IT-EQUIP-01 | Source of the laptop-and-kit detail; the rest is in HR-ONB-01 | Multi-chunk answer; reranker put IT-EQUIP-01 first and HR-ONB-01 third |
+| kb-025 | HR-LEAVE-03 | Source of the accrual and "no advance leave" rules; the emergency exception is in HR-PROB-02 | Multi-chunk answer; reranker order (LEAVE-03 first) |
+| kb-030 | HR-LEAVE-02 | Sick-leave allowance; HR-LEAVE-05 already states the conversion limit | Over-citation |
+| kb-043 | HR-HARASS-01 | The only source of "you do not need proof or a witness" | Multi-chunk answer; the citation is correct. The expected chunk ranked third, behind IT-EQUIP-04 and HR-ONB-03 |
+
+By my reading four are valid second sources (kb-001, 021, 025, 043) and three are over-citations (kb-002, 007, 030), so the strict 0.879 understates citation quality (about 0.95 by this reading). The expected entry is ranked first in 38 of 51 answered questions.
+
+**3. Five low answer-correctness samples** (all faithfulness 1.0):
+
+| Id | Correctness | Cause |
+|---|---|---|
+| kb-024 | 0.42 | Reference adds an unasked fact (probation can be extended once). The answer ("6 months") is complete for the question. Reference scope |
+| kb-029 | 0.50 | Answer has every reference fact (people portal, Leave then Apply, manager, 2 working days) plus the correct escalation rule. Extra true detail penalised |
+| kb-035 | 0.50 | Answer has every reference fact (Work location request, 5 working days ahead, 20 days, India) plus more. Extra true detail penalised |
+| kb-019 | 0.44 | **Missing facts.** IT-EQUIP-03 says to call Security on extension 4999 straight away and raise a request within 24 hours; the answer covers only the charge |
+| kb-037 | 0.49 | **Missing facts.** HR-REIMB-01 says receipts are mandatory over ₹500 and approved claims are paid with salary if approved by the 20th; the answer omits both. Context recall 0.5 is a Ragas false negative, because that chunk holds both facts |
+
+Correction to my earlier note that low scores come from answers being shorter than the references: it is the other way round. Answers are longer than the reference in 46 of 51 cases (41 words against 21 words on average), and correctness correlates negatively with answer-to-reference length (r = -0.30). Three of the five low samples are reference scope, two are real omissions.
+
+**Real issues (added to Known failure cases in evals/README.md).** (a) Answers sometimes drop actionable steps or deadlines that sit in the retrieved entry (kb-019, kb-037). (b) User-facing wording refers to "the context" or "the policy" (kb-007, kb-019, kb-050). (c) Answers cite a second entry that is not needed (kb-002, 007, 030). (d) In 13 of 51 answered questions the expected entry is not ranked first (reranker or fusion order).
+
+**Proposed fixes (not applied; each needs your approval, and any answer-prompt change needs a rerun of the gap set, about $0.26, because v3 exists to stop the gap-006 leak):**
+1. Answer prompt v4: never say "the context" or "the policy says"; when the entry lists immediate steps, deadlines or conditions that bear on the question, include them in one line.
+2. Citations: tell the answerer to cite only entries it used a fact from, and report "expected entry cited" (51/51) beside citation accuracy. Longer term, judge each cited chunk for support instead of comparing ids.
+3. Retrieval order: look at kb-021, kb-025 and kb-043 in the existing retrieval ablation before changing anything.
+4. Metrics: the short references understate correctness and factual precision. Add a key-facts list per reference, or report recall of reference facts instead of factual precision. This changes the eval set, so it needs your OK (FR-A18 applies to the KB, not to references).

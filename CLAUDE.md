@@ -46,3 +46,11 @@ python -m evals.run                      # Ragas + retrieval ablations
 - Keep PLAN.md and TASKS.md current as work progresses. Commit each completed task separately with its FR ids, as part of a named batch. Never push without asking.
 - Deadline: Oct 23, 2026; core target Oct 18. Default branch is `main`.
 
+
+## Working rules (added 2026-10-18)
+- Every paid run: show an estimate first, use a spend ceiling plus the watchdog (`evals/judge_run.py`), and record spend in the spend ledger (`data/spend_ledger.jsonl`). Report the ledger cost, not only the tracker's.
+- Commits go through the pre-commit hook (`scripts/install_hooks.sh`). Never bypass it with `--no-verify`.
+- Every LLM call goes through `FallbackChat` (guarded by `tests/test_llm_observed.py`).
+- Retrieval stays hybrid + rerank (see `evals/README.md`, "Retrieval ablation").
+- Answer prompt v4 and grounding judge v3 are active. Final gap, safety and Ragas reruns happen after Phase 7.
+- PII checks in tests use `tests/pii_helpers` (whole-token match only, never a bare substring such as `"98765" in blob`).

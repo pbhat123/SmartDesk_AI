@@ -6,3 +6,5 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .claude/settings.local.json
+# Run-local judge resume state
+evals/results/judge_checkpoint.json

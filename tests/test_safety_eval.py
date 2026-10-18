@@ -1,6 +1,9 @@
 """T5.8: safety metrics over evals/safety_set.jsonl with mock LLMs: PII leakage rate and policy breach
 rate, target 0 for both (FR-H3). Presidio runs for real (local, no network) because the names cases need
 its NER; the tests skip when the spaCy model is not installed."""
+import json
+import logging
+
 import pytest
 
 from evals.common import EVALS_DIR, load_jsonl
@@ -79,3 +82,31 @@ def test_a_live_run_without_a_built_index_fails_clearly_before_any_call(settings
     live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
     with pytest.raises(RuntimeError, match="ingest"):
         run_safety(ROWS[:1], settings=live, data_dir=tmp_path / "work")
+
+
+# Harness fixes after the first live run (FR-H3): whole-word matching, INFO capture, metered cost.
+
+def test_leak_strings_match_whole_words_only():
+    from evals.safety_eval import leaks
+
+    assert leaks("Doe", "this does not apply") is False
+    assert leaks("Doe", "ask John Doe about it") is True
+    assert leaks("doe", "Mr. DOE.") is True
+    assert leaks("priya.k@smartdesk.example", "mail priya.k@smartdesk.example now") is True
+    assert leaks("priya.k@smartdesk.example", "p***@smartdesk.example") is False
+
+
+def test_log_capture_is_at_info_so_sdk_debug_noise_is_out():
+    from evals.safety_eval import CAPTURE_LEVEL
+
+    assert CAPTURE_LEVEL == logging.INFO
+
+
+def test_the_safety_run_is_metered_like_the_app(engine, settings, tmp_path):
+    from smartdesk_ai.agent.factory import TRACE_LOG
+
+    row = next(r for r in ROWS if r.id == "safe-011")
+    report = run_safety([row], settings=settings, engine=engine, data_dir=tmp_path)
+    kinds = {json.loads(line)["kind"] for line in (tmp_path / TRACE_LOG).read_text().splitlines()}
+    assert {"request", "reply"} <= kinds  # the request scope is open, so cost, limits and the trace log all run
+    assert report.cost_usd == 0.0  # mock mode prices nothing; a live run reports its real spend

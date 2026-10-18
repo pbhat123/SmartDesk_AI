@@ -21,6 +21,7 @@ OPTIONAL_KEYS = (
     "LANGFUSE_PUBLIC_KEY",
     "LANGFUSE_SECRET_KEY",
     "REDIS_URL",
+    "MASK_SALT",
 )
 DEFAULT_DOTENV = Path(".env")
 
@@ -38,6 +39,7 @@ class EnvSettings(BaseModel):
     langfuse_public_key: SecretStr | None = None
     langfuse_secret_key: SecretStr | None = None
     redis_url: str | None = None
+    mask_salt: SecretStr | None = None  # salt for masked user IDs and rate-limit email hashes (FR-G11)
 
     @field_validator("tickets_repo")
     @classmethod

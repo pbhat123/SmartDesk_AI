@@ -22,12 +22,30 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-USER_ID_SALT = "smartdesk-user-v1"  # fixed per install; the hash only needs to be stable and not an email
+FALLBACK_SALT = "smartdesk-user-v1"  # used only when MASK_SALT is not set
+_salt: str | None = None
+_warned = False
+
+
+def configure_mask_salt(salt: str | None) -> None:
+    """Set the salt from the environment (`MASK_SALT`) at start-up; None or blank selects the fallback."""
+    global _salt, _warned
+    _salt, _warned = (salt or None), False
+
+
+def _active_salt() -> str:
+    global _warned
+    if _salt:
+        return _salt
+    if not _warned:
+        _warned = True
+        logger.warning("MASK_SALT is not set; masked user IDs and rate-limit keys use the built-in salt")
+    return FALLBACK_SALT
 
 
 def masked_user_id(email: str) -> str:
-    """A stable ID for an employee that is not their email (FR-G11, FR-H9)."""
-    digest = hashlib.sha256(f"{USER_ID_SALT}:{email.strip().lower()}".encode()).hexdigest()
+    """A stable ID for an employee that is not their email (FR-G11, FR-H9). Also the rate-limit key."""
+    digest = hashlib.sha256(f"{_active_salt()}:{email.strip().lower()}".encode()).hexdigest()
     return f"user-{digest[:12]}"
 
 

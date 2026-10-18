@@ -42,7 +42,7 @@ from smartdesk_ai.ops.compaction import Compactor, make_summarizer
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
 from smartdesk_ai.ops.metrics import MetricsRecorder
 from smartdesk_ai.ops.rate_limit import RateLimiter
-from smartdesk_ai.ops.runtime import Services, current_budget_level
+from smartdesk_ai.ops.runtime import Services, configure_mask_salt, current_budget_level
 from smartdesk_ai.ops.tracing import TracingFactories, build_tracing
 from smartdesk_ai.ops.trace_log import TraceLog, make_masker
 from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embeddings
@@ -97,6 +97,7 @@ def build_responder(
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     data_dir = resolve_data_dir(data_dir, environ)
+    configure_mask_salt(env.mask_salt.get_secret_value() if env.mask_salt else None)
     live = settings.modes.llm == "live"
     reranker = None
     embeddings: Embeddings

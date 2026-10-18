@@ -124,7 +124,7 @@ prompts:
   orchestrator: 3
   answer: 3
   synthesizer: 1
-  grounding_judge: 2
+  grounding_judge: 3
   ticket_summary: 1
   tool_select: 1
   injection_classifier: 1

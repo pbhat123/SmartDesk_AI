@@ -3,8 +3,8 @@
   "n_gap": 21,
   "n_kb": 53,
   "gap_pass_rate": 1.0,
-  "kb_answer_rate": 0.7169811320754716,
-  "escalation_precision": 0.5833333333333334,
+  "kb_answer_rate": 0.7924528301886793,
+  "escalation_precision": 0.65625,
   "escalation_recall": 1.0,
   "by_split": {
     "dev": {
@@ -13,7 +13,7 @@
     },
     "test": {
       "gap_pass_rate": 1.0,
-      "kb_answer_rate": 0.6538461538461539
+      "kb_answer_rate": 0.8076923076923077
     }
   },
   "grey_zone_pass_rate": 1.0,
@@ -255,7 +255,7 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "escalated"
     },
     {
       "id": "kb-014",
@@ -276,7 +276,7 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-017",
@@ -290,14 +290,14 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-019",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-020",
@@ -360,14 +360,14 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-029",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "escalated"
     },
     {
       "id": "kb-030",
@@ -395,7 +395,7 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-034",
@@ -409,7 +409,7 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "escalated"
     },
     {
       "id": "kb-036",
@@ -423,14 +423,14 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-038",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-039",
@@ -444,7 +444,7 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "escalated"
     },
     {
       "id": "kb-041",
@@ -472,7 +472,7 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered"
     },
     {
       "id": "kb-045",
@@ -538,5 +538,5 @@
       "outcome": "answered"
     }
   ],
-  "run_id": "20261018T010940Z-baa7a0"
+  "run_id": "20261018T030401Z-b43a6f"
 }

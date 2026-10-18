@@ -117,3 +117,4 @@ question that is still escalated:
   used, report "expected entry cited", judge each cited chunk (not applied).
 - **Expected entry not ranked first** in 13 of 51 answered questions (for example kb-043, where two unrelated entries rank above it).
   Look at it in the retrieval ablation before changing anything.
+

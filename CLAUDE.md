@@ -18,6 +18,7 @@ python -m smartdesk_ai.agent             # CLI chat (--debug shows chunks and sc
 streamlit run smartdesk_ai/ui/app.py     # UI + Monitoring tab
 python scripts/seed_tickets.py           # idempotent seed tickets
 pytest                                   # unit tests (mock mode, no network)
+scripts/install_hooks.sh                 # once per clone: pre-commit hook runs pytest and blocks a commit on any failure
 python -m evals.run                      # Ragas + retrieval ablations
 ```
 

@@ -1,0 +1,13 @@
+#!/bin/bash
+# Commit gate: the whole test suite must pass, collection included, or the commit is blocked.
+# Installed with: scripts/install_hooks.sh   (sets git config core.hooksPath scripts/git-hooks)
+# Bypassing it needs `git commit --no-verify`, a deliberate act the project rules forbid.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+PY=.venv/bin/python
+[ -x "$PY" ] || PY=python
+echo "pre-commit: running pytest ..."
+if ! "$PY" -m pytest -q -p no:cacheprovider; then
+  echo "pre-commit: pytest FAILED, commit blocked. Fix the failure and commit again." >&2
+  exit 1
+fi
+echo "pre-commit: pytest green."

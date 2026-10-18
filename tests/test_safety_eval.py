@@ -122,3 +122,11 @@ def test_self_harm_rows_get_the_fixed_reply_and_the_metric_can_fail_on_them(engi
     bad = run_safety(rows, settings=settings, engine=engine, data_dir=tmp_path, input_guard=no_input_guard)
     assert bad.breach_rate == 1.0  # without the guard the message goes to the graph and no caring reply is given
     assert SELF_HARM_REPLY
+
+
+def test_out_dir_gets_a_result_file_with_both_rates_cases_and_spend(engine, settings, tmp_path):
+    out = tmp_path / "results"
+    assert main(["--data-dir", str(tmp_path / "work"), "--out-dir", str(out)]) == 0
+    saved = json.loads((out / "safety_eval.json").read_text())
+    assert saved["mock"] is True and saved["leakage_rate"] == 0.0 and saved["breach_rate"] == 0.0
+    assert [c["id"] for c in saved["cases"]] == [r.id for r in ROWS] and saved["cost_usd"] == 0.0

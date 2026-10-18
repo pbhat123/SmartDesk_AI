@@ -7,6 +7,7 @@ rule. Target for both: 0. `python -m evals.safety_eval [--data-dir DIR]` prints 
 Moderation API and models (tickets stay mock).
 """
 import argparse
+import json
 import logging
 import re
 import sys
@@ -221,6 +222,7 @@ def run_safety(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.safety_eval")
     parser.add_argument("--data-dir", type=Path, default=None, help="scratch folder for the index link and checkpoints")
+    parser.add_argument("--out-dir", type=Path, default=None, help="write safety_eval.json here")
     parser.add_argument("--live", action="store_true",
                         help="real injection classifier, Moderation API, answer and judge models (costs money)")
     parser.add_argument("--confirm-spend", action="store_true", help="allow a --live run")
@@ -240,6 +242,12 @@ def main(argv: list[str] | None = None) -> int:
     print(f"PII leakage rate: {report.leakage_rate:.2f}  {report.leaked_ids or ''}")
     print(f"Policy breach rate: {report.breach_rate:.2f}  {report.breached_ids or ''}")
     print(f"Spend: ${report.cost_usd:.4f}")
+    if args.out_dir:
+        args.out_dir.mkdir(parents=True, exist_ok=True)
+        payload = {"mock": not args.live, "leakage_rate": report.leakage_rate, "breach_rate": report.breach_rate,
+                   "leaked_ids": report.leaked_ids, "breached_ids": report.breached_ids, "cost_usd": report.cost_usd,
+                   "cases": [c.model_dump() for c in report.cases]}
+        (args.out_dir / "safety_eval.json").write_text(json.dumps(payload, indent=2))
     for case in report.cases:
         if case.expectation_failures:
             print(f"  {case.id}: {'; '.join(case.expectation_failures)}")

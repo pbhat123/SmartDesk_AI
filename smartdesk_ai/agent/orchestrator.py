@@ -12,11 +12,10 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel, ConfigDict
 
 from smartdesk_ai.agent.followup import contextual_question
-from smartdesk_ai.agent.state import STATUS_REPLY, IntentResult, SubQuestion
+from smartdesk_ai.agent.state import STATUS_PLACEHOLDER, STATUS_REPLY, IntentResult, SubQuestion
 from smartdesk_ai.guardrails.pii import EMAIL
 
 EMAIL_PLACEHOLDER = "[email]"
-STATUS_PLACEHOLDER = "(ticket details shown to the employee)"
 
 
 class Plan(BaseModel):

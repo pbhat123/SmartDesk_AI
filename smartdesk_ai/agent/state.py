@@ -17,6 +17,7 @@ RouteSource = Literal["classifier", "tool_pick"]
 Category = Literal["IT", "HR", "MISC"]
 Priority = Literal["low", "medium", "high", "critical"]
 Domain = Literal["IT", "HR"]
+STATUS_PLACEHOLDER = "(ticket details shown to the employee)"  # what any model sees in place of a status reply
 STATUS_REPLY = "ticket_status"  # the `name` of an assistant message from the status flow: it quotes team comments (FR-C9)
 RouteKind = Literal["kb", "ticket", "status", "smalltalk", "deflect", "clarify"]
 PartDomain = Literal["IT", "HR", "MISC"]  # the domain the orchestrator tags a sub-question with (FR-I4)

@@ -17,6 +17,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from pydantic import BaseModel, ConfigDict
 
 from smartdesk_ai.agent.prompt_loader import load_prompt
+from smartdesk_ai.agent.state import STATUS_PLACEHOLDER, STATUS_REPLY
 from smartdesk_ai.config.settings import Settings, Tier
 from smartdesk_ai.guardrails.pii import PiiRedactor, mask_emails_in
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
@@ -47,6 +48,10 @@ def _label(message: BaseMessage) -> str:
 
 
 def _line(message: BaseMessage) -> str:
+    """One message as text for the summarizer and the window count. A ticket status reply quotes the support team's
+    comment, which no model may see (FR-C9), so it stands as a placeholder."""
+    if getattr(message, "name", None) == STATUS_REPLY:
+        return f"{_label(message)}: {STATUS_PLACEHOLDER}"
     return f"{_label(message)}: {message.content}"
 
 

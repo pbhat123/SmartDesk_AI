@@ -1,5 +1,15 @@
 {
  "model": "gpt-5.4-mini",
+ "long_conversation": {
+  "turns": 60,
+  "history_max_tokens": 4000,
+  "capped_max": 4901,
+  "capped_median": 4658.0,
+  "uncapped_max": 17928,
+  "first_capped_turn": 15,
+  "usd_per_call_capped_max": 0.00368,
+  "usd_per_call_uncapped_max": 0.01345
+ },
  "turns": [
   {
    "scenario": "api_down",

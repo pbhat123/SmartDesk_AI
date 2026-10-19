@@ -31,7 +31,7 @@ from smartdesk_ai.agent.chat_service import Turn
 from smartdesk_ai.agent.chitchat import Chitchat, static_chitchat
 from smartdesk_ai.agent.followup import contextual_question, topic_after
 from smartdesk_ai.agent.intents import dialog_update_for
-from smartdesk_ai.agent.orchestrator import plan_parts, transcript_for
+from smartdesk_ai.agent.orchestrator import OrchestratorLimits, plan_parts, transcript_for
 from smartdesk_ai.agent.router import RouteDecision, Router
 from smartdesk_ai.agent.state import (
     AgentState,
@@ -207,9 +207,10 @@ def _route_kind(decision: RouteDecision) -> RouteKind:
     )
 
 
-def make_route_node(route: Router, max_parts: int) -> Callable[[AgentState], dict[str, Any]]:
+def make_route_node(route: Router, limits: OrchestratorLimits) -> Callable[[AgentState], dict[str, Any]]:
     def route_node(state: AgentState) -> dict[str, Any]:
-        decision = route(_question(state), state.awaiting, state.last_topic, history=transcript_for(state.messages))
+        decision = route(_question(state), state.awaiting, state.last_topic, history=transcript_for(
+            state.messages, max_tokens=limits.history_max_tokens, model_id=limits.model_id))
         intent = None
         if decision.intent is not None:
             intent = IntentResult(
@@ -225,7 +226,7 @@ def make_route_node(route: Router, max_parts: int) -> Callable[[AgentState], dic
         if kind == "kb":
             plan = plan_parts(_question(state), state.last_topic,
                               IntentResult(intent="kb_query", confidence=1.0, domain=domain, parts=decision.parts),
-                              max_parts=max_parts)
+                              max_parts=limits.max_parts)
             if plan.parts[-1].rewritten:  # the standalone form is the topic the next follow-up builds on
                 topic = {"last_topic": plan.parts[-1].text}
             if len(plan.parts) == 1:
@@ -533,7 +534,7 @@ def build_kb_graph(
     route: Router | None = None,
     tickets: TicketDeps | None = None,
     status_max_listed: int | None = None,
-    max_parts: int | None = None,
+    limits: OrchestratorLimits | None = None,
     chitchat: Chitchat | None = None,
     compactor: Compactor | None = None,
     budget_level: Callable[[], int] = lambda: 0,
@@ -544,8 +545,8 @@ def build_kb_graph(
     replies (FR-F7). With a `compactor`, each turn starts by compacting long histories (FR-H5)."""
     if route is not None and status_max_listed is None:
         raise ValueError("status_max_listed (config: status.max_listed) is required when routing is on")
-    if route is not None and max_parts is None:
-        raise ValueError("max_parts (config: orchestrator.max_parts) is required when routing is on")
+    if route is not None and limits is None:
+        raise ValueError("limits (config: orchestrator.*) are required when routing is on")
     builder = StateGraph(AgentState)
     builder.add_node("entry", entry_node)
     builder.add_node("offer_reply", offer_reply_node)
@@ -580,7 +581,7 @@ def build_kb_graph(
         ["t_collect", "route", "single_part", END] if route else ["t_collect", "single_part", END],
     )
     if route is not None:
-        builder.add_node("route", spanned(ORCHESTRATOR, make_route_node(route, max_parts)))
+        builder.add_node("route", spanned(ORCHESTRATOR, make_route_node(route, limits)))
         builder.add_node("chitchat", make_chitchat_node(chitchat or static_chitchat))
         builder.add_node("s_lookup", spanned(TICKET_AGENT, make_s_lookup_node(deps.executor, status_max_listed)))
         builder.add_node("s_email_reply", spanned(TICKET_AGENT, s_email_reply))

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from smartdesk_ai.agent.workers import MISC_SEARCH, make_worker_answerers
 from smartdesk_ai.agent.confirm import rule_parser
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph
+from smartdesk_ai.agent.orchestrator import OrchestratorLimits
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
 from smartdesk_ai.agent.synthesizer import make_synthesizer
@@ -64,7 +65,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
     synthesizer = make_synthesizer(settings, builder=lambda model_id, cfg: synth_model) if synth_model is not None else None
     graph = build_kb_graph(KBDeps(executor=executor, answer=answer, cache=cache, workers=workers, synthesizer=synthesizer), saver, route=route, tickets=tickets,
                              status_max_listed=settings.status.max_listed,
-                             max_parts=settings.orchestrator.max_parts, chitchat=chitchat, compactor=compactor)
+                             limits=OrchestratorLimits.from_settings(settings), chitchat=chitchat, compactor=compactor)
     return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, executor=executor, saver=saver)
 
 

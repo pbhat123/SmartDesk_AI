@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 import tiktoken
+from langchain_core.messages import HumanMessage
 from pydantic import BaseModel
 
 from evals.agent_metrics import _DEGRADE
@@ -47,8 +48,22 @@ class TurnTokens(BaseModel):
     compacted: bool  # the conversation held a summary at this turn
 
 
+class LongConversation(BaseModel):
+    """One synthetic conversation of many KB questions with answers of realistic length (about 250 tokens each)."""
+
+    turns: int
+    history_max_tokens: int  # the cap in force (config orchestrator.history_max_tokens)
+    capped_max: int  # the largest orchestrator input with the cap
+    capped_median: float
+    uncapped_max: int  # what the same turns would have sent with no cap
+    first_capped_turn: int | None  # the first turn whose history was cut
+    usd_per_call_capped_max: float  # input cost of the largest capped call, config prices
+    usd_per_call_uncapped_max: float
+
+
 class TokenReport(BaseModel):
     model: str
+    long_conversation: LongConversation | None = None
     turns: list[TurnTokens]
     total_min: int
     total_median: float
@@ -73,7 +88,72 @@ def _count(encoding: tiktoken.Encoding, text: str) -> int:
     return len(encoding.encode(text))
 
 
-def measure(settings: Settings, work: Path) -> TokenReport:
+class _LongAnswer:
+    """A scripted answer model: the first entry it was given, up to about 200 words, as the answer and cited. Taken from
+    the context, so the mock grounding judge accepts it, and about as long as a real KB answer."""
+
+    def invoke(self, messages):
+        import re
+        from types import SimpleNamespace
+
+        context = str(messages[-1].content).split("Context:\n", 1)[1]
+        first = re.match(r"\[([A-Z]+-[A-Z0-9-]+)\] [^\n]*\n(.*?)(?=\n\n\[|\Z)", context, re.S)
+        body = " ".join(first.group(2).split()[:200])
+        return SimpleNamespace(content=json.dumps({"answer": body, "insufficient": False, "citations": [first.group(1)]}))
+
+
+LONG_QUESTIONS = ("How do I reset my forgotten password?", "How do I set up MFA on a new phone?",
+                  "How do I connect to the VPN from home?", "How many casual leave days do I get?",
+                  "When is my salary paid each month?", "How do I request an extra monitor?")
+
+
+def measure_long(settings: Settings, work: Path, turns: int = 60) -> LongConversation:
+    """The orchestrator's input over one long conversation, with the history cap and without it."""
+    from smartdesk_ai.agent.orchestrator import transcript_for
+
+    encoding = _encoding(settings.models.main.id)
+    seen: list[tuple[str, str]] = []
+    original = mock.MockRoutingModel.invoke
+
+    def recording(self, messages):
+        human = str(messages[-1].content)
+        if "Last topic:" in human:
+            seen.append((str(messages[0].content), human))
+        return original(self, messages)
+
+    capped: list[int] = []
+    uncapped: list[int] = []
+    first_cut: int | None = None
+    mock.MockRoutingModel.invoke = recording
+    try:
+        stack = build_stack(load_settings(), environ={}, dotenv_path=None, data_dir=work / "long", use_cache=False,
+                            registry=HealthRegistry(), client=MockTicketClient(), tracing=False,
+                            mock_answer_model=_LongAnswer())
+        session = new_thread_id()
+        for turn in range(1, turns + 1):
+            seen.clear()
+            before = stack.graph.get_state({"configurable": {"thread_id": session}}).values.get("messages", [])
+            run_turn(stack.graph, session, f"{LONG_QUESTIONS[turn % len(LONG_QUESTIONS)]} (question {turn})")
+            system, human = seen[0]
+            whole = _count(encoding, system) + _count(encoding, human)
+            full = transcript_for([*before, HumanMessage("x")])
+            block = _count(encoding, HISTORY_MARKER + full + "\n") if full else 0
+            without = whole - (_count(encoding, HISTORY_MARKER + human.split(HISTORY_MARKER, 1)[1].rsplit("\nMessage: ", 1)[0] + "\n")
+                               if HISTORY_MARKER in human else 0)
+            capped.append(whole)
+            uncapped.append(without + block)
+            if first_cut is None and uncapped[-1] > capped[-1]:
+                first_cut = turn
+    finally:
+        mock.MockRoutingModel.invoke = original
+    price = settings.models.main.price.input / 1_000_000
+    return LongConversation(
+        turns=turns, history_max_tokens=settings.orchestrator.history_max_tokens, capped_max=max(capped),
+        capped_median=statistics.median(capped), uncapped_max=max(uncapped), first_capped_turn=first_cut,
+        usd_per_call_capped_max=round(max(capped) * price, 5), usd_per_call_uncapped_max=round(max(uncapped) * price, 5))
+
+
+def measure(settings: Settings, work: Path, long_turns: int = 60) -> TokenReport:
     encoding = _encoding(settings.models.main.id)
     seen: list[tuple[str, str]] = []
     original = mock.MockRoutingModel.invoke
@@ -123,7 +203,7 @@ def measure(settings: Settings, work: Path) -> TokenReport:
     trigger = int(settings.compaction.trigger_fraction * settings.models.main.context_window)
     prompt_tokens = turns[0].prompt
     return TokenReport(
-        model=settings.models.main.id, turns=turns,
+        model=settings.models.main.id, long_conversation=measure_long(settings, work, long_turns), turns=turns,
         total_min=min(totals), total_median=statistics.median(totals), total_max=max(totals),
         history_median=statistics.median(histories), history_max=max(histories),
         first_compaction=first_compaction, messages_tokens_per_turn=round(per_turn, 1), trigger_tokens=trigger,
@@ -133,7 +213,13 @@ def measure(settings: Settings, work: Path) -> TokenReport:
 
 
 def render(report: TokenReport) -> str:
-    return "\n".join([
+    long = report.long_conversation
+    extra = [] if long is None else [
+        f"  one long conversation of {long.turns} turns (answers of about 250 tokens), history cap {long.history_max_tokens}: "
+        f"whole input max {long.capped_max}, median {long.capped_median:.0f} tokens; without the cap it would reach "
+        f"{long.uncapped_max}; the cap first cut the history at turn {long.first_capped_turn}; the largest call costs "
+        f"${long.usd_per_call_capped_max} in input against ${long.usd_per_call_uncapped_max} uncapped"]
+    return "\n".join([*extra, 
         f"Orchestrator input per turn, {len(report.turns)} routed turns in 12 scenarios, tiktoken ({report.model}), no API calls",
         f"  whole input   min {report.total_min}   median {report.total_median:.0f}   max {report.total_max} tokens",
         f"  of which the conversation block: median {report.history_median:.0f}, max {report.history_max} tokens",

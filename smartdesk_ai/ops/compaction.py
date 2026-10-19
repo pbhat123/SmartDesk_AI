@@ -41,6 +41,11 @@ def _encoding(model_id: str) -> tiktoken.Encoding:
         return tiktoken.get_encoding(FALLBACK_ENCODING)
 
 
+def encoding_for(model_id: str) -> tiktoken.Encoding:
+    """The tiktoken encoding that counts `model_id`'s tokens (a close one when tiktoken does not know the model)."""
+    return _encoding(model_id)
+
+
 def _label(message: BaseMessage) -> str:
     if isinstance(message, HumanMessage):
         return "Employee"

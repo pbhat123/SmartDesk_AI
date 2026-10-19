@@ -19,6 +19,7 @@ from smartdesk_ai.agent.chitchat import make_chitchat
 from smartdesk_ai.agent.confirm import make_confirm_parser
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph, make_kb_responder
 from smartdesk_ai.agent.grounding import make_grounding_judge
+from smartdesk_ai.agent.orchestrator import OrchestratorLimits
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
@@ -247,7 +248,7 @@ def build_stack(
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,
         status_max_listed=settings.status.max_listed,
-        max_parts=settings.orchestrator.max_parts,
+        limits=OrchestratorLimits.from_settings(settings),
         chitchat=make_chitchat(settings, builder=chat_b),
         budget_level=current_budget_level,
         compactor=Compactor(settings, make_summarizer(settings, builder=compact_b), overhead_tokens=prompt_tokens),

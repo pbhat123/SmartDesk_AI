@@ -89,8 +89,11 @@ status:
 
 # Orchestrator (FR-I4): a message is split into at most this many sub-questions; any further ones are not answered.
 # The orchestrator prompt says "at most four"; change both together.
+# It also reads the earlier conversation, at most history_max_tokens of it: the compacted summary plus the most recent
+# turns that fit, newest first. Compaction (75% of the window) alone would let a Main call on every turn grow to ~300k tokens.
 orchestrator:
   max_parts: 4
+  history_max_tokens: 4000
 
 input:
   max_chars: 4000            # FR-F4

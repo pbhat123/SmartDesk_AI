@@ -237,6 +237,7 @@ class CacheSettings(_Strict):
 
 class Orchestrator(_Strict):
     max_parts: Annotated[int, Field(ge=1, le=8)]  # sub-questions answered per message; the rest are named, not answered (FR-I4)
+    history_max_tokens: Annotated[int, Field(ge=200)]  # the most the orchestrator reads of the earlier conversation (FR-I3)
 
 
 class Settings(_Strict):

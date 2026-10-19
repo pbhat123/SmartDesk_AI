@@ -17,7 +17,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
-from evals.gap_eval import Case, GapReport, build_live_stack, classify, summarize
+from evals.gap_eval import Case, GapReport, answered_with_citations, build_live_stack, classify, summarize
 from evals.harness import RESULTS_DIR, ROOT
 from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, run_items, signature
 from smartdesk_ai.agent.factory import AgentStack, build_stack
@@ -42,6 +42,7 @@ class Observation(BaseModel):
     grey_zone: bool = False
     question: str
     outcome: str
+    cited: bool = False
     top_score: float | None
     hit: bool | None  # KB questions: the expected entry was among the k retrieved
     grounded: int  # the grounding judge's verdicts for this question
@@ -74,7 +75,7 @@ def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
     verdicts = drift.verdicts_from_events(new_events)
     return Observation(
         id=row.id, label=label, split=row.split, grey_zone=getattr(row, "grey_zone", False), question=row.question,
-        outcome=classify(state), top_score=chunks[0].score if chunks else None,
+        outcome=classify(state), cited=label == "kb" and answered_with_citations(state), top_score=chunks[0].score if chunks else None,
         hit=row.expected_entry_id in {c.entry_id for c in chunks[:k]} if label == "kb" else None,
         grounded=sum(verdicts), verdicts=len(verdicts),
         workers=len({e.get("part_id") for e in new_events if e.get("kind") == "agent_span" and e.get("part_id")}),
@@ -93,7 +94,7 @@ def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, m
         done, stopped = run_items(run, checkpoint if checkpoint is not None else Checkpoint(None, ""), ids,
                                   lambda i: observe(stack, *by_id[i], k).model_dump())
     seen = [Observation(**done[i]) for i in ids if i in done]
-    gap = summarize([Case(id=o.id, label=o.label, split=o.split, grey_zone=o.grey_zone, outcome=o.outcome, question=o.question)
+    gap = summarize([Case(id=o.id, label=o.label, split=o.split, grey_zone=o.grey_zone, outcome=o.outcome, cited=o.cited, question=o.question)
                      for o in seen])
     usd = run.cost().usd if run is not None else stack.services.cost.total
     point = None
@@ -121,7 +122,8 @@ def render(result: GoldenResult, *, mock: bool) -> str:
     g = result.gap
     precision = "n/a" if g.escalation_precision is None else f"{g.escalation_precision:.3f}"
     lines = [f"gap and KB run ({'MOCK' if mock else 'live'}): gap pass rate {g.gap_pass_rate:.3f} ({g.n_gap} questions), "
-             f"KB answer rate {g.kb_answer_rate:.3f} ({g.n_kb} questions)",
+             f"KB answer rate {g.kb_answer_rate:.3f} ({g.n_kb} questions), "
+             f"KB answered with citations {g.kb_answered_with_citations:.3f}" + (f" (not: {', '.join(g.kb_not_cited)})" if g.kb_not_cited else ""),
              f"  escalation precision {precision}  recall {g.escalation_recall:.3f}"]
     lines += [f"  FAIL {f}" for f in g.failures]
     lines.append(f"  single-topic check: {result.single_part_clean} of {result.single_part_total} questions used exactly one worker "

@@ -100,3 +100,40 @@ def test_a_confirmed_live_gap_run_uses_the_live_stack_with_mock_tickets(monkeypa
     monkeypatch.setattr(run_module, "get_index", lambda res, d: None)
     assert run_module.main(["--only", "gap", "--confirm-spend", "--out-dir", str(tmp_path / "out")]) == 0
     assert seen == {"live": True}
+
+
+# --- "answered with citations" is reported next to the KB answer rate, which keeps its definition ------------------
+
+def _state(intent="kb_query", cited=(), offer=False, parts=None):
+    from types import SimpleNamespace
+
+    result = lambda c: SimpleNamespace(citations=list(c))  # noqa: E731
+    return SimpleNamespace(intent=SimpleNamespace(intent=intent), part_result=result(cited) if cited else None,
+                           part_results={f"p{i}": result(c) for i, c in enumerate(parts, 1)} if parts else {},
+                           pending_offer=object() if offer else None)
+
+
+def test_a_cited_answer_with_no_offer_counts_as_answered_with_citations():
+    assert ge.answered_with_citations(_state(cited=["IT-1"])) is True
+
+
+def test_a_deflection_an_offer_or_an_empty_result_does_not():
+    assert ge.answered_with_citations(_state(intent="out_of_scope", cited=["IT-1"])) is False
+    assert ge.answered_with_citations(_state(cited=["IT-1"], offer=True)) is False
+    assert ge.answered_with_citations(_state()) is False
+
+
+def test_a_split_question_counts_only_when_every_part_is_cited():
+    assert ge.answered_with_citations(_state(parts=[["IT-1"], ["HR-1"]])) is True
+    assert ge.answered_with_citations(_state(parts=[["IT-1"], []])) is False
+
+
+def test_the_report_gives_both_rates_and_the_old_one_is_unchanged():
+    def kb(id, outcome, cited):
+        return ge.Case(id=id, label="kb", split="dev", outcome=outcome, cited=cited, question="q")
+
+    cases = [kb("a", "answered", True), kb("b", "escalated", False), kb("c", "deflected", False), kb("d", "other", False)]
+    report = ge.summarize(cases)
+    assert report.kb_answer_rate == pytest.approx(3 / 4)  # anything but escalated, as before
+    assert report.kb_answered_with_citations == pytest.approx(1 / 4)
+    assert report.kb_not_cited == ["b", "c", "d"]

@@ -23,12 +23,25 @@ from smartdesk_ai.ops.runtime import RequestContext, request_scope
 Outcome = Literal["escalated", "answered", "deflected", "other"]
 
 
+def answered_with_citations(state: AgentState) -> bool:
+    """The employee was given a cited answer for the whole question: a knowledge-base intent, no ticket offer, and a citation on
+    every part (a question split in two counts only when both parts are cited). `kb_answer_rate` is looser: it counts anything
+    but an escalation, so a deflection or an empty result passes it."""
+    if state.intent is not None and state.intent.intent != "kb_query":
+        return False
+    if state.pending_offer is not None:
+        return False
+    parts = list(state.part_results.values()) or ([state.part_result] if state.part_result is not None else [])
+    return bool(parts) and all(p.citations for p in parts)
+
+
 class Case(BaseModel):
     id: str
     label: Literal["kb", "gap"]
     split: str
     grey_zone: bool = False
     outcome: Outcome
+    cited: bool = False  # answered_with_citations
     question: str = Field(exclude=True)  # eval questions are public data, but the result file stays small
 
 
@@ -49,6 +62,8 @@ class GapReport(BaseModel):
     n_kb: int
     gap_pass_rate: float
     kb_answer_rate: float
+    kb_answered_with_citations: float = 0.0  # shown next to kb_answer_rate; it does not replace it
+    kb_not_cited: list[str] = Field(default_factory=list)  # KB question IDs without a cited answer
     escalation_precision: float | None
     escalation_recall: float
     by_split: dict[str, dict[str, float]]
@@ -76,6 +91,7 @@ def summarize(cases: Sequence[Case]) -> GapReport:
     return GapReport(
         n_gap=len(gaps), n_kb=len(kbs), gap_pass_rate=_rate(len(passed), len(gaps)),
         kb_answer_rate=_rate(sum(c.outcome != "escalated" for c in kbs), len(kbs)),
+        kb_answered_with_citations=_rate(sum(c.cited for c in kbs), len(kbs)), kb_not_cited=[c.id for c in kbs if not c.cited],
         escalation_precision=(len(passed) / len(escalations)) if escalations else None,
         escalation_recall=_rate(len(passed), len(gaps)), by_split=by_split,
         grey_zone_pass_rate=_rate(sum(c.outcome == "escalated" for c in grey), len(grey)) if grey else None,
@@ -93,7 +109,7 @@ def run_cases(stack: AgentStack, split: str | None = None) -> list[Case]:
         with request_scope(ctx, stack.services):
             state = run_turn(stack.graph, session, row.question)
         cases.append(Case(id=row.id, label=label, split=row.split, grey_zone=getattr(row, "grey_zone", False),
-                          outcome=classify(state), question=row.question))
+                          outcome=classify(state), cited=label == "kb" and answered_with_citations(state), question=row.question))
     return cases
 
 
@@ -130,7 +146,8 @@ def run(res: Resources, out_dir: Path | None, work_dir: Path, *, settings: Setti
         send_probe(stack)
         stack.services.trace.flush()
     print(f"gap eval ({'mock' if res.mock else 'live'}): gap pass rate {report.gap_pass_rate:.3f} "
-          f"({report.n_gap} questions), KB answer rate {report.kb_answer_rate:.3f} ({report.n_kb} questions)")
+          f"({report.n_gap} questions), KB answer rate {report.kb_answer_rate:.3f} ({report.n_kb} questions), "
+          f"KB answered with citations {report.kb_answered_with_citations:.3f}")
     precision = "n/a" if report.escalation_precision is None else f"{report.escalation_precision:.3f}"
     print(f"  escalation precision {precision}  recall {report.escalation_recall:.3f}")
     for failure in report.failures:

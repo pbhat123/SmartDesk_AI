@@ -165,3 +165,16 @@ def test_single_topic_questions_use_one_worker_and_no_synthesizer(settings, stac
     result = gr.run_golden(stack, settings, GOLDEN, mock=True)
     assert result.single_part_total == 12 and result.single_part_clean == 12 and result.not_clean == []
     assert "12 of 12 questions used exactly one worker" in gr.render(result, mock=True)
+
+
+def test_the_run_reports_answered_with_citations_next_to_the_old_rate(settings, stack):
+    result = gr.run_golden(stack, settings, GOLDEN, mock=True)
+    g = result.gap
+    assert 0.0 <= g.kb_answered_with_citations <= 1.0 and g.kb_answer_rate >= g.kb_answered_with_citations
+    text = gr.render(result, mock=True)
+    assert "KB answer rate" in text and "KB answered with citations" in text
+
+
+def test_the_saved_file_carries_the_new_rate(settings, stack, tmp_path):
+    saved = json.loads(gr.save(gr.run_golden(stack, settings, GOLDEN, mock=True), tmp_path).read_text())
+    assert "kb_answered_with_citations" in saved and "kb_not_cited" in saved and "kb_answer_rate" in saved

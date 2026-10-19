@@ -237,6 +237,7 @@ def step_monitoring(b: Browser, work: Path) -> None:
     b.page.get_by_role("link", name="Monitoring").first.click()
     b.page.get_by_text("Tool stats").first.wait_for(timeout=b.timeout)
     b.page.get_by_text("Human checks at the ticket approval gate").first.wait_for(timeout=b.timeout)
+    b.page.locator('[data-testid="stMetricLabel"]', has_text="Approvals").first.wait_for(timeout=b.timeout)  # the headings draw before the data
     b.no_exception("on the Monitoring page")
     metrics = {}
     for tile in b.page.locator('[data-testid="stMetric"]').all():

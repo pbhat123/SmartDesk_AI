@@ -101,6 +101,24 @@ def _without_emails(text: str) -> str:
     return " ".join(EMAIL.sub("", text).split())
 
 
+MIN_PART_WORDS = 5  # a part with fewer words is a fragment ("for how long?"), not a question that stands on its own
+
+
+def merge_fragments(parts: list) -> list:
+    """Join a fragment onto the part before it when both are in the same domain. It only merges, never splits, and it never joins
+    across domains (a short question for another domain, such as "How long is probation?" after a password question, is a real part).
+    The first part is never a fragment: there is nothing before it."""
+    merged: list[SubQuestion] = []
+    for part in parts:
+        if merged and merged[-1].domain == part.domain and len(part.text.split()) < MIN_PART_WORDS:
+            before = merged[-1]
+            merged[-1] = before.model_copy(update={"text": f"{before.text.rstrip(' ?.')}, {part.text}",
+                                                   "rewritten": before.rewritten or part.rewritten})
+        else:
+            merged.append(part)
+    return merged
+
+
 def plan_parts(raw_text: str, last_topic: str | None, result: IntentResult, *, max_parts: int) -> Plan:
     """The parts to answer for a kb_query. The model's sub-questions are used as they are for a message split into
     several; for one part, only when the model says it is a follow-up it had to rewrite. Otherwise the part is the
@@ -109,7 +127,8 @@ def plan_parts(raw_text: str, last_topic: str | None, result: IntentResult, *, m
     cleaned = [p.model_copy(update={"text": _without_emails(p.text)}) for p in result.parts]
     cleaned = [p for p in cleaned if p.text]
     dropped = max(len(cleaned) - max_parts, 0)
-    cleaned = cleaned[:max_parts]
+    cleaned = merge_fragments(cleaned[:max_parts])
+    one = one or len(cleaned) == 1  # fragments merged back into one question: the employee's own words are searched
     if not cleaned:
         domain = result.domain or "MISC"
         return Plan(parts=[SubQuestion(part_id="p1", text=contextual_question(raw_text, last_topic), domain=domain)])

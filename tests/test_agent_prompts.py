@@ -132,8 +132,7 @@ def test_orchestrator_v7_is_v6_plus_the_work_policy_clarification(settings):
     """v7 changes one line of v6, the out_of_scope definition: rules for using tools, code, data or AI services at work are
     kb_query (kb-011), while asking the assistant for general coding help stays out_of_scope."""
     v6 = (PROMPTS_DIR / "orchestrator_v6.md").read_text().splitlines()
-    v7 = load_prompt("orchestrator", settings)
-    assert v7.version == 7
+    v7 = type("P", (), {"text": (PROMPTS_DIR / "orchestrator_v7.md").read_text()})()
     assert [line for line in v6 if line not in v7.text.splitlines()] == [v6[10]] and v6[10].startswith("- out_of_scope:")
     [new] = [line for line in v7.text.splitlines() if line not in v6]
     assert new.startswith(v6[10]) and len(v7.text.splitlines()) == len(v6)
@@ -141,3 +140,21 @@ def test_orchestrator_v7_is_v6_plus_the_work_policy_clarification(settings):
     assert "Can I install this software?" in new and "share a file with someone outside the company" in new
     assert '"write me a Python sort function"' in new and "non-work topics" in new
     assert "general coding help" in new
+
+
+def test_orchestrator_v8_is_v7_plus_the_fragment_rule(settings):
+    """v8 changes one line of v7, the parts bullet: a part is a complete standalone question, and a clause that only asks about the
+    same thing's timing, count, place or duration stays with it. Its examples have the shape of the two over-split golden questions
+    in other words, so the golden set does not leak into the prompt."""
+    v7 = (PROMPTS_DIR / "orchestrator_v7.md").read_text().splitlines()
+    v8 = load_prompt("orchestrator", settings)
+    assert v8.version == 8
+    changed = [line for line in v7 if line not in v8.text.splitlines()]
+    assert len(changed) == 1 and changed[0].startswith('- "parts" lists each separate question') and len(v8.text.splitlines()) == len(v7)
+    [new] = [line for line in v8.text.splitlines() if line not in v7]
+    assert 'never list a fragment such as "for how long?" as a part' in new and "timing, count, place or duration" in new
+    assert "Who is assigned to look after a new joiner, and for how long?" in new and "when is the bonus decided?" in new
+    assert "needs its own knowledge base entry" in new and "is two parts" in new and "At most four parts" in new
+    assert "Who is the person assigned to help new starters" not in v8.text and "possible performance scores" not in v8.text
+    out_of_scope = [line for line in v8.text.splitlines() if line.startswith("- out_of_scope:")][0]
+    assert "write me a Python sort function" in out_of_scope  # v7's clarification is kept

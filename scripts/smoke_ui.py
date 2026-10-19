@@ -44,6 +44,7 @@ GAP_QUESTION = "How do I register my tractor for the office parking lot?"  # not
 EMAIL = "priya.k@smartdesk.example"
 DEMO_EMAIL = "one.ticket@smartdesk.example"  # a preloaded mock employee with exactly one ticket (tickets/seed.py)
 NEW_TITLE = "Tractor parking permit"
+PARTIAL_QUESTION = "How do I reset my password, and where can I park my car at the Bengaluru office?"  # one answer, one gap
 COMPOUND_QUESTION = "How do I reset my password, and how many casual leave days do I get?"  # one IT part, one HR part
 
 CHAT_INPUT = '[data-testid="stChatInputTextArea"]'
@@ -200,7 +201,8 @@ class Browser:
                 if reply:
                     return reply
             time.sleep(0.2)
-        raise StepFailed(f"no reply to {text!r} within {self.timeout / 1000:.0f}s")
+        shown = [m.strip()[:900] for m in self.page.locator(MESSAGE).all_inner_texts()]
+        raise StepFailed(f"no reply to {text!r} within {self.timeout / 1000:.0f}s (messages on the page: {shown})")
 
 
 def step_kb_question(b: Browser) -> None:
@@ -268,19 +270,47 @@ def step_monitoring(b: Browser, work: Path) -> None:
     check(len(created) == 1, f"expected one successful create_ticket in the tool metrics, found {len(created)}")
 
 
+def new_conversation(b: Browser) -> None:
+    """Click "New conversation" and wait until the old messages are gone: the greeting can show while the previous
+    conversation is still on the page, and a message sent then would be counted against it."""
+    b.page.get_by_role("button", name="New conversation").click()
+    b.page.get_by_text("Ask an IT or HR question").wait_for(timeout=b.timeout)
+    deadline = time.time() + b.timeout / 1000
+    while b.messages() and time.time() < deadline:
+        time.sleep(0.2)
+    check(b.messages() == 0, "the previous conversation is still on the page after New conversation")
+
+
 def step_compound_question(b: Browser) -> None:
     """One message with an IT part and an HR part: one merged answer citing both domains, and a debug panel with one
     table per part and the fan-out and synthesize steps (FR-I4, FR-A12)."""
     b.page.get_by_role("link", name="Chat").first.click()
     b.page.locator(CHAT_INPUT).wait_for(timeout=b.timeout)
-    b.page.get_by_role("button", name="New conversation").click()
-    b.page.get_by_text("Ask an IT or HR question").wait_for(timeout=b.timeout)  # the rerun is done: an empty conversation
+    new_conversation(b)
     reply = b.send(COMPOUND_QUESTION)
     check("Sources:" in reply and "IT-" in reply and "HR-" in reply,
           f"expected one answer with sources from an IT and an HR entry, got {reply[:300]!r}")
     b.page.locator('[data-testid="stExpander"]').last.locator("summary").click()
     for text in ("Part 1 (it_worker)", "Part 2 (hr_worker)", "fan_out:2", "synthesize"):
         b.page.get_by_text(text).first.wait_for(timeout=b.timeout)
+
+
+def step_partial_answer(b: Browser) -> None:
+    """One answerable part and one the KB cannot answer: the first is answered with a source, the second is named with a
+    ticket offer for it only, and the ticket draft covers only that part (FR-I7, FR-B6)."""
+    new_conversation(b)
+    reply = b.send(PARTIAL_QUESTION)
+    check("Sources: IT-" in reply, f"expected the answerable part answered with an IT source, got {reply[:300]!r}")
+    check("couldn't find an answer to this part of your question" in reply and "park my car at the Bengaluru office" in reply,
+          f"expected the unanswered part to be named, got {reply[:400]!r}")
+    check("support ticket for that part" in reply and "work email" in reply,
+          f"expected a ticket offer for that part with the email request, got {reply[:400]!r}")
+    draft = b.send(EMAIL)
+    check("ready to create" in draft and "Shall I go ahead" in draft, f"expected a ticket draft, got {draft[:300]!r}")
+    check("park" in draft.lower() and "password" not in draft.lower(),
+          f"expected a draft about the parking part only, got {draft[:400]!r}")
+    created = b.send("yes")
+    check(re.search(r"Ticket #(\d+) \(mock\)", created), f"expected 'Ticket #N (mock)', got {created[:200]!r}")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -342,6 +372,8 @@ def run(args: argparse.Namespace) -> int:
                     lambda: step_monitoring(b, work))
             attempt("7 compound question: one merged answer, one panel table per part",
                     lambda: step_compound_question(b))
+            attempt("8 partial answer: the gap is named, the ticket covers only that part",
+                    lambda: step_partial_answer(b))
             browser.close()
     except StepFailed as error:
         failed = True
@@ -350,7 +382,7 @@ def run(args: argparse.Namespace) -> int:
         server.stop()
     log = server.log_text()
     bad = [line for line in log.splitlines() if "Traceback" in line or "ProgrammingError" in line]
-    results.append(("8 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
+    results.append(("9 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
     failed = failed or bool(bad)
     print("\nsmoke_ui results")
     for name, outcome in results:

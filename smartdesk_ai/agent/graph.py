@@ -53,6 +53,7 @@ from smartdesk_ai.agent.status_flow import (
 from smartdesk_ai.agent.ticket_agent import (
     TicketDeps,
     escalation_offer,
+    partial_reply,
     handle_offer_reply,
     after_t_confirm,
     after_t_dup_ask,
@@ -442,14 +443,19 @@ def after_compose(state: AgentState) -> str:
     results = _results(state)
     if any(r.outage is not None for r in results):
         return END
-    if any(part_unanswered(r) for r in results):
-        return "offer"
-    return "synthesize" if len(results) > 1 else "reply"
+    answered = [r for r in results if not part_unanswered(r)]
+    if len(answered) > 1:
+        return "synthesize"  # merged first; an unanswered part is added after it (FR-I7)
+    return "offer" if len(answered) < len(results) else "reply"
+
+
+def after_synthesize(state: AgentState) -> str:
+    return "offer" if any(part_unanswered(r) for r in _results(state)) else "reply"
 
 
 def make_synthesize_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
     def synthesize(state: AgentState) -> dict[str, Any]:
-        results = _results(state)
+        results = [r for r in _results(state) if not part_unanswered(r)]  # the answered parts only (FR-I3, FR-I7)
         outcome = deps.synthesizer.merge(_question(state), results) if deps.synthesizer else join_answers(results)
         steps = state.steps + ["synthesize"] + ([] if outcome.merged else ["synthesize_fallback"])
         return {"steps": steps, "reply": outcome.text}
@@ -466,15 +472,26 @@ def _with_dropped_note(reply: str, state: AgentState) -> str:
 def offer_node(state: AgentState) -> dict[str, Any]:
     if "search_kb" not in state.steps:
         raise KBFirstViolation("a ticket may only be offered after search_kb ran (FR-A14)")
-    unanswered = [r.sub_question for r in _results(state) if part_unanswered(r)]
-    question = _question(state) if len(state.parts) == 1 else "\n".join(unanswered)
-    reply = _with_dropped_note(escalation_offer(email_known=bool(state.email)), state)
+    results = _results(state)
+    unanswered = [r.sub_question for r in results if part_unanswered(r)]
+    answered = [r for r in results if not part_unanswered(r)]
+    if len(results) == 1:  # the whole question is a gap: the original wording, the ticket covers the message
+        reply = escalation_offer(email_known=bool(state.email))
+        pending = PendingOffer(unanswered_text=_question(state))
+        context_start = _last_human_index(state)
+    else:  # some or all parts of a compound question: the answered ones first, then the gap and the offer (FR-I7)
+        head = state.reply if len(answered) > 1 else (answered[0].answer if answered else "")
+        gap = partial_reply(unanswered, email_known=bool(state.email))
+        reply = f"{head}\n\n{gap}" if head else gap
+        pending = PendingOffer(unanswered_text="\n".join(unanswered), unanswered_parts=unanswered)
+        context_start = len(state.messages) + 1  # the ticket starts after this reply: it covers the unanswered parts only
+    reply = _with_dropped_note(reply, state)
     return {
         "steps": state.steps + ["offer"],
-        "pending_offer": PendingOffer(unanswered_text=question, unanswered_parts=unanswered),
+        "pending_offer": pending,
         # The merged offer asks for the email when it is unknown (FR-A16); both states read the same replies.
         "awaiting": "offer_reply" if state.email else "email",
-        "ticket_context_start": _last_human_index(state),  # the ticket covers the unanswered question on
+        "ticket_context_start": context_start,
         "reply": reply,
         "messages": [AIMessage(reply)],
     }
@@ -530,7 +547,7 @@ def build_kb_graph(
     builder.add_conditional_edges("retry_gate", after_retry_gate, ["kb_retry", "compose"])
     builder.add_edge("kb_retry", "retry_gate")
     builder.add_conditional_edges("compose", after_compose, ["reply", "offer", "synthesize", END])
-    builder.add_edge("synthesize", "reply")
+    builder.add_conditional_edges("synthesize", after_synthesize, ["reply", "offer"])
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
     builder.add_node("t_collect", make_t_collect_node(drafting=tickets is not None))

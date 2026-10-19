@@ -46,7 +46,8 @@ def test_the_only_way_into_the_offer_node_is_through_a_kb_search(built_index_dir
     graph, _ = build_test_graph(built_index_dir, settings, tmp_path)
     edges = graph.get_graph().edges
     into = lambda target: {e.source for e in edges if e.target == target}  # noqa: E731
-    assert into("offer") == {"compose"} and into("compose") == {"retry_gate"}
+    assert into("offer") == {"compose", "synthesize"} and into("synthesize") == {"compose"}  # merged answers, then the gap
+    assert into("compose") == {"retry_gate"}
     assert into("retry_gate") == {"it_worker", "hr_worker", "misc_search", "kb_retry"}
     assert into("kb_retry") == {"retry_gate"}
 

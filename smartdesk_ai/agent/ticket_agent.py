@@ -53,6 +53,11 @@ OFFER_WITH_EMAIL_REQUEST = (
     "I can open a support ticket for you. If you'd like that, please share your work email address."
 )
 OFFER_YES_NO = "Would you like me to open a support ticket for this? Please answer yes or no."
+# After a partly answered compound question the offer is for the part the KB could not answer (FR-I7). Fixed text, not model output.
+PARTIAL_OFFER_WITH_EMAIL_REQUEST = (
+    "I can open a support ticket for that part. If you'd like that, please share your work email address."
+)
+PARTIAL_OFFER_YES_NO = "Would you like me to open a support ticket for that part? Please answer yes or no."
 ASK_EMAIL = "Thanks. What's your work email address?"
 DECLINED = "No problem, I won't open a ticket. Is there anything else I can help with?"
 AGREED_KNOWN_EMAIL = "Thanks, let's get the ticket details together."
@@ -81,6 +86,18 @@ def escalation_offer(email_known: bool) -> str:
     """The one message after a KB gap: an acknowledgement (FR-D4), "I don't know", the offer (FR-A16)."""
     offer = OFFER_YES_NO if email_known else OFFER_WITH_EMAIL_REQUEST
     return f"{ACKNOWLEDGEMENT_PHRASES[0]} {INSUFFICIENT_REPLY} {offer}"
+
+
+def partial_reply(unanswered: Sequence[str], *, email_known: bool) -> str:
+    """The statement and the offer for the parts of a compound question the KB could not answer (FR-I7, FR-A16): names
+    each part in the employee's own sub-question wording, then offers a ticket for it (them) and, when the email is
+    unknown, asks for it in the same message. Fixed wording: the model writes none of it."""
+    offer = PARTIAL_OFFER_YES_NO if email_known else PARTIAL_OFFER_WITH_EMAIL_REQUEST
+    if len(unanswered) == 1:
+        return f"I'm sorry, I couldn't find an answer to this part of your question: \"{unanswered[0]}\". {offer}"
+    listed = "\n".join(f'- "{q}"' for q in unanswered)
+    return (f"I'm sorry, I couldn't find answers to these parts of your question:\n{listed}\n"
+            + offer.replace("that part", "those parts"))
 
 
 def find_email(text: str) -> str | None:
@@ -133,7 +150,7 @@ def employee_statements(state: AgentState) -> list[str]:
     """What the employee said about the current ticket, in order: their own messages since the
     ticket's context began, without yes/no and email-only replies and without email addresses.
     A bare "raise a ticket" says nothing about the issue and is left out (FR-B6, FR-B13)."""
-    statements = []
+    statements = list(state.pending_offer.unanswered_parts) if state.pending_offer else []
     for message in state.messages[state.ticket_context_start:]:
         if not isinstance(message, HumanMessage):
             continue
@@ -143,6 +160,18 @@ def employee_statements(state: AgentState) -> list[str]:
             continue
         statements.append(text)
     return statements
+
+
+def conversation_statements(state: AgentState) -> list[str]:
+    """Everything the employee said in this conversation, without email addresses: the source a draft may take facts
+    from. A sub-question is the orchestrator's wording of what they asked, so its names and numbers come from here."""
+    said = []
+    for message in state.messages:
+        if isinstance(message, HumanMessage):
+            text = " ".join(t for t in str(message.content).split() if find_email(t) is None).strip()
+            if text:
+                said.append(text)
+    return said
 
 
 class CollectOutcome(BaseModel):
@@ -188,7 +217,7 @@ class TicketDeps(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
-    drafter: Callable[[Sequence[str]], TicketDraft]
+    drafter: Callable[..., TicketDraft]  # (statements) or, for a partly answered question, (statements, grounding)
     executor: Any  # ToolExecutor with create_ticket and get_tickets registered; every tool call goes through it
     parse_confirm: ConfirmParser
     duplicate_threshold: float  # config: thresholds.duplicate_title
@@ -313,7 +342,13 @@ def make_t_draft_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]
     def t_draft(state: AgentState) -> dict[str, Any]:
         steps = state.steps + ["t_draft"]
         try:
-            draft = deps.drafter(employee_statements(state))
+            statements = employee_statements(state)
+            if state.pending_offer is not None and state.pending_offer.unanswered_parts:
+                # a partly answered compound question: the ticket covers only the unanswered part (FR-B6, FR-I7),
+                # and may use facts from anything the employee said (FR-B13)
+                draft = deps.drafter(statements, conversation_statements(state))
+            else:
+                draft = deps.drafter(statements)
         except DraftUnavailable as outage:  # nothing is created; the employee can try again later
             return {"steps": steps + ["llm_unavailable"], "reply": outage.message,
                     "messages": [AIMessage(outage.message)], "awaiting": "none", "pending_offer": None}
@@ -408,9 +443,12 @@ def fallback_draft(statements: Sequence[str]) -> TicketDraft:
     )
 
 
-def draft_from_statements(llm: Any, prompt: str, statements: Sequence[str]) -> TicketDraft:
+def draft_from_statements(
+    llm: Any, prompt: str, statements: Sequence[str], grounding: Sequence[str] | None = None
+) -> TicketDraft:
     """One TICKET_DRAFT call. A malformed reply, or one that adds details the employee did not give,
-    falls back to their own words; an outage raises `DraftUnavailable` (FR-F2)."""
+    falls back to their own words; an outage raises `DraftUnavailable` (FR-F2). `grounding` is what the draft may take
+    facts from when that is more than `statements` (a sub-question is a rewording of the employee's message)."""
     human = "Employee statements:\n" + "\n".join(f"- {s}" for s in statements)
     try:
         response = llm.invoke([SystemMessage(prompt), HumanMessage(human)])
@@ -421,10 +459,11 @@ def draft_from_statements(llm: Any, prompt: str, statements: Sequence[str]) -> T
         reply = parse_model_reply(DraftReply, getattr(response, "content", response))
     except ReplyError:
         return plain
+    said = statements if grounding is None else [*statements, *grounding]
     # Judge the raw text: the statements carry no email, so any email in a draft is an invented fact.
     return TicketDraft(
-        title=reply.title if is_grounded(reply.title, statements) else plain.title,
-        description=reply.description if is_grounded(reply.description, statements) else plain.description,
+        title=reply.title if is_grounded(reply.title, said) else plain.title,
+        description=reply.description if is_grounded(reply.description, said) else plain.description,
         category=reply.category,
         priority=reply.priority,
     )
@@ -455,8 +494,8 @@ def make_drafter(
     )
     prompt = load_prompt("ticket_summary", settings).text
 
-    def drafter(statements: Sequence[str]) -> TicketDraft:
-        return draft_from_statements(llm, prompt, statements)
+    def drafter(statements: Sequence[str], grounding: Sequence[str] | None = None) -> TicketDraft:
+        return draft_from_statements(llm, prompt, statements, grounding)
 
     return drafter
 

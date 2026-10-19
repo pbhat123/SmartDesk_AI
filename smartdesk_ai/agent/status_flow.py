@@ -12,7 +12,7 @@ from typing import Any, Literal
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel, ConfigDict
 
-from smartdesk_ai.agent.state import AgentState, TicketRef
+from smartdesk_ai.agent.state import STATUS_REPLY, AgentState, TicketRef
 from smartdesk_ai.agent.ticket_agent import INVALID_EMAIL, find_email, is_refusal
 from smartdesk_ai.tickets import TeamUpdate, Ticket
 from smartdesk_ai.tools.executor import Outcome
@@ -122,7 +122,7 @@ def render_ticket(ticket: Ticket, update: TeamUpdate | None) -> str:
 
 
 def _say(state: AgentState, step: str, reply: str, **update: Any) -> dict[str, Any]:
-    return {"steps": state.steps + [step], "reply": reply, "messages": [AIMessage(reply)], **update}
+    return {"steps": state.steps + [step], "reply": reply, "messages": [AIMessage(reply, name=STATUS_REPLY)], **update}
 
 
 def make_s_lookup_node(executor: Any, max_listed: int) -> Callable[[AgentState], dict[str, Any]]:

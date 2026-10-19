@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, ConfigDict, Field
 
 from smartdesk_ai.agent.prompt_loader import load_prompt
-from smartdesk_ai.agent.state import AgentState, Awaiting, Category, Intent, IntentResult
+from smartdesk_ai.agent.state import AgentState, Awaiting, Category, Intent, IntentResult, SubQuestion
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.fallback import FallbackChat
@@ -32,9 +32,21 @@ class ClassifierError(Exception):
     """The model call failed or its answer was not a valid classification."""
 
 
-def build_messages(prompt: str, text: str, awaiting: Awaiting, last_topic: str | None) -> list[Any]:
-    human = f"Awaiting: {awaiting}\nLast topic: {last_topic or 'none'}\nMessage: {text}"
+def build_messages(prompt: str, text: str, awaiting: Awaiting, last_topic: str | None, history: str = "") -> list[Any]:
+    """The classifier's input. `history` is the earlier conversation, masked (FR-I3); the block is left out when empty."""
+    earlier = f"Conversation so far:\n{history}\n" if history else ""
+    human = f"Awaiting: {awaiting}\nLast topic: {last_topic or 'none'}\n{earlier}Message: {text}"
     return [SystemMessage(prompt), HumanMessage(human)]
+
+
+class PartReply(BaseModel):
+    """One sub-question as the model returns it (FR-I3, FR-I4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: str
+    domain: Category
+    follow_up: bool = False  # true when the question only makes sense with the earlier turns, so it was rewritten
 
 
 class ClassifierReply(BaseModel):
@@ -45,11 +57,14 @@ class ClassifierReply(BaseModel):
     intent: Intent
     confidence: float = Field(ge=0.0, le=1.0)
     domain: Category | None = None
+    parts: list[PartReply] = Field(default_factory=list)
 
 
 def _to_result(reply: ClassifierReply) -> IntentResult:
-    domain = reply.domain if reply.intent == "kb_query" else None
-    return IntentResult(intent=reply.intent, confidence=reply.confidence, domain=domain)
+    kb = reply.intent == "kb_query"
+    parts = [SubQuestion(part_id=f"p{i}", text=p.text, domain=p.domain, rewritten=p.follow_up)
+             for i, p in enumerate(reply.parts, 1)] if kb else []
+    return IntentResult(intent=reply.intent, confidence=reply.confidence, domain=reply.domain if kb else None, parts=parts)
 
 
 def _parse(content: Any) -> IntentResult:
@@ -65,10 +80,12 @@ def classify_intent(
     text: str,
     awaiting: Awaiting = "none",
     last_topic: str | None = None,
+    history: str = "",
 ) -> IntentResult:
-    """Classify one message. Any failure is a `ClassifierError`, never a crash (FR-D8)."""
+    """Classify one message, given the earlier conversation as masked text. Any failure is a `ClassifierError`, never a
+    crash (FR-D8)."""
     try:
-        response = llm.invoke(build_messages(prompt, text, awaiting, last_topic))
+        response = llm.invoke(build_messages(prompt, text, awaiting, last_topic, history))
     except Exception as error:  # network, rate limit, timeout: the router falls back
         raise ClassifierError(f"classifier call failed: {type(error).__name__}") from error
     return _parse(getattr(response, "content", response))
@@ -119,7 +136,7 @@ def make_classifier(
                        schema=ClassifierReply if use_schema else None)
     prompt = load_prompt("orchestrator", settings).text
 
-    def classify(text: str, awaiting: Awaiting = "none", last_topic: str | None = None) -> IntentResult:
-        return classify_intent(llm, prompt, text, awaiting, last_topic)
+    def classify(text: str, awaiting: Awaiting = "none", last_topic: str | None = None, history: str = "") -> IntentResult:
+        return classify_intent(llm, prompt, text, awaiting, last_topic, history)
 
     return classify

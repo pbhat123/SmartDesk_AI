@@ -17,8 +17,18 @@ RouteSource = Literal["classifier", "tool_pick"]
 Category = Literal["IT", "HR", "MISC"]
 Priority = Literal["low", "medium", "high", "critical"]
 Domain = Literal["IT", "HR"]
+STATUS_REPLY = "ticket_status"  # the `name` of an assistant message from the status flow: it quotes team comments (FR-C9)
 RouteKind = Literal["kb", "ticket", "status", "smalltalk", "deflect", "clarify"]
 PartDomain = Literal["IT", "HR", "MISC"]  # the domain the orchestrator tags a sub-question with (FR-I4)
+
+
+class SubQuestion(BaseModel):
+    """One part of the employee's message, rewritten as a standalone question by the orchestrator (FR-I3, FR-I4)."""
+
+    part_id: str
+    text: str
+    domain: PartDomain
+    rewritten: bool = False  # the orchestrator rewrote it from the conversation or split it from a longer message
 
 
 class IntentResult(BaseModel):
@@ -28,6 +38,7 @@ class IntentResult(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
     route_source: RouteSource = "classifier"
     domain: Category | None = None
+    parts: list[SubQuestion] = []  # the sub-questions of a kb_query, as the model gave them (FR-I3, FR-I4)
 
 
 class PendingOffer(BaseModel):
@@ -76,14 +87,6 @@ class ChunkRef(BaseModel):
     dense: float | None = None  # cosine, RRF and rerank score of this entry's best piece (None: stage did not run)
     rrf: float | None = None
     rerank: float | None = None
-
-
-class SubQuestion(BaseModel):
-    """One part of the employee's message, rewritten as a standalone question by the orchestrator (FR-I3, FR-I4)."""
-
-    part_id: str
-    text: str
-    domain: PartDomain
 
 
 class PartResult(BaseModel):
@@ -135,6 +138,7 @@ class AgentState(BaseModel):
     search_domain: Domain | None = None  # KB filter chosen by routing for this turn
     part_result: PartResult | None = None  # the one part's result when the turn had a single part
     parts: list[SubQuestion] = []  # the orchestrator's sub-questions for this turn (FR-I3)
+    parts_dropped: int = 0  # parts past `orchestrator.max_parts`, which are not answered
     part_results: Annotated[dict[str, PartResult], merge_by_key] = {}  # by part_id, written in parallel (FR-I4)
     part_steps: Annotated[dict[str, list[str]], merge_by_key] = {}  # each part's trace, folded into `steps` at the join
     steps: list[str] = []  # this turn's trace, e.g. ["search_kb", "answer", "offer"] (FR-H11)

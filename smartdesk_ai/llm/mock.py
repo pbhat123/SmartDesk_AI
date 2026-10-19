@@ -49,6 +49,9 @@ _STATUS = re.compile(
 _SMALLTALK = re.compile(r"^(hi|hello|hey|thanks|thank you|bye|goodbye|good morning|how are you)\b", re.I)
 _OUT_OF_SCOPE = re.compile(r"\b(weather|recipe|cricket|world cup|poem|joke|python function|python script|mutual funds?|prime minister)\b", re.I)
 _AMBIGUOUS = re.compile(r"^(it'?s not working|i need (some )?help|i have a question|can you sort that out)", re.I)
+_CLAUSE_BREAK = re.compile(
+    r"[?,]+\s*(?:and\s+)?(?=(?:how|what|when|where|who|which|can|could|does|do|will|is|are|should)\b)", re.I)
+_QUESTION_WORD = re.compile(r"^(how|what|when|where|who|which|can|could|does|do|will|is|are|should)\b", re.I)
 _ORDINAL = re.compile(r"\b(first|second|third|fourth|last|one|\d+)\b", re.I)
 _YES_WORDS = re.compile(r"^(yes|yeah|yep|sure|ok|okay|please do|go ahead)\b", re.I)
 
@@ -69,7 +72,22 @@ class MockRoutingModel:
         awaiting = re.search(r"^Awaiting: (\w+)$", human, re.M).group(1)
         text = re.search(r"^Message: (.*)$", human, re.M | re.S).group(1).strip()
         intent, domain = self._classify(text, awaiting)
-        return SimpleNamespace(content=json.dumps({"intent": intent, "confidence": 0.9, "domain": domain}))
+        reply = {"intent": intent, "confidence": 0.9, "domain": domain}
+        if intent == "kb_query":
+            reply["parts"] = self.split(text, domain)
+        return SimpleNamespace(content=json.dumps(reply))
+
+    @staticmethod
+    def split(text: str, domain: str | None) -> list[dict]:
+        """The sub-questions of a message, for the mock only. A message is split when it holds two or more clauses that
+        each open with a question word and that the keyword rules put in different domains; anything else is one part,
+        the question as the employee asked it. A real model judges this from meaning, so a two-clause question about
+        one topic ("what are the scores, and when are promotions decided?") stays one part here."""
+        pieces = [p.strip(" ,?") for p in _CLAUSE_BREAK.split(text) if p.strip(" ,?")]
+        domains = [infer_mock_category(p) for p in pieces]
+        if len(pieces) < 2 or len(set(domains)) < 2 or not all(_QUESTION_WORD.match(p) for p in pieces):
+            return [{"text": text, "domain": domain, "follow_up": False}]
+        return [{"text": f"{p[0].upper()}{p[1:]}?", "domain": d, "follow_up": False} for p, d in zip(pieces, domains)]
 
     @staticmethod
     def _classify(text: str, awaiting: str) -> tuple[str, str | None]:

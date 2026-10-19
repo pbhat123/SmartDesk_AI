@@ -28,6 +28,7 @@ from smartdesk_ai.agent.chat_service import Turn
 from smartdesk_ai.agent.chitchat import Chitchat, static_chitchat
 from smartdesk_ai.agent.followup import contextual_question, topic_after
 from smartdesk_ai.agent.intents import dialog_update_for
+from smartdesk_ai.agent.orchestrator import plan_parts, transcript_for
 from smartdesk_ai.agent.router import RouteDecision, Router
 from smartdesk_ai.agent.state import (
     AgentState,
@@ -122,7 +123,7 @@ def _chunk_refs(found: SearchKBResult) -> list[ChunkRef]:
 
 def entry_node(state: AgentState) -> dict[str, Any]:
     """Start of every turn: a fresh trace and no leftovers from the previous turn."""
-    return {"steps": ["start"], "part_result": None, "parts": [], "part_results": None, "part_steps": None, "reply": ""}
+    return {"steps": ["start"], "part_result": None, "parts": [], "parts_dropped": 0, "part_results": None, "part_steps": None, "reply": ""}
 
 
 def make_compact_node(compactor: Compactor, budget_level: Callable[[], int]) -> Callable[[AgentState], dict[str, Any]]:
@@ -195,9 +196,9 @@ def _route_kind(decision: RouteDecision) -> RouteKind:
     )
 
 
-def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
+def make_route_node(route: Router, max_parts: int) -> Callable[[AgentState], dict[str, Any]]:
     def route_node(state: AgentState) -> dict[str, Any]:
-        decision = route(_question(state), state.awaiting, state.last_topic)
+        decision = route(_question(state), state.awaiting, state.last_topic, history=transcript_for(state.messages))
         intent = None
         if decision.intent is not None:
             intent = IntentResult(
@@ -208,15 +209,25 @@ def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
             cleared = {**cleared, "status_pending_email": False, "status_candidates": []}
         kind = _route_kind(decision)
         domain = {"it_worker": "IT", "hr_worker": "HR"}.get(decision.route)
-        parts = []
-        if kind == "kb":  # one part until the orchestrator splits the message (T7.3)
-            text = contextual_question(_question(state), state.last_topic)
-            parts = [SubQuestion(part_id="p1", text=text, domain=domain or "MISC")]
+        plan = None
+        topic: dict[str, Any] = {}
+        if kind == "kb":
+            plan = plan_parts(_question(state), state.last_topic,
+                              IntentResult(intent="kb_query", confidence=1.0, domain=domain, parts=decision.parts),
+                              max_parts=max_parts)
+            if plan.parts[-1].rewritten:  # the standalone form is the topic the next follow-up builds on
+                topic = {"last_topic": plan.parts[-1].text}
+            if len(plan.parts) == 1:
+                domain = {"IT": "IT", "HR": "HR"}.get(plan.parts[0].domain)
+            else:
+                domain = None
         return {
             **cleared,
+            **topic,
             "route_kind": kind,
             "search_domain": domain,
-            "parts": parts,
+            "parts": plan.parts if plan else [],
+            "parts_dropped": plan.dropped if plan else 0,
             "intent": intent,
             "steps": state.steps + ["route"],
         }
@@ -322,9 +333,11 @@ def make_worker_node(deps: KBDeps, node: str) -> Callable[[AgentState], dict[str
         if isinstance(outcome, Unavailable):
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
-        return {"steps": _kb_steps(state.steps, outcome), "part_result": outcome, "reply": outcome.answer,
-                "part_results": {part.part_id: outcome},
-                "last_topic": topic_after(text, state.last_topic)}
+        update = {"steps": _kb_steps(state.steps, outcome), "part_result": outcome, "reply": outcome.answer,
+                  "part_results": {part.part_id: outcome}}
+        if not part.rewritten:  # a rewritten part already set the topic when the orchestrator planned it
+            update["last_topic"] = topic_after(text, state.last_topic)
+        return update
 
     return worker
 
@@ -403,6 +416,7 @@ def build_kb_graph(
     route: Router | None = None,
     tickets: TicketDeps | None = None,
     status_max_listed: int | None = None,
+    max_parts: int | None = None,
     chitchat: Chitchat | None = None,
     compactor: Compactor | None = None,
     budget_level: Callable[[], int] = lambda: 0,
@@ -413,6 +427,8 @@ def build_kb_graph(
     replies (FR-F7). With a `compactor`, each turn starts by compacting long histories (FR-H5)."""
     if route is not None and status_max_listed is None:
         raise ValueError("status_max_listed (config: status.max_listed) is required when routing is on")
+    if route is not None and max_parts is None:
+        raise ValueError("max_parts (config: orchestrator.max_parts) is required when routing is on")
     builder = StateGraph(AgentState)
     builder.add_node("entry", entry_node)
     builder.add_node("offer_reply", offer_reply_node)
@@ -440,7 +456,7 @@ def build_kb_graph(
         ["t_collect", "route", "single_part", END] if route else ["t_collect", "single_part", END],
     )
     if route is not None:
-        builder.add_node("route", make_route_node(route))
+        builder.add_node("route", make_route_node(route, max_parts))
         builder.add_node("chitchat", make_chitchat_node(chitchat or static_chitchat))
         builder.add_node("s_lookup", make_s_lookup_node(deps.executor, status_max_listed))
         builder.add_node("s_email_reply", s_email_reply)

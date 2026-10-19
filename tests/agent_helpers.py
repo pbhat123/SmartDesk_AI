@@ -34,7 +34,8 @@ class SearchSpy:
 
 
 def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", routed=False,
-             drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None, compactor=None, hitl=None, cache=None):
+             drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None, compactor=None, hitl=None, cache=None,
+             route_model=None):
     """Everything the tests need: the compiled graph plus the spy, the tickets client and the store."""
     index = open_index(built_index_dir, HashingEmbeddings())
     spy = SearchSpy(make_search_kb(index, settings, reranker=None, health=HealthRegistry()))
@@ -48,7 +49,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
         seed(client, store)
     answer = make_answerer(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM(), judge=judge)
     saver = make_checkpointer(tmp_path / name, STATE_MODELS)
-    route = make_router(settings, builder=lambda model_id, cfg: MockRoutingModel()) if routed else None
+    route = make_router(settings, builder=lambda model_id, cfg: route_model or MockRoutingModel()) if routed else None
     tickets = None
     if drafter_llm is not None:
         tickets = TicketDeps(
@@ -59,7 +60,8 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
             hitl=hitl,
         )
     graph = build_kb_graph(KBDeps(executor=executor, answer=answer, cache=cache), saver, route=route, tickets=tickets,
-                             status_max_listed=settings.status.max_listed, chitchat=chitchat, compactor=compactor)
+                             status_max_listed=settings.status.max_listed,
+                             max_parts=settings.orchestrator.max_parts, chitchat=chitchat, compactor=compactor)
     return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, executor=executor, saver=saver)
 
 

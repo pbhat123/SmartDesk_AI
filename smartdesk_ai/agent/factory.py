@@ -243,6 +243,7 @@ def build_stack(
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,
         status_max_listed=settings.status.max_listed,
+        max_parts=settings.orchestrator.max_parts,
         chitchat=make_chitchat(settings, builder=chat_b),
         budget_level=current_budget_level,
         compactor=Compactor(settings, make_summarizer(settings, builder=compact_b), overhead_tokens=prompt_tokens),

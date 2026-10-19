@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 
 from smartdesk_ai.agent.intents import ClassifierError, Route, route_for
 from smartdesk_ai.agent.prompt_loader import load_prompt
-from smartdesk_ai.agent.state import Awaiting, Intent, IntentResult, RouteSource
+from smartdesk_ai.agent.state import Awaiting, Intent, IntentResult, RouteSource, SubQuestion
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.fallback import FallbackChat
@@ -61,6 +61,7 @@ class RouteDecision(BaseModel):
     confidence: float | None = None
     clarify: bool = False  # ask exactly one clarifying question
     deflect: bool = False  # out of scope: polite deflection, no ticket
+    parts: list[SubQuestion] = []  # the classifier's sub-questions for a kb_query (FR-I3); empty from the tool pick
 
     @property
     def ticket_offer_possible(self) -> bool:
@@ -69,7 +70,7 @@ class RouteDecision(BaseModel):
 
 
 ClassifyFn = Callable[..., IntentResult]
-Router = Callable[[str, Awaiting, str | None], "RouteDecision"]  # (text, awaiting, last topic) -> decision
+Router = Callable[..., "RouteDecision"]  # (text, awaiting, last topic, history="") -> decision
 ToolPicker = Callable[[str, Awaiting], ToolPick]
 
 
@@ -89,6 +90,7 @@ def _from_classifier(result: IntentResult) -> RouteDecision:
         confidence=result.confidence,
         clarify=result.intent == "ambiguous",
         deflect=result.intent == "out_of_scope",
+        parts=result.parts,
     )
 
 
@@ -112,10 +114,13 @@ def route_message(
     classify: ClassifyFn,
     pick_tool: ToolPicker,
     threshold: float,
+    history: str = "",
 ) -> RouteDecision:
-    """Classifier first; tool pick on error, invalid output or confidence below `threshold`."""
+    """Classifier first; tool pick on error, invalid output or confidence below `threshold`. The earlier conversation
+    (masked) goes to the classifier only when there is one."""
     try:
-        result: IntentResult | None = classify(text, awaiting, last_topic)
+        result: IntentResult | None = classify(text, awaiting, last_topic, history=history) if history else \
+            classify(text, awaiting, last_topic)
     except ClassifierError:
         result = None
     if result is not None and result.confidence >= threshold:
@@ -160,7 +165,7 @@ def make_router(settings: Settings, *, builder: ModelBuilder = openai_builder, b
     pick = make_tool_picker(settings, builder=builder, budget_level=budget_level)
     threshold = settings.thresholds.routing_confidence
 
-    def route(text: str, awaiting: Awaiting, last_topic: str | None) -> RouteDecision:
-        return route_message(text, awaiting, last_topic, classify, pick, threshold)
+    def route(text: str, awaiting: Awaiting, last_topic: str | None, history: str = "") -> RouteDecision:
+        return route_message(text, awaiting, last_topic, classify, pick, threshold, history)
 
     return route

@@ -235,6 +235,10 @@ class CacheSettings(_Strict):
     redis_retry_seconds: Annotated[float, Field(gt=0)]  # after a Redis failure the cache runs in memory this long
 
 
+class Orchestrator(_Strict):
+    max_parts: Annotated[int, Field(ge=1, le=8)]  # sub-questions answered per message; the rest are named, not answered (FR-I4)
+
+
 class Settings(_Strict):
     models: Models
     tiers: dict[str, Tier]
@@ -246,6 +250,7 @@ class Settings(_Strict):
     rate_limits: RateLimits
     compaction: Compaction
     status: StatusList
+    orchestrator: Orchestrator
     input: InputLimits
     thresholds: Thresholds
     guardrails: Guardrails

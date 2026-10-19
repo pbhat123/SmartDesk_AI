@@ -35,8 +35,18 @@ class ErrorCode(StrEnum):
     CONFIRMATION_REQUIRED = "confirmation_required"
     EMAIL_REQUIRED = "email_required"
     EMAIL_INVALID = "email_invalid"
+    NOT_ALLOWED = "agent_not_allowed"  # the calling agent does not own this tool (FR-G1, FR-I8)
 
 
+# Which tools each agent of FR-I1 may call (FR-G1): the workers and the orchestrator search the KB; only the ticket agent
+# reaches the ticket tools, and it does not search. Any other label (the status flow, scripts, tests) is not restricted.
+AGENT_TOOLS = {
+    "orchestrator": frozenset({"search_kb"}),
+    "it_worker": frozenset({"search_kb"}),
+    "hr_worker": frozenset({"search_kb"}),
+    "synthesizer": frozenset(),
+    "ticket_agent": frozenset({"create_ticket", "get_tickets"}),
+}
 # Tools that need the employee's email, and tools that need the employee's confirmation (FR-G5).
 EMAIL_TOOLS = frozenset({"create_ticket", "get_tickets"})
 CONFIRMED_TOOLS = frozenset({"create_ticket"})
@@ -74,6 +84,15 @@ def _rate_counter(tool: str, agent: str) -> str | None:
     if tool == "create_ticket":
         return "ticket_creations"
     return "ticket_lookups" if tool == "get_tickets" and agent in LOOKUP_AGENTS else None
+
+
+def _agent_denied(tool: str, agent: str) -> "ToolResult | None":
+    """A refusal when one of the FR-I1 agents calls a tool that is not its own. Nothing runs and nothing is retried."""
+    allowed = AGENT_TOOLS.get(agent)
+    if allowed is None or tool in allowed:
+        return None
+    return ToolResult(tool=tool, outcome=Outcome.VALIDATION_ERROR, attempts=0, code=ErrorCode.NOT_ALLOWED,
+                      error="this tool is not available to this agent")
 
 
 def _email_of(raw_args: dict[str, Any]) -> str | None:
@@ -119,9 +138,10 @@ class ToolExecutor:
         if scope is not None:
             scope[0].set_email(_email_of(raw_args))  # from here on the request carries a masked user ID
         counter = _rate_counter(name, agent)
-        limited = self._rate_limited(scope, counter, raw_args)
-        result = limited or self._execute(name, raw_args, confirmed, attempt_ms)
-        if limited is None and scope is not None and counter and result.outcome is Outcome.SUCCESS:
+        denied = _agent_denied(name, agent)
+        limited = None if denied else self._rate_limited(scope, counter, raw_args)
+        result = denied or limited or self._execute(name, raw_args, confirmed, attempt_ms)
+        if denied is None and limited is None and scope is not None and counter and result.outcome is Outcome.SUCCESS:
             ctx, services = scope
             if services.limiter is not None:
                 services.limiter.record(counter, ctx.session_id, _email_of(raw_args))

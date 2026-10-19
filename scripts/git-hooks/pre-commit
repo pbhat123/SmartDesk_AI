@@ -1,7 +1,9 @@
 #!/bin/bash
-# Commit gate: the whole test suite must pass, collection included, or the commit is blocked.
-# Installed with: scripts/install_hooks.sh   (sets git config core.hooksPath scripts/git-hooks)
-# Bypassing it needs `git commit --no-verify`, a deliberate act the project rules forbid.
+# Commit gate. Installed with: scripts/install_hooks.sh   (sets git config core.hooksPath scripts/git-hooks)
+#   1. The whole test suite must pass, collection included.
+#   2. If a staged file is under smartdesk_ai/ or is scripts/smoke_ui.py, scripts/smoke_ui.py must pass too.
+# They run one after the other, never together (two heavy runs at once crashed the editor). Either failing blocks the
+# commit. There is no skip flag; `git commit --no-verify` is a deliberate act the project rules forbid.
 cd "$(git rev-parse --show-toplevel)" || exit 1
 PY=.venv/bin/python
 [ -x "$PY" ] || PY=python
@@ -11,3 +13,13 @@ if ! "$PY" -m pytest -q -p no:cacheprovider; then
   exit 1
 fi
 echo "pre-commit: pytest green."
+if git diff --cached --name-only | grep -qE '^(smartdesk_ai/|scripts/smoke_ui\.py$)'; then
+  echo "pre-commit: app code or the smoke test is staged, running scripts/smoke_ui.py ..."
+  if ! "$PY" scripts/smoke_ui.py; then
+    echo "pre-commit: smoke_ui.py FAILED, commit blocked. Fix the failure and commit again." >&2
+    exit 1
+  fi
+  echo "pre-commit: smoke_ui.py green."
+else
+  echo "pre-commit: no app code or smoke test staged, smoke_ui.py not needed."
+fi

@@ -95,6 +95,7 @@ class LedgerRun:
         self.calls = self.input_tokens = self.cached_tokens = self.output_tokens = self.reasoning_tokens = 0
         self.usd = 0.0
         self.finished = False
+        self.on_spend: Any = None  # called after every recorded spend (a watchdog's heartbeat)
         self._lock = threading.Lock()
         self._write({"event": "start", "command": self.command, "pid": os.getpid()})
 
@@ -143,6 +144,8 @@ class LedgerRun:
         if assumed:
             record["price_assumed"] = True
         self._write(record)
+        if self.on_spend is not None:
+            self.on_spend()
         return usd
 
     def finish(self, status: str = "ok") -> None:

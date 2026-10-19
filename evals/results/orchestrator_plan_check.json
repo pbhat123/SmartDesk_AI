@@ -1,0 +1,265 @@
+{
+ "n_cases": 88,
+ "n_answered": 88,
+ "intent_accuracy": 0.9659,
+ "domain_accuracy": 0.9054,
+ "domain_accuracy_by_kind": {
+  "kb": 0.9057,
+  "gap": 0.9048
+ },
+ "wrong_domain": [
+  "kb-011",
+  "kb-016",
+  "kb-020",
+  "kb-038",
+  "kb-053",
+  "gap-003",
+  "gap-021"
+ ],
+ "wrong_intent": [
+  "kb-011",
+  "kb-038",
+  "gap-003"
+ ],
+ "single_topic": 74,
+ "split_single": [
+  {
+   "id": "kb-053",
+   "kind": "kb",
+   "question": "How many people work at SmartDesk AI and in which cities?",
+   "intent": "kb_query",
+   "domain": "MISC",
+   "parts": [
+    {
+     "text": "How many people work at SmartDesk AI?",
+     "domain": "MISC"
+    },
+    {
+     "text": "In which cities do people work at SmartDesk AI?",
+     "domain": "MISC"
+    }
+   ]
+  },
+  {
+   "id": "gap-005",
+   "kind": "gap",
+   "question": "Is there a spot for my motorbike at the Pune site, and does it cost anything?",
+   "intent": "kb_query",
+   "domain": "MISC",
+   "parts": [
+    {
+     "text": "Is there a spot for my motorbike at the Pune site?",
+     "domain": "MISC"
+    },
+    {
+     "text": "Does it cost anything?",
+     "domain": "MISC"
+    }
+   ]
+  }
+ ],
+ "split_rate": 0.027,
+ "compound": [
+  {
+   "id": "cmp-001",
+   "expected": [
+    "IT",
+    "HR"
+   ],
+   "got": [
+    "IT",
+    "HR"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-002",
+   "expected": [
+    "IT",
+    "HR"
+   ],
+   "got": [
+    "IT",
+    "HR"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-003",
+   "expected": [
+    "IT",
+    "HR"
+   ],
+   "got": [
+    "IT",
+    "HR"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-004",
+   "expected": [
+    "HR",
+    "IT"
+   ],
+   "got": [
+    "HR",
+    "IT"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-005",
+   "expected": [
+    "HR",
+    "IT"
+   ],
+   "got": [
+    "HR",
+    "IT"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-006",
+   "expected": [
+    "IT",
+    "HR"
+   ],
+   "got": [
+    "IT",
+    "HR"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-007",
+   "expected": [
+    "HR",
+    "IT"
+   ],
+   "got": [
+    "HR",
+    "IT"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-008",
+   "expected": [
+    "HR",
+    "IT"
+   ],
+   "got": [
+    "HR",
+    "IT"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-009",
+   "expected": [
+    "IT",
+    "MISC"
+   ],
+   "got": [
+    "IT",
+    "MISC"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-010",
+   "expected": [
+    "HR",
+    "MISC"
+   ],
+   "got": [
+    "HR",
+    "MISC"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-011",
+   "expected": [
+    "IT",
+    "HR",
+    "MISC"
+   ],
+   "got": [
+    "IT",
+    "HR",
+    "MISC"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-012",
+   "expected": [
+    "IT",
+    "HR"
+   ],
+   "got": [
+    "IT",
+    "HR"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-013",
+   "expected": [
+    "HR",
+    "HR"
+   ],
+   "got": [
+    "HR",
+    "HR"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  },
+  {
+   "id": "cmp-014",
+   "expected": [
+    "HR",
+    "IT"
+   ],
+   "got": [
+    "HR",
+    "IT"
+   ],
+   "correct_split": true,
+   "right_count": true,
+   "same_domains": true
+  }
+ ],
+ "compound_correct": 14,
+ "errors": [],
+ "stopped": null
+}

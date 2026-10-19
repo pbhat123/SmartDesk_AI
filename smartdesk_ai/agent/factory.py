@@ -139,6 +139,8 @@ def build_stack(
     client: TicketClient | None = None,
     tracing_factories: TracingFactories | None = None,
     mock_answer_model: Any | None = None,
+    mock_routing_model: Any | None = None,
+    mock_synth_model: Any | None = None,
     tracing: bool = True,
     use_cache: bool = True,
 ) -> "AgentStack":
@@ -177,13 +179,13 @@ def build_stack(
         search_settings = settings.model_copy(update={"thresholds": settings.thresholds.model_copy(
             update={"escalation": settings.thresholds.escalation_mock})})
         answer_b = _builder_for(mock_answer_model or MockAnswerModel())  # evals swap in a scripted answer model
-        route_b = _builder_for(MockRoutingModel())
+        route_b = _builder_for(mock_routing_model or MockRoutingModel())  # evals script the orchestrator
         draft_b, confirm_b = _builder_for(MockDraftModel()), _builder_for(MockConfirmModel())
         chat_b = _builder_for(MockChitchatModel())
         inject_b = _builder_for(MockInjectionModel())
         judge_b = _builder_for(MockGroundingModel())
         compact_b = _builder_for(MockCompactionModel())
-        synth_b = _builder_for(MockSynthesizerModel())
+        synth_b = _builder_for(mock_synth_model or MockSynthesizerModel())
     # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
     trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)),
                      prompt_versions=settings.prompts)

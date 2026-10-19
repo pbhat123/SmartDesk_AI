@@ -294,3 +294,24 @@ def test_two_concurrent_searches_give_what_they_give_one_after_the_other(built_i
     sequential = [search(a) for a in asks]
     with ThreadPoolExecutor(2) as pool:
         assert list(pool.map(search, asks)) == sequential
+
+
+# --- markdown and hyphens are not new facts -------------------------------------------------------------------------
+
+def test_a_faithful_merge_with_markdown_and_hyphenated_words_is_not_rejected():
+    """KB answers carry **bold** and words such as Wi-Fi; copying them into the merged text adds no fact."""
+    from smartdesk_ai.agent.synthesizer import unsupported
+
+    bodies = ["The VPN client is **SmartDesk Connect** on company laptops.",
+              "There are two Wi-Fi networks: **SmartDesk-Secure** for laptops and the guest network."]
+    merged = " ".join(bodies)
+    assert unsupported(merged, bodies) is None
+    assert unsupported(merged.replace("**", ""), bodies) is None, "dropping the markdown is fine too"
+
+
+def test_markdown_does_not_hide_a_name_or_a_number_that_was_not_given():
+    from smartdesk_ai.agent.synthesizer import unsupported
+
+    bodies = ["The VPN client is **SmartDesk Connect** on company laptops."]
+    assert unsupported(bodies[0] + " Ask **Priya** for a token.", bodies) == "fact"
+    assert unsupported(bodies[0] + " It costs **500** a month.", bodies) == "number"

@@ -84,6 +84,12 @@ def join_answers(parts: Sequence[PartResult]) -> SynthOutcome:
                         reason="no_synthesizer")
 
 
+def _plain(text: str) -> str:
+    """The text without markdown emphasis marks, and with hyphens as spaces, so `**SmartDesk Connect**` and `Wi-Fi` in
+    a merged answer are compared as the words they are: the fact check reads a word with a mark on it as a different word."""
+    return re.sub(r"[*_`]", "", text).replace("-", " ")
+
+
 def unsupported(text: str, bodies: Sequence[str]) -> str | None:
     """Why `text` may not be used, or None when it adds nothing to what the workers said (FR-H2)."""
     if not text:
@@ -93,7 +99,7 @@ def unsupported(text: str, bodies: Sequence[str]) -> str | None:
         return "number"
     if any(entry not in said for entry in _ENTRY_ID.findall(text)):
         return "entry_id"
-    if not is_grounded(text, bodies):
+    if not is_grounded(_plain(text), [_plain(b) for b in bodies]):
         return "fact"
     return None
 

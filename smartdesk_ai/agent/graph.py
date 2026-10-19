@@ -7,6 +7,7 @@ is reachable only from the KB nodes,
 so retrieval is always attempted before a ticket is offered (FR-A14). The ticket path starts at
 `t_collect`. `steps` is the per-turn trace.
 """
+import functools
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -18,7 +19,7 @@ from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel
 from langgraph.types import Command, Send
 
-from smartdesk_ai.agent.agents import ORCHESTRATOR
+from smartdesk_ai.agent.agents import ORCHESTRATOR, SYNTHESIZER, TICKET_AGENT
 from smartdesk_ai.agent.answer import (
     INSUFFICIENT_REPLY,
     AnswerError,
@@ -74,7 +75,7 @@ from smartdesk_ai.agent.synthesizer import Synthesizer, join_answers
 from smartdesk_ai.agent.workers import AGENT_FOR_NODE, FILTER_FOR_NODE, MISC_SEARCH, NODE_FOR_DOMAIN, WORKER_AGENTS, Answerer
 from smartdesk_ai.ops.cache import AnswerCache
 from smartdesk_ai.ops.compaction import Compactor
-from smartdesk_ai.ops.runtime import current_scope
+from smartdesk_ai.ops.runtime import agent_span, current_scope
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
@@ -328,6 +329,17 @@ def make_single_part_node() -> Callable[[AgentState], dict[str, Any]]:
     return single_part
 
 
+def spanned(agent: str, node: Callable[[AgentState], dict[str, Any]]) -> Callable[[AgentState], dict[str, Any]]:
+    """Run a graph node as one agent's span in the trace (FR-I9)."""
+
+    @functools.wraps(node)
+    def run(state: AgentState) -> dict[str, Any]:
+        with agent_span(agent):
+            return node(state)
+
+    return run
+
+
 class WorkerInput(BaseModel):
     """What a worker is sent: its sub-question and nothing else (FR-I3). Plain data, so the checkpoint can hold it."""
 
@@ -360,7 +372,8 @@ def make_worker_node(deps: KBDeps, node: str) -> Callable[[dict[str, Any]], dict
     def worker(payload: dict[str, Any]) -> dict[str, Any]:
         part = WorkerInput.model_validate(payload).part  # a Send argument reaches the node as the plain dict it was sent as
         try:
-            outcome = _search_and_answer(deps, part, node)
+            with agent_span(AGENT_FOR_NODE[node], part.part_id):
+                outcome = _search_and_answer(deps, part, node)
         except Exception as error:  # the type only: the message could echo the employee's text (FR-G11)
             logger.warning("worker %s failed (%s)", node, type(error).__name__)
             outcome = Unavailable(WORKER_FAILED_REPLY, "worker_failed")
@@ -377,7 +390,8 @@ def make_kb_retry_node(deps: KBDeps) -> Callable[[dict[str, Any]], dict[str, Any
     def kb_retry(payload: dict[str, Any]) -> dict[str, Any]:
         part = WorkerInput.model_validate(payload).part
         try:
-            outcome = _search_and_answer(deps, part, MISC_SEARCH)
+            with agent_span(AGENT_FOR_NODE[MISC_SEARCH], part.part_id):
+                outcome = _search_and_answer(deps, part, MISC_SEARCH)
         except Exception as error:
             logger.warning("whole-KB retry failed (%s)", type(error).__name__)
             outcome = Unavailable(WORKER_FAILED_REPLY, "worker_failed")
@@ -543,14 +557,14 @@ def build_kb_graph(
     builder.add_node("retry_gate", retry_gate)
     builder.add_node("kb_retry", make_kb_retry_node(deps))
     builder.add_node("compose", make_compose_node())
-    builder.add_node("synthesize", make_synthesize_node(deps))
+    builder.add_node("synthesize", spanned(SYNTHESIZER, make_synthesize_node(deps)))
     builder.add_conditional_edges("retry_gate", after_retry_gate, ["kb_retry", "compose"])
     builder.add_edge("kb_retry", "retry_gate")
     builder.add_conditional_edges("compose", after_compose, ["reply", "offer", "synthesize", END])
     builder.add_conditional_edges("synthesize", after_synthesize, ["reply", "offer"])
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
-    builder.add_node("t_collect", make_t_collect_node(drafting=tickets is not None))
+    builder.add_node("t_collect", spanned(TICKET_AGENT, make_t_collect_node(drafting=tickets is not None)))
     if compactor is not None:
         builder.add_node("compact", make_compact_node(compactor, budget_level))
         builder.add_edge(START, "compact")
@@ -566,11 +580,11 @@ def build_kb_graph(
         ["t_collect", "route", "single_part", END] if route else ["t_collect", "single_part", END],
     )
     if route is not None:
-        builder.add_node("route", make_route_node(route, max_parts))
+        builder.add_node("route", spanned(ORCHESTRATOR, make_route_node(route, max_parts)))
         builder.add_node("chitchat", make_chitchat_node(chitchat or static_chitchat))
-        builder.add_node("s_lookup", make_s_lookup_node(deps.executor, status_max_listed))
-        builder.add_node("s_email_reply", s_email_reply)
-        builder.add_node("s_pick", make_s_pick_node(deps.executor))
+        builder.add_node("s_lookup", spanned(TICKET_AGENT, make_s_lookup_node(deps.executor, status_max_listed)))
+        builder.add_node("s_email_reply", spanned(TICKET_AGENT, s_email_reply))
+        builder.add_node("s_pick", spanned(TICKET_AGENT, make_s_pick_node(deps.executor)))
         builder.add_conditional_edges("s_pick", after_s_pick, ["route", END])
         builder.add_conditional_edges("route", after_route, [*WORKER_AGENTS, "t_collect", "s_lookup", "chitchat"])
         builder.add_conditional_edges("s_email_reply", after_s_email_reply, ["s_lookup", "route", END])
@@ -581,21 +595,21 @@ def build_kb_graph(
     if tickets is None:
         builder.add_edge("t_collect", END)
     else:
-        builder.add_node("t_draft", make_t_draft_node(tickets))
-        builder.add_node("t_present", make_t_present_node())
+        builder.add_node("t_draft", spanned(TICKET_AGENT, make_t_draft_node(tickets)))
+        builder.add_node("t_present", spanned(TICKET_AGENT, make_t_present_node()))
         builder.add_conditional_edges("t_collect", after_t_collect, ["t_draft", END])
-        builder.add_node("t_dup_check", make_t_dup_check_node(tickets))
-        builder.add_node("t_dup_ask", make_t_dup_ask_node(tickets))
-        builder.add_node("t_dup_reask", t_dup_reask)
+        builder.add_node("t_dup_check", spanned(TICKET_AGENT, make_t_dup_check_node(tickets)))
+        builder.add_node("t_dup_ask", spanned(TICKET_AGENT, make_t_dup_ask_node(tickets)))
+        builder.add_node("t_dup_reask", spanned(TICKET_AGENT, t_dup_reask))
         builder.add_conditional_edges("t_draft", after_t_draft, ["t_dup_check", END])
         builder.add_conditional_edges("t_dup_check", after_t_dup_check, ["t_dup_ask", "t_present"])
         builder.add_conditional_edges("t_dup_ask", after_t_dup_ask, ["t_present", "t_cancel", "t_dup_reask"])
         builder.add_edge("t_dup_reask", "t_dup_ask")
-        builder.add_node("t_confirm", make_t_confirm_node(tickets))
-        builder.add_node("t_apply_edit", t_apply_edit)
-        builder.add_node("t_reask", t_reask)
-        builder.add_node("t_create", make_t_create_node(tickets))
-        builder.add_node("t_cancel", t_cancel)
+        builder.add_node("t_confirm", spanned(TICKET_AGENT, make_t_confirm_node(tickets)))
+        builder.add_node("t_apply_edit", spanned(TICKET_AGENT, t_apply_edit))
+        builder.add_node("t_reask", spanned(TICKET_AGENT, t_reask))
+        builder.add_node("t_create", spanned(TICKET_AGENT, make_t_create_node(tickets)))
+        builder.add_node("t_cancel", spanned(TICKET_AGENT, t_cancel))
         builder.add_edge("t_present", "t_confirm")
         builder.add_conditional_edges(
             "t_confirm", after_t_confirm, ["t_create", "t_cancel", "t_apply_edit", "t_reask"]

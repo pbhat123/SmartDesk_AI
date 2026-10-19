@@ -251,6 +251,8 @@ def step_status(b: Browser, number: int) -> None:
 def step_monitoring(b: Browser, work: Path) -> None:
     b.page.get_by_role("link", name="Monitoring").first.click()
     b.page.get_by_text("Tool stats").first.wait_for(timeout=b.timeout)
+    b.page.get_by_text("Cost by agent").first.wait_for(timeout=b.timeout)
+    check({"orchestrator", "it_worker"} <= span_agents(work), "expected agent spans for the orchestrator and a worker by now")
     b.page.get_by_text("Human checks at the ticket approval gate").first.wait_for(timeout=b.timeout)
     b.page.locator('[data-testid="stMetricLabel"]', has_text="Approvals").first.wait_for(timeout=b.timeout)  # the headings draw before the data
     b.page.locator('[data-testid="stMetricLabel"]', has_text="Exact hits").first.wait_for(timeout=b.timeout)
@@ -270,6 +272,13 @@ def step_monitoring(b: Browser, work: Path) -> None:
     check(len(created) == 1, f"expected one successful create_ticket in the tool metrics, found {len(created)}")
 
 
+def span_agents(work: Path) -> set[str]:
+    """The agents that have an `agent_span` record in the app's local trace (FR-I9)."""
+    trace = work / "data" / "trace.jsonl"
+    events = [json.loads(line) for line in trace.read_text().splitlines()] if trace.exists() else []
+    return {e["agent"] for e in events if e.get("kind") == "agent_span"}
+
+
 def new_conversation(b: Browser) -> None:
     """Click "New conversation" and wait until the old messages are gone: the greeting can show while the previous
     conversation is still on the page, and a message sent then would be counted against it."""
@@ -281,7 +290,7 @@ def new_conversation(b: Browser) -> None:
     check(b.messages() == 0, "the previous conversation is still on the page after New conversation")
 
 
-def step_compound_question(b: Browser) -> None:
+def step_compound_question(b: Browser, work: Path) -> None:
     """One message with an IT part and an HR part: one merged answer citing both domains, and a debug panel with one
     table per part and the fan-out and synthesize steps (FR-I4, FR-A12)."""
     b.page.get_by_role("link", name="Chat").first.click()
@@ -293,9 +302,11 @@ def step_compound_question(b: Browser) -> None:
     b.page.locator('[data-testid="stExpander"]').last.locator("summary").click()
     for text in ("Part 1 (it_worker)", "Part 2 (hr_worker)", "fan_out:2", "synthesize"):
         b.page.get_by_text(text).first.wait_for(timeout=b.timeout)
+    missing = {"orchestrator", "it_worker", "hr_worker", "synthesizer"} - span_agents(work)
+    check(not missing, f"expected an agent span in the trace for each agent, missing {sorted(missing)}")
 
 
-def step_partial_answer(b: Browser) -> None:
+def step_partial_answer(b: Browser, work: Path) -> None:
     """One answerable part and one the KB cannot answer: the first is answered with a source, the second is named with a
     ticket offer for it only, and the ticket draft covers only that part (FR-I7, FR-B6)."""
     new_conversation(b)
@@ -311,6 +322,7 @@ def step_partial_answer(b: Browser) -> None:
           f"expected a draft about the parking part only, got {draft[:400]!r}")
     created = b.send("yes")
     check(re.search(r"Ticket #(\d+) \(mock\)", created), f"expected 'Ticket #N (mock)', got {created[:200]!r}")
+    check("ticket_agent" in span_agents(work), "expected an agent span for the ticket agent in the trace")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -371,9 +383,9 @@ def run(args: argparse.Namespace) -> int:
             attempt("6 Monitoring page: no exception, HITL 1 edit / 1 approval, cache hit rate",
                     lambda: step_monitoring(b, work))
             attempt("7 compound question: one merged answer, one panel table per part",
-                    lambda: step_compound_question(b))
+                    lambda: step_compound_question(b, work))
             attempt("8 partial answer: the gap is named, the ticket covers only that part",
-                    lambda: step_partial_answer(b))
+                    lambda: step_partial_answer(b, work))
             browser.close()
     except StepFailed as error:
         failed = True

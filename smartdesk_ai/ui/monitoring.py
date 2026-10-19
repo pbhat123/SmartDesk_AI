@@ -18,6 +18,7 @@ import pandas as pd
 import streamlit as st
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from smartdesk_ai.agent.agents import AGENTS
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.pii import mask_emails_in
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
@@ -121,6 +122,19 @@ class TierRow(BaseModel):
     tracker_usd: float = 0.0
 
 
+class AgentRow(BaseModel):
+    """What one agent did, summed over the agent spans in the local trace (FR-I9)."""
+
+    agent: str
+    spans: int = 0
+    calls: int = 0
+    tool_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    usd: float = 0.0
+    tiers: list[str] = Field(default_factory=list)
+
+
 class BudgetRow(BaseModel):
     spent_today_usd: float | None  # None when ops.db does not exist yet
     level: int
@@ -152,6 +166,7 @@ class MonitoringData(BaseModel):
     components: list[ComponentRow]
     degraded: list[DegradedRow]
     tiers: list[TierRow]
+    agents: list[AgentRow]
     ledger_total_usd: float
     ledger_today_usd: float
     sources_today: list[SourceRow]
@@ -277,6 +292,33 @@ def session_cost(tracker: Any, thread_ids: Sequence[str]) -> SessionCost:
                        tokens=sum(e.input_tokens + e.output_tokens for e in mine))
 
 
+def _agent_view(trace_path: Path) -> list[AgentRow]:
+    """Per-agent totals from the `agent_span` records of the local trace, in the order of the agents of FR-I1 (any other
+    agent after them). A missing file or a damaged line is skipped, not an error."""
+    rows: dict[str, AgentRow] = {}
+    try:
+        lines = trace_path.read_text().splitlines()
+    except OSError:
+        return []
+    for line in lines:
+        try:
+            event = json.loads(line)
+            if event.get("kind") != "agent_span":
+                continue
+            row = rows.setdefault(event["agent"], AgentRow(agent=event["agent"]))
+            row.spans += 1
+            row.calls += int(event["calls"])
+            row.tool_calls += int(event.get("tool_calls", 0))
+            row.input_tokens += int(event["input_tokens"])
+            row.output_tokens += int(event["output_tokens"])
+            row.usd += float(event["usd"])
+            row.tiers = sorted(set(row.tiers) | set(event["tiers"]))
+        except (ValueError, KeyError, TypeError, AttributeError):
+            continue
+    order = {name: i for i, name in enumerate(AGENTS)}
+    return sorted(rows.values(), key=lambda r: (order.get(r.agent, len(order)), r.agent))
+
+
 def _budget_row(settings: Settings, ops_db: Path) -> BudgetRow:
     cfg = settings.budget
     if not ops_db.is_file():  # opening a SpendStore would create the file
@@ -316,7 +358,7 @@ def load_monitoring(
         degraded=[DegradedRow(component=h.component.value, mode=h.mode or "", reason=mask_emails_in(h.reason or ""),
                               since=h.since.isoformat(timespec="seconds") if h.since else None)
                   for h in registry.degraded_modes()],
-        tiers=tiers, ledger_total_usd=ledger_total, ledger_today_usd=ledger_today,
+        tiers=tiers, agents=_agent_view(data_dir / TRACE_FILE), ledger_total_usd=ledger_total, ledger_today_usd=ledger_today,
         sources_today=sources,
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
@@ -390,6 +432,16 @@ def _render_cost(ctx: UiContext, data: MonitoringData) -> None:
         "ledger calls (all time)": t.ledger_calls, "ledger USD (all time)": t.ledger_usd,
         "tracker steps": t.tracker_steps, "tracker USD": t.tracker_usd} for t in data.tiers]),
         hide_index=True, width="stretch")
+    st.subheader("Cost by agent")
+    if data.agents:
+        st.dataframe(pd.DataFrame([{
+            "agent": a.agent, "spans": a.spans, "model calls": a.calls, "tool calls": a.tool_calls,
+            "input tokens": a.input_tokens, "output tokens": a.output_tokens, "tiers": ", ".join(a.tiers),
+            "tracker USD": round(a.usd, 6)} for a in data.agents]), hide_index=True, width="stretch")
+        st.caption("From the agent spans in the local trace: one span per agent per request (a worker per part). "
+                   "The grounding judge's calls count in the worker that asked for them. Mock runs price nothing.")
+    else:
+        st.caption("No agent spans yet. Ask a question and they appear here.")
     st.caption("The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
                "per-request analytics. Dated model names are grouped under the model configured for their tier. "
                "'other' is a model missing from config.yaml (priced as the Main model).")

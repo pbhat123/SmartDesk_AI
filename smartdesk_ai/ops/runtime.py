@@ -8,9 +8,10 @@ tests and scripts need no set-up. Nothing here holds message text; the context o
 import contextvars
 import hashlib
 import logging
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -66,6 +67,29 @@ class RequestContext:
             self.user_id = masked_user_id(email)
 
 
+@dataclass
+class AgentSpan:
+    """What one agent did in one request (FR-I9): the model calls, tool calls, tokens and cost made while its node ran."""
+
+    agent: str
+    part_id: str | None
+    started: float
+    calls: int = 0
+    tool_calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    usd: float = 0.0
+    tiers: set[str] = field(default_factory=set)
+
+    def add_llm(self, call: "LLMCall", usd: float) -> None:
+        self.calls += 1
+        self.tiers.add(call.tier)
+        if call.ok:
+            self.input_tokens += call.input_tokens
+            self.output_tokens += call.output_tokens
+            self.usd += usd
+
+
 class Services:
     """The optional ops services. Any of them may be None (they degrade away, FR-F7)."""
 
@@ -83,18 +107,40 @@ class Services:
         return self.budget.level(ctx.task if ctx else None) if self.budget is not None else 0
 
     def on_llm_call(self, ctx: RequestContext | None, agent: str, call: "LLMCall") -> None:
+        usd = 0.0
         if self.cost is not None and call.ok:
-            self.cost.record_llm(ctx, agent, call)
+            usd = self.cost.record_llm(ctx, agent, call).usd
         if self.trace is not None:
             self.trace.llm_record(ctx, agent, call)
+        span = _span.get()
+        if span is not None:
+            span.add_llm(call, usd)
 
     def on_embedding(self, ctx: RequestContext | None, tokens: int) -> None:
         if self.cost is not None:
-            self.cost.record_embedding(ctx, tokens)
+            usd = self.cost.record_embedding(ctx, tokens).usd
+            span = _span.get()
+            if span is not None:
+                span.usd += usd
 
     def on_tool(self, ctx: RequestContext | None, agent: str, tool: str) -> None:
         if self.cost is not None:
             self.cost.record_tool(ctx, agent, tool)
+        span = _span.get()
+        if span is not None:
+            span.tool_calls += 1
+
+    def on_agent_span(self, ctx: RequestContext, span: "AgentSpan") -> None:
+        """One trace record per agent that did something in a request (FR-I9): which agent, which tiers, how many calls,
+        tokens, cost and time. No text: the prompts and replies are in the LLM records. An agent that made no model or
+        tool call (a node that only moved state) writes nothing."""
+        if self.trace is None or not (span.calls or span.tool_calls):
+            return
+        self.trace.event(
+            "agent_span", agent=span.agent, part_id=span.part_id, tiers=sorted(span.tiers), calls=span.calls,
+            tool_calls=span.tool_calls, input_tokens=span.input_tokens, output_tokens=span.output_tokens,
+            usd=round(span.usd, 8), latency_ms=round((time.perf_counter() - span.started) * 1000, 2),
+            **self.trace.request_fields(ctx))
 
     def finish_request(self, ctx: RequestContext, goal: str | None) -> float:
         """Close a request: costs recorded under it get their task and are written out. Returns its cost."""
@@ -103,6 +149,27 @@ class Services:
 
 _scope: contextvars.ContextVar[tuple[RequestContext, Services] | None] = contextvars.ContextVar(
     "smartdesk_request_scope", default=None)
+
+
+_span: contextvars.ContextVar[AgentSpan | None] = contextvars.ContextVar("smartdesk_agent_span", default=None)
+
+
+@contextmanager
+def agent_span(agent: str, part_id: str | None = None) -> Iterator[AgentSpan | None]:
+    """Run a block as one agent's span: the model and tool calls made inside it are added to the span, which is written
+    to the trace when the block ends (FR-I9). Outside a request scope nothing is recorded. Each parallel worker runs on its
+    own thread with its own copy of the context, so its span counts only its own calls."""
+    scope = _scope.get()
+    if scope is None:
+        yield None
+        return
+    span = AgentSpan(agent, part_id, time.perf_counter())
+    token = _span.set(span)
+    try:
+        yield span
+    finally:
+        _span.reset(token)
+        scope[1].on_agent_span(scope[0], span)
 
 
 @contextmanager

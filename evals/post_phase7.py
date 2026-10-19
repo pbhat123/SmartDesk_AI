@@ -7,7 +7,7 @@ estimate, ledger run, ceiling of twice that estimate, stall watchdog and checkpo
 
   a  diagnostics    diag_compound  the compound rows cmp-003, cmp-008, cmp-013, with per-part diagnostics      results/diagnostics/
                     diag_kb        kb-010 alone, with per-part diagnostics                                      results/diagnostics/
-  b  plan_check     the orchestrator (v6) alone on the 74 golden + 14 compound questions                       orchestrator_plan_check.json
+  b  plan_check     the orchestrator (v7) alone on the 74 golden + 14 compound questions                       orchestrator_plan_check.json
   c  compound       the full live compound set                                                                  compound_eval_live.json
   d  safety         27 rows through the real guards                                                             safety_eval.json
      gap_kb         74 golden questions: gap, KB, the drift baseline                                            gap_eval.json
@@ -178,7 +178,7 @@ def build_steps(settings: Settings) -> list[Step]:
     diag_kb = drift.Golden(kb=[r for r in golden.kb if r.id in DIAG_KB_QUESTIONS.split(",")], gap=[])
     cases = orchestrator_plan_check.load_cases()
     plan = orchestrator_plan_check.estimate(live, cases, 0.0)
-    plan_estimate = Estimate("the orchestrator planning check (v6)", round(plan.usd, 4),
+    plan_estimate = Estimate("the orchestrator planning check (v7)", round(plan.usd, 4),
                              f"{plan.calls} orchestrator calls, no workers")
     return [
         Step("diag_compound", "a", "evals.compound_eval", ("--live", "--only", DIAG_COMPOUND_ROWS),
@@ -377,7 +377,7 @@ def final_table(outcome: Outcome, root: Path, *, balance_before: float) -> str:
         L.append("The batch ran to the end.")
     L += _diag_lines(root)
     if (b := _try(root, "orchestrator_plan_check.json")):
-        L.append(f"orchestrator v6 planning check: intent accuracy {_pct(b['intent_accuracy'])}, domain accuracy {_pct(b['domain_accuracy'])}, "
+        L.append(f"orchestrator v7 planning check: intent accuracy {_pct(b['intent_accuracy'])}, domain accuracy {_pct(b['domain_accuracy'])}, "
                  f"single-topic questions split {len(b['split_single'])} of {b['single_topic']} "
                  f"({', '.join(o['id'] for o in b['split_single']) or 'none'}), compound split correctly {b['compound_correct']} of {len(b['compound'])}")
     if (c := _try(root, "compound_eval_live.json")):

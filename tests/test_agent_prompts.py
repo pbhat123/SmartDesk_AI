@@ -110,8 +110,8 @@ def test_orchestrator_v6_is_v5_with_the_split_for_different_entries_rule(setting
     v3 = (PROMPTS_DIR / "orchestrator_v3.md").read_text().splitlines()
     v4 = (PROMPTS_DIR / "orchestrator_v4.md").read_text().splitlines()
     v5 = (PROMPTS_DIR / "orchestrator_v5.md").read_text().splitlines()
-    v6 = load_prompt("orchestrator", settings)
-    assert v6.version == 6 and settings.orchestrator.max_parts == 4
+    v6 = type("P", (), {"text": (PROMPTS_DIR / "orchestrator_v6.md").read_text()})()
+    assert settings.orchestrator.max_parts == 4
     assert all(line in v4 for line in v3 if not line.startswith('{"intent"'))
     assert len([line for line in v4 if line not in v5]) == 1
     changed = [line for line in v5 if line not in v6.text.splitlines()]
@@ -122,7 +122,22 @@ def test_orchestrator_v6_is_v5_with_the_split_for_different_entries_rule(setting
 
 
 def test_orchestrator_v6_has_one_example_of_each_decision(settings):
-    text = load_prompt("orchestrator", settings).text
+    text = (PROMPTS_DIR / "orchestrator_v6.md").read_text()
     assert '"What is the probation period, and does the company offer a sabbatical?" is two parts' in text
     assert '"How many sick days do I get, and do I need a certificate?" is one part' in text
     assert text.count("is two parts") == 1 and text.count("is one part") == 1
+
+
+def test_orchestrator_v7_is_v6_plus_the_work_policy_clarification(settings):
+    """v7 changes one line of v6, the out_of_scope definition: rules for using tools, code, data or AI services at work are
+    kb_query (kb-011), while asking the assistant for general coding help stays out_of_scope."""
+    v6 = (PROMPTS_DIR / "orchestrator_v6.md").read_text().splitlines()
+    v7 = load_prompt("orchestrator", settings)
+    assert v7.version == 7
+    assert [line for line in v6 if line not in v7.text.splitlines()] == [v6[10]] and v6[10].startswith("- out_of_scope:")
+    [new] = [line for line in v7.text.splitlines() if line not in v6]
+    assert new.startswith(v6[10]) and len(v7.text.splitlines()) == len(v6)
+    assert "Is it fine to paste our source code into a public AI chatbot" in new and "kb_query" in new
+    assert "Can I install this software?" in new and "share a file with someone outside the company" in new
+    assert '"write me a Python sort function"' in new and "non-work topics" in new
+    assert "general coding help" in new

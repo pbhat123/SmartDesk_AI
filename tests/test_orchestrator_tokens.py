@@ -24,7 +24,10 @@ def test_the_run_leaves_the_mock_model_as_it_found_it(settings, tmp_path):
 
 def test_the_history_cap_keeps_a_long_conversation_flat(settings, tmp_path):
     long = measure(settings, tmp_path, long_turns=30).long_conversation
-    prompt = 880  # the orchestrator prompt's size in tokens, with a little room
+    from smartdesk_ai.agent.prompt_loader import load_prompt
+    from smartdesk_ai.rag.chunking import count_tokens
+
+    prompt = count_tokens(load_prompt("orchestrator", settings).text)  # the active prompt's own size, whatever its version
     assert long.history_max_tokens == settings.orchestrator.history_max_tokens == 4000
     assert long.capped_max <= prompt + long.history_max_tokens + 60, "the cap, the prompt and the message"
     assert long.uncapped_max > 1.5 * long.capped_max and long.first_capped_turn is not None

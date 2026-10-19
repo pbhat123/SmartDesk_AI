@@ -237,3 +237,20 @@ def test_the_page_shows_the_split_and_a_window_filter(tmp_path):
     metrics = {m.label: m.value for m in page.main.metric}
     assert metrics["Approved, ticket created"] == "1" and metrics["Approved, creation failed"] == "1"
     assert metrics["Approvals"] == "2" and metrics["Rejections"] == "0"
+
+
+def test_each_filter_sits_directly_under_its_own_heading(tmp_path):
+    page = monitoring_app(mock_context(tmp_path))
+
+    def flat(node):
+        for child in node.children.values():
+            yield child
+            if hasattr(child, "children"):
+                yield from flat(child)
+
+    shown = [(e.type, getattr(e, "label", None) or getattr(e, "value", None)) for e in flat(page.main)]
+    kinds = [(t, v) for t, v in shown if t in ("subheader", "radio")]
+    assert kinds.index(("radio", "Tool stats window")) == kinds.index(("subheader", "Tool stats")) + 1
+    heading = ("subheader", "Human checks at the ticket approval gate")
+    assert kinds.index(("radio", "Human checks window")) == kinds.index(heading) + 1
+    assert kinds.index(("subheader", "Cost by tier")) < kinds.index(heading)  # the page order is unchanged

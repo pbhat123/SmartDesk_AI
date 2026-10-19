@@ -336,7 +336,6 @@ def _choose(label: str, options: dict[str, Any], key: str) -> Any:
 
 
 def _render_tools(data: MonitoringData) -> None:
-    st.subheader("Tool stats")
     info = data.tool_window
     if not data.tools:
         st.caption(f"No tool calls since {info.since}." if info.since else "No tool calls yet.")
@@ -412,7 +411,6 @@ def _render_stale(data: MonitoringData) -> None:
 
 
 def _render_hitl(data: MonitoringData) -> None:
-    st.subheader("Human checks at the ticket approval gate")
     counts = data.hitl
     st.caption(f"{data.hitl_label}.")
     cells = [("Approvals", counts.approvals), ("Rejections", counts.rejections), ("Edits", counts.edits)]
@@ -529,15 +527,27 @@ def _render_drift(ctx: UiContext, data: MonitoringData) -> None:
 def render_monitoring(ctx: UiContext) -> None:
     if st.button("Refresh", key="monitoring_refresh"):
         st.rerun()
-    tool_window = _choose("Tool stats window", TOOL_WINDOWS, "monitoring_tool_window")
-    hitl_window = _choose("Human checks window", HITL_WINDOWS, "monitoring_hitl_window")
+    # Each filter sits under its own heading, but the data it picks is needed before the sections draw: the sections
+    # fill containers that were opened in page order.
+    tools_box, degraded_box, cost_box, stale_box, hitl_box = (st.container() for _ in range(5))
+    with tools_box:
+        st.subheader("Tool stats")
+        tool_window = _choose("Tool stats window", TOOL_WINDOWS, "monitoring_tool_window")
+    with hitl_box:
+        st.subheader("Human checks at the ticket approval gate")
+        hitl_window = _choose("Human checks window", HITL_WINDOWS, "monitoring_hitl_window")
     data = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir,
                            window=tool_window, hitl_window=hitl_window,
                            sessions=st.session_state.get("thread_ids", []))
-    _render_tools(data)
-    _render_degraded(data)
-    _render_cost(ctx, data)
-    _render_stale(data)
-    _render_hitl(data)
+    with tools_box:
+        _render_tools(data)
+    with degraded_box:
+        _render_degraded(data)
+    with cost_box:
+        _render_cost(ctx, data)
+    with stale_box:
+        _render_stale(data)
+    with hitl_box:
+        _render_hitl(data)
     _render_agent_metrics(data)
     _render_drift(ctx, data)

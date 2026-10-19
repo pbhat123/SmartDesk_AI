@@ -186,3 +186,65 @@ def test_the_mock_run_prints_both_columns_and_writes_the_result_file(capsys, tmp
         assert text in out, text
     saved = json.loads((tmp_path / "tier_comparison.json").read_text())
     assert saved["mock"] is True and [r["name"] for r in saved["results"]] == ["tier_map", "all_main"]
+
+
+# --- T7.11: cost by agent, the ledger ceiling, and the Ragas report from the same judge pass ---------------------------
+
+def test_every_configuration_reports_cost_by_agent_and_it_adds_up_to_the_tiers(mock_comparison):
+    for result in mock_comparison.results:
+        assert result.by_agent, result.name
+        assert "orchestrator" in result.by_agent and any(a.endswith("_worker") or a == "misc_search" for a in result.by_agent)
+        by_agent_usd = sum(u.usd for name, u in result.by_agent.items() if name != "retrieval")
+        by_tier_usd = sum(u.usd for u in result.by_tier.values())
+        assert by_agent_usd == pytest.approx(by_tier_usd), result.name  # the same LLM calls grouped two ways
+
+
+def test_the_table_has_a_row_per_agent_for_both_configurations(mock_comparison):
+    text = "\n".join(tc.format_table(mock_comparison))
+    assert "cost by agent (all tasks, USD)" in text and "  orchestrator" in text
+
+
+def test_the_spend_guard_also_reads_the_ledger():
+    spent = [0.0]
+    guard = tc.SpendGuard(0.10, ledger=lambda: spent[0])
+    guard.add(0.01)
+    spent[0] = 0.25  # the ledger counts calls the run's own tracker did not see
+    with pytest.raises(SpendCeilingExceeded):
+        guard.add(0.0)
+
+
+def test_the_live_run_keeps_the_ragas_report_of_the_shared_judge_pass(tmp_path, monkeypatch):
+    seen = {}
+    out = tmp_path / "tier_map"
+    out.mkdir()
+    (out / "rag_metrics.json").write_text(json.dumps({"context_precision": 0.9}))
+    path = tc.save_ragas(tmp_path, tmp_path / "results")
+    assert path.name == "rag_metrics_final.json" and json.loads(path.read_text())["context_precision"] == 0.9
+    assert tc.save_ragas(tmp_path / "nowhere", tmp_path / "results") is None
+    assert not seen
+
+
+def test_a_live_run_without_confirm_spend_runs_nothing(capsys, monkeypatch):
+    monkeypatch.setattr(tc, "run_live", lambda *a, **k: (_ for _ in ()).throw(AssertionError("paid run")))
+    assert tc.main([]) == 2 and "Nothing was run" in capsys.readouterr().out
+
+
+def test_kept_answers_are_scored_again_on_a_rerun_without_asking_the_models(settings, tmp_path):
+    from evals.harness import kb_rows
+    from evals.rag_metrics import MockJudge, RagOutput, compute_metrics
+
+    rows = kb_rows()[:3]
+    asked = []
+
+    def answer(row):
+        asked.append(row.id)
+        return RagOutput(question_id=row.id, answer="a", contexts=["c"], retrieved=[row.expected_entry_id],
+                         citations=[row.expected_entry_id], insufficient=False)
+
+    score = lambda name, outputs, rows: compute_metrics(outputs, rows, MockJudge())  # noqa: E731
+    guard = tc.SpendGuard(None)
+    first = tc.run_kb_set(settings, answer, rows, score, "tier_map", guard, cache_dir=tmp_path)
+    again = tc.run_kb_set(settings, answer, rows, score, "tier_map", guard, cache_dir=tmp_path)
+    assert asked == [r.id for r in rows] and again.usd == first.usd and again.n_questions == 3
+    other = tc.run_kb_set(settings, answer, rows[:2], score, "tier_map", guard, cache_dir=tmp_path)  # other questions: asked again
+    assert len(asked) == 5 and other.n_questions == 2

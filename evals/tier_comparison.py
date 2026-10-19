@@ -15,8 +15,8 @@ configurations run the same models there. The KB set then runs once and both col
 
 Nothing paid runs by accident: with no flag the command prints the estimate and stops. `--mock` is a free dry run,
 `--estimate` prints the estimate, and a live run needs `--confirm-spend`, runs under a spend ceiling (estimate x
-`tier_comparison.ceiling_multiplier`) and a stall watchdog, and is metered in the spend ledger. The live run is built
-but has not been run: it is combined with T7.11 after Phase 7.
+`tier_comparison.ceiling_multiplier`) and a stall watchdog, and is metered in the spend ledger. A live run
+also keeps the full Ragas report of the tier-map column (`rag_metrics_final.json`): one judge pass serves both.
 """
 import argparse
 import dataclasses
@@ -30,8 +30,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from evals import agent_metrics
-from evals.harness import Resources, kb_rows, link_live_index, live_settings, make_resources
-from evals.judge_run import EXIT_STALLED, STALL_SECONDS, SpendCeilingExceeded, Watchdog
+from evals.harness import RESULTS_DIR, ROOT, Resources, kb_rows, link_live_index, live_settings, make_resources
+from evals.judge_run import SpendCeilingExceeded
 from evals.rag_metrics import AnswerFn, MockJudge, RagOutput, RagReport, compute_metrics, make_answer_fn, mock_answerer
 from evals.scenario_schema import Scenario, load_scenario
 from smartdesk_ai.config.settings import Settings, load_settings
@@ -41,6 +41,9 @@ from smartdesk_ai.ops.runtime import RequestContext, Services, request_scope
 CONFIGS = ("tier_map", "all_main")
 KB_PATH_TASKS = ("ORCHESTRATOR", "WORKER_ANSWER", "GROUNDING_JUDGE", "SYNTHESIZER")
 RESULT_FILE = "tier_comparison.json"
+RAGAS_FINAL_FILE = "rag_metrics_final.json"
+ANSWERS_FILE = "kb_answers.json"
+WORK_DIR = ROOT / "data" / "eval_checkpoints" / "tier_comparison"
 MOCK_NOTE = ("MOCK run: prompts are the real ones, replies are scripted, and prices come from config.yaml. The cost "
              "columns show what these tokens would cost on each configuration; the quality columns only exercise the code.")
 
@@ -73,15 +76,17 @@ class SpendGuard:
     """Adds up what a run has cost and raises `SpendCeilingExceeded` once it passes the ceiling. It is checked between
     tasks and questions, so a run stops after the one in flight. `on_beat` tells the watchdog the run is alive."""
 
-    def __init__(self, ceiling_usd: float | None, on_beat: Callable[[], None] | None = None) -> None:
-        self.ceiling_usd, self.spent, self.on_beat = ceiling_usd, 0.0, on_beat
+    def __init__(self, ceiling_usd: float | None, on_beat: Callable[[], None] | None = None,
+                 ledger: Callable[[], float] | None = None) -> None:
+        self.ceiling_usd, self.spent, self.on_beat, self.ledger = ceiling_usd, 0.0, on_beat, ledger
 
     def add(self, usd: float) -> None:
         self.spent += usd
         if self.on_beat is not None:
             self.on_beat()
-        if self.ceiling_usd is not None and self.spent > self.ceiling_usd:
-            raise SpendCeilingExceeded(f"spend ${self.spent:.2f} is over the ${self.ceiling_usd:.2f} ceiling")
+        total = max(self.spent, self.ledger()) if self.ledger is not None else self.spent  # the ledger sees every paid call
+        if self.ceiling_usd is not None and total > self.ceiling_usd:
+            raise SpendCeilingExceeded(f"spend ${total:.2f} is over the ${self.ceiling_usd:.2f} ceiling")
 
 
 # --- results ---------------------------------------------------------------------------------------------
@@ -115,6 +120,7 @@ class KbResult(BaseModel):
 
 class ConfigResult(BaseModel):
     name: str
+    by_agent: dict[str, TierUse] = Field(default_factory=dict)  # model calls of the scenario tasks, by the agent that made them
     n_tasks: int
     completion_rate: float | None
     task_accuracy: float | None
@@ -149,6 +155,19 @@ def _by_tier(entries: Sequence[CostEntry], settings: Settings) -> dict[str, Tier
     return dict(use)
 
 
+def _by_agent(entries: Sequence[CostEntry], settings: Settings) -> dict[str, TierUse]:
+    use: dict[str, TierUse] = defaultdict(TierUse)
+    for entry in entries:
+        if entry.step != "llm":
+            continue
+        row = use[entry.agent]
+        row.calls += 1
+        row.input_tokens += entry.input_tokens
+        row.output_tokens += entry.output_tokens
+        row.usd += price_entries([entry], settings)
+    return dict(use)
+
+
 def _task_entries(task: agent_metrics.TaskRun) -> list[CostEntry]:
     return [e for turn in task.turns for e in turn.entries]
 
@@ -162,7 +181,7 @@ def scenario_result(name: str, variant: Settings, tasks: Sequence[agent_metrics.
                 task_accuracy=sum(t.accurate for t in tasks) / n if n else None,
                 usd_per_task=sum(c.usd for c in costs) / n if n else 0.0,
                 tokens_per_task=sum(c.tokens for c in costs) / n if n else 0.0,
-                by_tier=_by_tier(entries, variant), tasks=costs)
+                by_tier=_by_tier(entries, variant), by_agent=_by_agent(entries, variant), tasks=costs)
 
 
 # --- the KB set ------------------------------------------------------------------------------------------
@@ -181,9 +200,20 @@ def mock_pipeline(res: Resources, index) -> KbPipeline:
 
 
 def run_kb_set(variant: Settings, answer_fn: AnswerFn, rows: Sequence, score: Score, name: str,
-               guard: SpendGuard) -> KbResult:
+               guard: SpendGuard, cache_dir: Path | None = None) -> KbResult:
     """Answer the KB questions through the agent's own search and answer path and score them. Every call runs under a
-    request scope, so its tokens are counted and priced at the tiers' config prices."""
+    request scope, so its tokens are counted and priced at the tiers' config prices. With a `cache_dir` the answers are kept
+    there, and a rerun after a stop scores those same answers (so the judge checkpoint still matches) instead of paying again."""
+    saved = cache_dir / ANSWERS_FILE if cache_dir else None
+    if saved is not None and saved.is_file():
+        kept = json.loads(saved.read_text())
+        if kept.get("ids") == [r.id for r in rows]:
+            outputs, usd = [RagOutput(**o) for o in kept["outputs"]], kept["usd"]
+            report = score(name, outputs, rows)
+            return KbResult(n_questions=report.n_questions, n_answered=report.n_answered,
+                            faithfulness=report.grounded_answer_rate, hallucination_rate=report.hallucination_rate,
+                            answer_correctness=report.answer_correctness, usd=usd,
+                            usd_per_question=usd / report.n_questions if report.n_questions else 0.0, judge=report.judge)
     tracker = CostTracker(variant, priced=False)
     outputs = []
     for row in rows:
@@ -192,8 +222,11 @@ def run_kb_set(variant: Settings, answer_fn: AnswerFn, rows: Sequence, score: Sc
         with request_scope(ctx, Services(cost=tracker)):
             outputs.append(answer_fn(row))
         guard.add(price_entries(tracker.entries[before:], variant))
-    report = score(name, outputs, rows)
     usd = price_entries(tracker.entries, variant)
+    if saved is not None:
+        saved.parent.mkdir(parents=True, exist_ok=True)
+        saved.write_text(json.dumps({"ids": [r.id for r in rows], "usd": usd, "outputs": [o.model_dump() for o in outputs]}))
+    report = score(name, outputs, rows)
     return KbResult(n_questions=report.n_questions, n_answered=report.n_answered,
                     faithfulness=report.grounded_answer_rate, hallucination_rate=report.hallucination_rate,
                     answer_correctness=report.answer_correctness, usd=usd,
@@ -217,6 +250,7 @@ def compare(
     scenario_builder: agent_metrics.StackBuilder = agent_metrics.mock_stack,
     kb_pipeline: KbPipeline | None = None,
     score: Score | None = None,
+    keep_answers: bool = False,
 ) -> Comparison:
     """Run both configurations. The defaults are the free mock run; the live run passes live builders, a pipeline and a
     scorer. A `guard` stops the run between tasks and questions once its ceiling is passed."""
@@ -239,7 +273,8 @@ def compare(
             scenarios, variant, work_dir / name, build=scenario_builder,
             after_task=lambda task, v=variant: guard.add(price_entries(_task_entries(task), v)))
         if kb_done is None or not shared:
-            kb_done = run_kb_set(variant, pipeline(variant), rows, score, name, guard)
+            kb_done = run_kb_set(variant, pipeline(variant), rows, score, name, guard,
+                                 cache_dir=work_dir / name if keep_answers else None)
         comparison.results.append(ConfigResult(kb=kb_done, kb_shared=shared, **scenario_result(name, variant, tasks)))
     return comparison
 
@@ -328,6 +363,11 @@ def format_table(comparison: Comparison) -> list[str]:
         row(f"  {tier} tokens in / out (all tasks)", f"{left.input_tokens}/{left.output_tokens}",
             f"{right.input_tokens}/{right.output_tokens}")
         row(f"  {tier} cost (all tasks, USD)", _n(left.usd, 5), _n(right.usd, 5))
+    agents = [name for name in (*a.by_agent, *b.by_agent) if name in a.by_agent or name in b.by_agent]
+    if agents:
+        row("cost by agent (all tasks, USD)", "", "")
+        for name in dict.fromkeys(agents):
+            row(f"  {name}", _n(a.by_agent.get(name, TierUse()).usd, 5), _n(b.by_agent.get(name, TierUse()).usd, 5))
     row("KB faithfulness (grounded rate)", _n(a.kb.faithfulness), _n(b.kb.faithfulness))
     row("KB hallucination rate", _n(a.kb.hallucination_rate), _n(b.kb.hallucination_rate))
     row("KB answer correctness", _n(a.kb.answer_correctness), _n(b.kb.answer_correctness))
@@ -358,33 +398,35 @@ def _live_stack(settings: Settings, data_dir: Path, client, registry):
                        use_cache=False, registry=registry, client=client)
 
 
-def run_live(settings: Settings, args: argparse.Namespace, estimate: Estimate) -> int:
-    """The paid run: real models, the real index, mock tickets, a ledger run, a spend ceiling and a stall watchdog.
-    Not run yet; it is combined with T7.11 after Phase 7."""
-    import os
+def save_ragas(work_dir: Path, results_dir: Path) -> Path | None:
+    """Keep the full Ragas report of the judge pass the comparison already paid for (the tier-map column), so the final Ragas
+    numbers and the T7.11 column come from one pass. None when that pass saved no report."""
+    source = work_dir / "tier_map" / "rag_metrics.json"
+    if not source.is_file():
+        return None
+    results_dir.mkdir(parents=True, exist_ok=True)
+    target = results_dir / RAGAS_FINAL_FILE
+    target.write_text(source.read_text())
+    return target
 
+
+def run_live(settings: Settings, args: argparse.Namespace, estimate: Estimate) -> int:
+    """The paid run (T7.11 with the final Ragas metrics): real models, the real index, mock tickets, a ledger run, a spend ceiling
+    of twice the estimate read from the ledger and the tracker, and a stall watchdog. The Ragas judge resumes from its
+    checkpoint in the (stable) work directory if the run is stopped and started again."""
+    from evals.live_guard import LiveRun
     from evals.rag_metrics import judge_saved
     from evals.run import get_index
     from smartdesk_ai.agent.answer import make_answerer
     from smartdesk_ai.agent.grounding import make_grounding_judge
     from smartdesk_ai.llm.factory import openai_builder
-    from smartdesk_ai.ops.spend_ledger import end_run, start_run
 
     live = live_settings(settings)
     res = dataclasses.replace(make_resources(mock=False), settings=live)
-    start_run(live, ["python", "-m", "evals.tier_comparison", *sys.argv[1:]], "eval")
-    guard = SpendGuard(estimate.ceiling_usd)
-
-    def stalled() -> None:
-        print("error: the comparison made no progress and was aborted", file=sys.stderr, flush=True)
-        end_run("stalled")
-        os._exit(EXIT_STALLED)  # a thread blocked in a network call cannot be interrupted any other way
-
-    watchdog = Watchdog(STALL_SECONDS, stalled)
-    guard.on_beat = watchdog.beat
-    out_dir = args.out_dir or Path(tempfile.mkdtemp(prefix="tier_comparison_"))
-    status = "crashed"
-    try:
+    work_dir = args.work_dir
+    with LiveRun(live, ["python", "-m", "evals.tier_comparison", *sys.argv[1:]], ceiling_usd=estimate.ceiling_usd) as run:
+        guard = SpendGuard(estimate.ceiling_usd, ledger=lambda: run.cost().usd)
+        guard.on_beat = run.beat
         index = get_index(res, None)
 
         def pipeline(variant: Settings) -> AnswerFn:
@@ -394,23 +436,24 @@ def run_live(settings: Settings, args: argparse.Namespace, estimate: Estimate) -
 
         def live_score(name: str, outputs: Sequence[RagOutput], rows: Sequence) -> RagReport:
             variant_res = dataclasses.replace(res, settings=settings_for(name, live))
-            return judge_saved(variant_res, outputs, rows, out_dir / name,
-                               ceiling_usd=max(estimate.ceiling_usd - guard.spent, 0.0))
+            return judge_saved(variant_res, outputs, rows, work_dir / name,
+                               ceiling_usd=max(estimate.ceiling_usd - run.cost().usd, 0.0))
 
-        watchdog.start()
-        comparison = compare(res, out_dir, index=index, kb_limit=args.kb_limit, kb_both=args.kb_both, guard=guard,
-                             scenario_builder=_live_stack, kb_pipeline=pipeline, score=live_score)
-        print("\n".join(format_table(comparison)))
-        print(f"saved: {save(comparison, out_dir)}")
-        status = "ok"
-        return 0
-    except SpendCeilingExceeded as stop:
-        print(f"[stopped] {stop}. Nothing was saved.", file=sys.stderr)
-        status = "ceiling"
-        return 1
-    finally:
-        watchdog.stop()
-        end_run(status)
+        try:
+            comparison = compare(res, work_dir, index=index, kb_limit=args.kb_limit, kb_both=args.kb_both, guard=guard,
+                                 scenario_builder=_live_stack, kb_pipeline=pipeline, score=live_score, keep_answers=True)
+        except SpendCeilingExceeded as stop:
+            run.status = "ceiling"
+            print(f"[stopped] {stop}. Nothing was saved; the judge pass resumes from {work_dir} on the next run.", file=sys.stderr)
+            return 1
+        cost = run.cost()
+    print("\n".join(format_table(comparison)))
+    print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls ({cost.input_tokens:,} input, "
+          f"{cost.output_tokens:,} output tokens)")
+    print(f"saved: {save(comparison, args.out_dir)}")
+    ragas = save_ragas(work_dir, args.out_dir)
+    print(f"final Ragas report (the same judge pass): {ragas}" if ragas else "no Ragas report was saved")
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -420,7 +463,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--confirm-spend", action="store_true", help="allow the live run, which calls paid models")
     parser.add_argument("--kb-both", action="store_true", help="run the KB set for each configuration even if the models match")
     parser.add_argument("--kb-limit", type=int, default=None, help="use only the first N KB questions")
-    parser.add_argument("--out-dir", type=Path, default=None, help="write tier_comparison.json here")
+    parser.add_argument("--out-dir", type=Path, default=RESULTS_DIR, help="write tier_comparison.json (and rag_metrics_final.json) here")
+    parser.add_argument("--work-dir", type=Path, default=WORK_DIR, help="live run: where the judge checkpoint is kept, to resume")
     args = parser.parse_args(argv)
     settings = load_settings()
     if args.mock:
@@ -428,8 +472,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         with tempfile.TemporaryDirectory(prefix="tier_comparison_") as work:
             comparison = compare(res, Path(work), kb_limit=args.kb_limit, kb_both=args.kb_both)
         print("\n".join(format_table(comparison)))
-        if args.out_dir:
-            print(f"saved: {save(comparison, args.out_dir)}")
+        if args.out_dir != RESULTS_DIR:
+            print(f"saved: {save(comparison, args.out_dir)}")  # a mock run never writes into the real results folder
         return 0
     n_kb = len(kb_rows()[:args.kb_limit])
     kb_runs = 2 if args.kb_both or kb_path_differs(settings) else 1

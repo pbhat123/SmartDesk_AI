@@ -58,3 +58,4 @@ python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows 
 - Retrieval stays hybrid + rerank (see `evals/README.md`, "Retrieval ablation").
 - Answer prompt v4 and grounding judge v3 are active. Final gap, safety and Ragas reruns happen after Phase 7.
 - PII checks in tests use `tests/pii_helpers` (whole-token match only, never a bare substring such as `"98765" in blob`).
+- Never run git checkout/restore/reset on files with uncommitted work. For mutation tests use git stash or a git worktree.

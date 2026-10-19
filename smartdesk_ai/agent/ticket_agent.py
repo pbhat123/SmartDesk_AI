@@ -532,6 +532,11 @@ def created_reply(ticket: Any) -> str:
     return f"Your ticket has been created. {ticket.receipt()}\n\n{UPDATES_NOTE}"
 
 
+def already_created_reply(ticket: Any) -> str:
+    """The reply when the create found its ticket already made (a lost response): same facts, said as what happened."""
+    return f"Your ticket was already created: {ticket.receipt()}\n\n{UPDATES_NOTE}"
+
+
 def make_t_create_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any]]:
     def t_create(state: AgentState) -> dict[str, Any]:
         if state.gate is None or state.gate.decision != "yes" or state.ticket is None:
@@ -547,7 +552,7 @@ def make_t_create_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any
             deps.hitl.record_outcome("created" if result.outcome is Outcome.SUCCESS else "failed", session=_session_id())
         steps = state.steps + ["t_create"]
         if result.outcome is Outcome.SUCCESS:
-            reply = created_reply(result.data)
+            reply = already_created_reply(result.data) if result.recovered else created_reply(result.data)
         else:  # the executor's reply is polite and names no service (FR-F1)
             reply = result.reply or CREATE_FAILED
             steps = steps + ["create_failed"]

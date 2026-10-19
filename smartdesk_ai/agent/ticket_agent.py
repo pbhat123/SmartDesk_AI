@@ -40,6 +40,7 @@ from smartdesk_ai.llm.fallback import GRACEFUL_MESSAGE, FallbackChat
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.structured import ReplyError, parse_model_reply
 from smartdesk_ai.ops.hitl_counters import HitlCounters
+from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
 from smartdesk_ai.tools.executor import Outcome
 
@@ -488,7 +489,7 @@ def make_t_confirm_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, An
             decision = ConfirmDecision(decision="unclear")  # an edit that changes nothing is no answer
         unclear = state.gate_unclear + 1 if decision.decision == "unclear" else state.gate_unclear
         if deps.hitl is not None and decision.decision != "unclear":  # after the interrupt, so once per decision
-            deps.hitl.record(decision.decision)
+            deps.hitl.record(decision.decision, session=_session_id())
         return {"steps": state.steps + ["t_confirm"], "gate": decision, "gate_unclear": unclear}
 
     return t_confirm
@@ -536,13 +537,14 @@ def make_t_create_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any
         if state.gate is None or state.gate.decision != "yes" or state.ticket is None:
             raise RuntimeError("create_ticket needs the employee's confirmation first (FR-B2)")
         draft = state.ticket
-        result = deps.executor.execute(
-            "create_ticket",
-            {"title": draft.title, "description": draft.description, "category": draft.category,
-             "priority": draft.priority, "email": state.email},
-            agent="ticket_agent",
-            confirmed=True,
-        )
+        try:
+            result = _create(deps, draft, state)
+        except BaseException:
+            if deps.hitl is not None:
+                deps.hitl.record_outcome("failed", session=_session_id())  # approved, and then it broke
+            raise
+        if deps.hitl is not None:
+            deps.hitl.record_outcome("created" if result.outcome is Outcome.SUCCESS else "failed", session=_session_id())
         steps = state.steps + ["t_create"]
         if result.outcome is Outcome.SUCCESS:
             reply = created_reply(result.data)
@@ -552,3 +554,20 @@ def make_t_create_node(deps: TicketDeps) -> Callable[[AgentState], dict[str, Any
         return {**_end_flow(state), "steps": steps, "reply": reply, "messages": [AIMessage(reply)]}
 
     return t_create
+
+
+def _session_id() -> str | None:
+    """The conversation's random thread ID, from the request scope (never an email)."""
+    scope = current_scope()
+    return scope[0].session_id if scope else None
+
+
+def _create(deps: "TicketDeps", draft: Any, state: AgentState) -> Any:
+    """The one create_ticket call, through the executor (FR-G5)."""
+    return deps.executor.execute(
+        "create_ticket",
+        {"title": draft.title, "description": draft.description, "category": draft.category,
+         "priority": draft.priority, "email": state.email},
+        agent="ticket_agent",
+        confirmed=True,
+    )

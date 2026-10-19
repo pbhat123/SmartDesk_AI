@@ -9,6 +9,7 @@ import math
 import threading
 from collections import Counter
 from collections.abc import Iterable
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -27,6 +28,7 @@ class ToolCallRecord(BaseModel):
     attempt_latencies_ms: list[float]
     attempt_outcomes: list[AttemptOutcome]  # one per attempt, same order as the latencies
     total_latency_ms: float
+    ts: str | None = None  # UTC time of the call; records written before this field existed have none
 
 
 class MetricsRecorder:
@@ -38,6 +40,8 @@ class MetricsRecorder:
         self.records: list[ToolCallRecord] = []
 
     def record(self, rec: ToolCallRecord) -> None:
+        if rec.ts is None:
+            rec = rec.model_copy(update={"ts": datetime.now(timezone.utc).isoformat(timespec="seconds")})
         with self._lock:
             self.records.append(rec)
             if self._path is not None:
@@ -92,3 +96,33 @@ def summarize_tools(records: Iterable[ToolCallRecord]) -> list[ToolSummary]:
             p95_ms=percentile((r.total_latency_ms for r in recs), 0.95),
         ))
     return rows
+
+
+def date_from_trace(records: list[ToolCallRecord], trace_path: Path | str) -> list[ToolCallRecord]:
+    """Give records written before `ts` existed the time of their `tool_call` event in the trace log.
+
+    The two logs get one line per tool call, in the same order, so the undated records (always the oldest ones) pair
+    with the first trace events. The pairing is used only if every pair agrees on the tool and the outcome; otherwise
+    the records stay undated rather than get a guessed time.
+    """
+    undated = [i for i, r in enumerate(records) if r.ts is None]
+    path = Path(trace_path)
+    if not undated or not path.is_file():
+        return records
+    events: list[dict] = []
+    for line in path.read_text().splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(event, dict) and event.get("kind") == "tool_call" and event.get("ts"):
+            events.append(event)
+        if len(events) == len(undated):
+            break
+    if len(events) < len(undated) or any(
+            records[i].tool != e.get("tool") or records[i].outcome != e.get("outcome") for i, e in zip(undated, events)):
+        return records
+    dated = list(records)
+    for i, event in zip(undated, events):
+        dated[i] = records[i].model_copy(update={"ts": str(event["ts"])})
+    return dated

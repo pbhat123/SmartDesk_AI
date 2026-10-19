@@ -12,7 +12,7 @@ import json
 from collections.abc import Sequence
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import pandas as pd
 import streamlit as st
@@ -35,18 +35,25 @@ from smartdesk_ai.ops.drift import (
 )
 from smartdesk_ai.ops.health import HealthRegistry
 from smartdesk_ai.ops.hitl_counters import HitlCounts, load_counts
-from smartdesk_ai.ops.metrics import ToolCallRecord, load_records, summarize_tools
+from smartdesk_ai.ops.metrics import ToolCallRecord, date_from_trace, load_records, summarize_tools
 from smartdesk_ai.ops.spend_ledger import ledger_path, read_events
 from smartdesk_ai.rag.embeddings import HashingEmbeddings, embedder_id
 from smartdesk_ai.rag.staleness import StaleReport, check_staleness
 from smartdesk_ai.ui.context import UiContext
 
 TOOL_METRICS_FILE = "tool_metrics.jsonl"
+TRACE_FILE = "trace.jsonl"
 COST_FILE = "cost.jsonl"
 HITL_FILE = "hitl.jsonl"
 OPS_DB_FILE = "ops.db"
 AGENT_METRICS_FILE = "agent_metrics.json"
 TIER_ORDER = ("main", "light", "embedding", "other")
+
+ToolWindowName = Literal["app", "today", "all"]
+HitlWindowName = Literal["session", "today", "all"]
+TOOL_WINDOWS: dict[str, ToolWindowName] = {"Since app start": "app", "Today (UTC)": "today", "All time": "all"}
+HITL_WINDOWS: dict[str, HitlWindowName] = {"This session": "session", "Today (UTC)": "today", "All time": "all"}
+APP_STARTED = datetime.now(timezone.utc)  # set when the server process first imports this module
 
 
 class ToolRow(BaseModel):
@@ -59,6 +66,19 @@ class ToolRow(BaseModel):
     retry_rate: float  # share of calls that needed more than one attempt
     p50_ms: float
     p95_ms: float
+    last_error_ts: str | None = None  # UTC time of the tool's latest failed call in the window
+    last_error_type: str | None = None  # its outcome: validation_error, unavailable or error
+
+
+class ToolWindow(BaseModel):
+    """The time span the tool stats cover."""
+
+    label: str
+    since: str | None  # the start of the window; for "All time" the first dated call
+    first_ts: str | None
+    last_ts: str | None
+    calls: int
+    undated: int = 0  # calls logged before times were recorded that the trace could not date (only in "All time")
 
 
 class DegradedRow(BaseModel):
@@ -127,6 +147,7 @@ class AgentMetrics(BaseModel):
 
 class MonitoringData(BaseModel):
     tools: list[ToolRow]
+    tool_window: ToolWindow
     components: list[ComponentRow]
     degraded: list[DegradedRow]
     tiers: list[TierRow]
@@ -136,18 +157,47 @@ class MonitoringData(BaseModel):
     budget: BudgetRow
     stale: StaleReport
     hitl: HitlCounts
+    hitl_label: str = "All time"
     drift: list[DriftPoint]
     agent_metrics: AgentMetrics | None
 
 
-def _tool_rows(path: Path) -> list[ToolRow]:
-    records = load_records(path)
+def _parse(ts: str | None) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(ts) if ts else None
+    except ValueError:
+        return None
+    return parsed if parsed is None or parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _day_start(now: datetime) -> datetime:
+    return now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _tool_view(data_dir: Path, window: ToolWindowName, now: datetime, app_started: datetime) -> tuple[list[ToolRow], ToolWindow]:
+    records = date_from_trace(load_records(data_dir / TOOL_METRICS_FILE), data_dir / TRACE_FILE)
+    start = {"app": app_started, "today": _day_start(now), "all": None}[window]
+    label = {"app": "Since app start", "today": "Today (UTC)", "all": "All time"}[window]
+    undated = sum(r.ts is None for r in records)
+    kept = [r for r in records if start is None or ((when := _parse(r.ts)) is not None and when >= start)]
+    times = sorted((r.ts for r in kept if r.ts), key=lambda t: _parse(t))
+    since = start.isoformat(timespec="seconds") if start is not None else (times[0] if times else None)
+    info = ToolWindow(label=label, since=since, first_ts=times[0] if times else None,
+                      last_ts=times[-1] if times else None, calls=len(kept), undated=undated if window == "all" else 0)
     retries: dict[str, int] = {}
-    for rec in records:
+    last_error: dict[str, ToolCallRecord] = {}
+    for rec in kept:
         retries[rec.tool] = retries.get(rec.tool, 0) + max(rec.attempts - 1, 0)
-    return [ToolRow(tool=s.tool, calls=s.calls, success_rate=s.success_rate, failures=sum(s.failures.values()),
+        if rec.outcome != "success" and rec.ts and (rec.tool not in last_error
+                                                    or _parse(rec.ts) >= _parse(last_error[rec.tool].ts)):
+            last_error[rec.tool] = rec
+    rows = [ToolRow(tool=s.tool, calls=s.calls, success_rate=s.success_rate, failures=sum(s.failures.values()),
                     failure_types=s.failures, retries=retries.get(s.tool, 0), retry_rate=s.retry_rate,
-                    p50_ms=s.p50_ms, p95_ms=s.p95_ms) for s in summarize_tools(records)]
+                    p50_ms=s.p50_ms, p95_ms=s.p95_ms,
+                    last_error_ts=last_error[s.tool].ts if s.tool in last_error else None,
+                    last_error_type=last_error[s.tool].outcome if s.tool in last_error else None)
+            for s in summarize_tools(kept)]
+    return rows, info
 
 
 def _tier_of(model: str | None, settings: Settings) -> str:
@@ -244,15 +294,20 @@ def _agent_metrics(results_dir: Path) -> AgentMetrics | None:
 
 def load_monitoring(
     settings: Settings, data_dir: Path, kb_dir: Path, registry: HealthRegistry, *,
-    results_dir: Path, ledger: Path | None = None,
+    results_dir: Path, ledger: Path | None = None, window: ToolWindowName = "all",
+    hitl_window: HitlWindowName = "all", sessions: Sequence[str] = (),
+    now: datetime | None = None, app_started: datetime | None = None,
 ) -> MonitoringData:
     data_dir = Path(data_dir)
+    now = now or datetime.now(timezone.utc)
+    tools, tool_window = _tool_view(data_dir, window, now, app_started or APP_STARTED)
+    hitl_filter = {"session": {"sessions": list(sessions)}, "today": {"since": _day_start(now)}, "all": {}}[hitl_window]
     live = settings.modes.llm == "live"
     index_dir = data_dir / ("index" if live else "index_mock")  # the folders `build_stack` uses
     embedder = settings.models.embedding.id if live else embedder_id(HashingEmbeddings())
     tiers, ledger_total, ledger_today, sources = _ledger_view(settings, ledger or ledger_path(), data_dir / COST_FILE)
     return MonitoringData(
-        tools=_tool_rows(data_dir / TOOL_METRICS_FILE),
+        tools=tools, tool_window=tool_window,
         components=[ComponentRow(component=h.component.value, status=h.status.value, running_instead=h.mode or "",
                                  detail=mask_emails_in(h.reason or ""), load_seconds=h.load_seconds)
                     for h in registry.all()],
@@ -263,7 +318,8 @@ def load_monitoring(
         sources_today=sources,
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
-        hitl=load_counts(data_dir / HITL_FILE),
+        hitl=load_counts(data_dir / HITL_FILE, trace_path=data_dir / TRACE_FILE, **hitl_filter),
+        hitl_label={"session": "This session", "today": "Today (UTC)", "all": "All time"}[hitl_window],
         drift=DriftHistory(data_dir / DRIFT_LOG).points(),
         agent_metrics=_agent_metrics(Path(results_dir)),
     )
@@ -275,16 +331,26 @@ def _pct(value: float | None) -> str:
     return "n/a" if value is None else f"{value:.1%}"
 
 
+def _choose(label: str, options: dict[str, Any], key: str) -> Any:
+    return options[st.radio(label, list(options), index=len(options) - 1, horizontal=True, key=key)]
+
+
 def _render_tools(data: MonitoringData) -> None:
     st.subheader("Tool stats")
+    info = data.tool_window
     if not data.tools:
-        st.caption("No tool calls yet.")
-        return
-    st.dataframe(pd.DataFrame([{
-        "tool": r.tool, "calls": r.calls, "success rate": round(r.success_rate, 3), "failures": r.failures,
-        "failed by": ", ".join(f"{k}: {v}" for k, v in sorted(r.failure_types.items())) or "-",
-        "retries": r.retries, "retry rate": round(r.retry_rate, 3), "p50 ms": round(r.p50_ms, 1),
-        "p95 ms": round(r.p95_ms, 1)} for r in data.tools]), hide_index=True, width="stretch")
+        st.caption(f"No tool calls since {info.since}." if info.since else "No tool calls yet.")
+    else:
+        st.caption(f"{info.label}: {info.calls} calls since {info.since}, the latest at {info.last_ts}.")
+        st.dataframe(pd.DataFrame([{
+            "tool": r.tool, "calls": r.calls, "success rate": round(r.success_rate, 3), "failures": r.failures,
+            "failed by": ", ".join(f"{k}: {v}" for k, v in sorted(r.failure_types.items())) or "-",
+            "last error": f"{r.last_error_ts} ({r.last_error_type})" if r.last_error_ts else "-",
+            "retries": r.retries, "retry rate": round(r.retry_rate, 3), "p50 ms": round(r.p50_ms, 1),
+            "p95 ms": round(r.p95_ms, 1)} for r in data.tools]), hide_index=True, width="stretch")
+    if info.undated:
+        st.caption(f"{info.undated} older call(s) were logged before times were recorded and cannot be dated; "
+                   "they appear only under All time.")
 
 
 def _render_degraded(data: MonitoringData) -> None:
@@ -348,11 +414,19 @@ def _render_stale(data: MonitoringData) -> None:
 def _render_hitl(data: MonitoringData) -> None:
     st.subheader("Human checks at the ticket approval gate")
     counts = data.hitl
-    for column, (label, value) in zip(st.columns(3), [("Approvals", counts.approvals),
-                                                      ("Rejections", counts.rejections), ("Edits", counts.edits)]):
+    st.caption(f"{data.hitl_label}.")
+    cells = [("Approvals", counts.approvals), ("Rejections", counts.rejections), ("Edits", counts.edits)]
+    for column, (label, value) in zip(st.columns(3), cells):
+        column.metric(label, str(value))
+    split = [("Approved, ticket created", counts.approved_created), ("Approved, creation failed", counts.approved_failed)]
+    if counts.approved_unknown:
+        split.append(("Approved, outcome unknown", counts.approved_unknown))
+    for column, (label, value) in zip(st.columns(len(split)), split):
         column.metric(label, str(value))
     st.caption("Counted when an employee answers the approval gate: yes, no, or a change to the draft. "
-               "Unclear replies are not decisions, so they are not counted.")
+               "Unclear replies are not decisions, so they are not counted. Each approval is matched to what happened "
+               "to the ticket afterwards; for older approvals that comes from the trace log, and \"unknown\" means "
+               "neither log shows it. The log keeps everything; the filter only chooses what is counted.")
 
 
 def _render_agent_metrics(data: MonitoringData) -> None:
@@ -455,7 +529,11 @@ def _render_drift(ctx: UiContext, data: MonitoringData) -> None:
 def render_monitoring(ctx: UiContext) -> None:
     if st.button("Refresh", key="monitoring_refresh"):
         st.rerun()
-    data = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir)
+    tool_window = _choose("Tool stats window", TOOL_WINDOWS, "monitoring_tool_window")
+    hitl_window = _choose("Human checks window", HITL_WINDOWS, "monitoring_hitl_window")
+    data = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir,
+                           window=tool_window, hitl_window=hitl_window,
+                           sessions=st.session_state.get("thread_ids", []))
     _render_tools(data)
     _render_degraded(data)
     _render_cost(ctx, data)

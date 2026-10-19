@@ -94,7 +94,7 @@ thresholds:
   escalation: 0.40           # final: live sweep 0.30-0.50 in evals/results/gap_sweep.json (gap pass 100% throughout; KB answer 98.1% at 0.40, 86.8% at 0.45)
   escalation_mock: 0.10      # mock mode only (hashing embeddings are weaker); the mock answer model judges sufficiency
   routing_confidence: 0.60   # provisional, tuned in T4.4 (FR-D8)
-  semantic_cache_cutoff: 0.95  # provisional: high on purpose (cache rules), not tuned on live embeddings (paid); mock tests pin the behaviour
+  semantic_cache_cutoff: 0.95  # final: no pair needing different answers is above 0.734 (2,261 + 1,620 pairs, evals/results/cache_cutoff.json); paraphrase recall is not measured (no true paraphrase pairs are cached)
   duplicate_title: 0.72      # tuned offline on 60 title pairs (best F1); see evals/results/duplicate_threshold.json
   injection_heuristic: 0.30  # provisional, tuned in T5.4 (LLM classifier runs only above this, FR-H1)
 

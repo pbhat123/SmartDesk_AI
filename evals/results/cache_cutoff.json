@@ -1,0 +1,45 @@
+{
+  "model": "text-embedding-3-small",
+  "skipped_not_cached": 0,
+  "different_answer_pairs": 3881,
+  "highest_different_answer": [
+    {
+      "cosine": 0.7336,
+      "a": "gap-014",
+      "b": "kb-025"
+    },
+    {
+      "cosine": 0.6672,
+      "a": "lex-010",
+      "b": "lex-013"
+    },
+    {
+      "cosine": 0.6502,
+      "a": "gap-013",
+      "b": "kb-053"
+    },
+    {
+      "cosine": 0.6278,
+      "a": "lex-008",
+      "b": "lex-010"
+    },
+    {
+      "cosine": 0.6171,
+      "a": "lex-004",
+      "b": "lex-005"
+    }
+  ],
+  "same_entry_pairs": {
+    "n": 17,
+    "min": 0.20207505085813277,
+    "median": 0.32028342920376085,
+    "max": 0.6602387556058273
+  },
+  "same_topic_gap_pairs": {
+    "n": 18,
+    "min": 0.33581409746180424,
+    "median": 0.4318081523368784,
+    "max": 0.6330828985285342
+  },
+  "configured_cutoff": 0.95
+}

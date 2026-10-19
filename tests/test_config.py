@@ -95,11 +95,13 @@ def test_prompt_versions_are_positive_ints(settings):
 
 def test_provisional_thresholds_are_marked_in_the_file():
     lines = CONFIG.read_text().splitlines()
-    for key in ("routing_confidence", "semantic_cache_cutoff", "injection_heuristic"):
+    for key in ("routing_confidence", "injection_heuristic"):
         (line,) = [l for l in lines if re.match(rf"\s+{key}:", l)]
         assert "provisional" in line, f"{key} should be marked provisional until its task tunes it"
     (line,) = [l for l in lines if re.match(r"\s+escalation:", l)]  # tuned end to end by the live sweep
     assert "final" in line and "gap_sweep.json" in line
+    (line,) = [l for l in lines if re.match(r"\s+semantic_cache_cutoff:", l)]  # set from the cached-embedding evidence
+    assert "final" in line and "cache_cutoff.json" in line
     assert not any(re.match(r"\s+fallback:", l) for l in lines)  # SPEC v3.1: one escalation threshold
 
 

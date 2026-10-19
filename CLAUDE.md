@@ -18,6 +18,7 @@ python -m smartdesk_ai.agent             # CLI chat (--debug shows chunks and sc
 streamlit run smartdesk_ai/ui/app.py     # UI + Monitoring tab
 python scripts/seed_tickets.py           # idempotent seed tickets
 pytest                                   # unit tests (mock mode, no network)
+python scripts/smoke_ui.py               # real Streamlit server + browser, mock mode, temp data (about 15 s); needs Playwright
 scripts/install_hooks.sh                 # once per clone: pre-commit hook runs pytest and blocks a commit on any failure
 python -m evals.run                      # Ragas + retrieval ablations
 python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows the cost estimate, asks to confirm (--estimate only prints it)
@@ -38,6 +39,7 @@ python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows 
 - Typed code with Pydantic schemas; small modules with meaningful names. All code and docs must be the user's own work (no copied code).
 
 ## Workflow rules
+- **Definition of done: unit tests pass AND `scripts/smoke_ui.py` passes. Run it before reporting any UI or agent-flow task as done.**
 - Core first: SPEC §3A to 3G, then bonus. Build the single-path agent before multi-agent fan-out (§3I).
 - Work through the tasks I name, in order. For each task: write its test first, implement, run pytest, tick the box, and commit it separately with its FR ids. Stop at the end of the named range, or at the first failure you can't fix, or at any [CONFIRM] step. Tick and commit only when pytest passes (`pytest -q && git commit ...`); never commit on red, not even to amend later.
 - Write evals (SPEC §7) before the code they test. Eval questions must be paraphrased, never copied from indexed KB text (FR-A18).

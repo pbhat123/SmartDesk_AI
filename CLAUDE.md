@@ -59,3 +59,4 @@ python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows 
 - Answer prompt v4 and grounding judge v3 are active. Final gap, safety and Ragas reruns happen after Phase 7.
 - PII checks in tests use `tests/pii_helpers` (whole-token match only, never a bare substring such as `"98765" in blob`).
 - Never run git checkout/restore/reset on files with uncommitted work. For mutation tests use git stash or a git worktree.
+- Never create or edit files in the repo while a commit hook is running; wait for it to finish. Use the scratchpad for drafts.

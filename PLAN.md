@@ -747,3 +747,6 @@ Streamlit runs every rerun on its own thread and the app context is one shared o
 
 ### 17.3 HITL counting (FR-H4)
 The live log shows edits are counted when they happen: `hitl.jsonl` has `edit` at 23:55:42 and 23:59:32, the same seconds as `t_confirm, t_apply_edit` in the trace, and the `yes` five seconds later at 23:55:47 and 23:59:35. That session had no "no", so the only rejection in the totals is the one from the earlier session. An approval is counted at the gate decision, before `t_create` runs, so the three `yes` lines of the crashed session are approvals whose ticket creation then failed with the SQLite error; tests pin both behaviours.
+
+## 18. T9.1 README notes (collect here until the root README.md exists)
+- KB links use the reserved .example domain (RFC 2606) and don't resolve; they're part of the fictional company's KB. (`https://id.smartdesk.example/reset` is in 5 entries: IT-PWD-01, IT-PWD-02, IT-VPN-02, IT-SEC-01, IT-EQUIP-03; `https://helpdesk.smartdesk.example` is in 13: IT-HELP-01, IT-VPN-02, IT-SW-01, IT-SW-03, IT-WIFI-01, IT-WIFI-02 (as `/wifi` only), IT-MAIL-02, IT-EQUIP-01 to IT-EQUIP-04, HR-ABOUT-01, HR-PAY-02. Checked 2026-10-19 against the indexed entries.)

@@ -46,10 +46,15 @@ class Observation(BaseModel):
     hit: bool | None  # KB questions: the expected entry was among the k retrieved
     grounded: int  # the grounding judge's verdicts for this question
     verdicts: int
+    workers: int = 0  # worker spans of the question (one part should mean one worker)
+    synth_calls: int = 0  # synthesizer calls (a single-part question should make none)
 
 
 class GoldenResult(BaseModel):
     gap: GapReport
+    single_part_clean: int = 0  # questions that used exactly one worker and no synthesizer call
+    single_part_total: int = 0
+    not_clean: list[str] = []
     drift: drift.DriftPoint | None  # None when the run stopped before the last question
     stopped: str | None = None
     usd: float = 0.0
@@ -65,12 +70,15 @@ def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
         state = run_turn(stack.graph, session, row.question)
     part = state.part_result
     chunks = part.chunks if part is not None else []
-    verdicts = drift.verdicts_from_events(trace.events[before:]) if trace is not None else []
+    new_events = trace.events[before:] if trace is not None else []
+    verdicts = drift.verdicts_from_events(new_events)
     return Observation(
         id=row.id, label=label, split=row.split, grey_zone=getattr(row, "grey_zone", False), question=row.question,
         outcome=classify(state), top_score=chunks[0].score if chunks else None,
         hit=row.expected_entry_id in {c.entry_id for c in chunks[:k]} if label == "kb" else None,
-        grounded=sum(verdicts), verdicts=len(verdicts))
+        grounded=sum(verdicts), verdicts=len(verdicts),
+        workers=len({e.get("part_id") for e in new_events if e.get("kind") == "agent_span" and e.get("part_id")}),
+        synth_calls=sum(e.get("kind") == "llm_call" and e.get("task") == "SYNTHESIZER" for e in new_events))
 
 
 def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, mock: bool, run: LiveRun | None = None,
@@ -96,7 +104,9 @@ def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, m
             hits=[o.hit for o in seen if o.hit is not None], top_scores=[o.top_score for o in seen if o.top_score is not None],
             escalated=sum(o.outcome == "escalated" for o in seen), n_questions=len(seen), n_kb=len(golden.kb),
             n_gap=len(golden.gap), reranker_status=stack.registry.get(Component.RERANKER).status.value, usd=usd)
-    return GoldenResult(gap=gap, drift=point, stopped=stopped, usd=usd)
+    clean = [o for o in seen if o.workers == 1 and o.synth_calls == 0]
+    return GoldenResult(gap=gap, drift=point, stopped=stopped, usd=usd, single_part_clean=len(clean), single_part_total=len(seen),
+                        not_clean=[o.id for o in seen if o not in clean])
 
 
 def estimate_golden(settings: Settings, golden: drift.Golden) -> Estimate:
@@ -114,6 +124,8 @@ def render(result: GoldenResult, *, mock: bool) -> str:
              f"KB answer rate {g.kb_answer_rate:.3f} ({g.n_kb} questions)",
              f"  escalation precision {precision}  recall {g.escalation_recall:.3f}"]
     lines += [f"  FAIL {f}" for f in g.failures]
+    lines.append(f"  single-topic check: {result.single_part_clean} of {result.single_part_total} questions used exactly one worker "
+                 f"and no synthesizer call" + (f"; not: {', '.join(result.not_clean)}" if result.not_clean else ""))
     if result.drift is not None:
         d = result.drift
         shown = lambda v: "n/a" if v is None else f"{v:.3f}"  # noqa: E731
@@ -128,7 +140,8 @@ def save(result: GoldenResult, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     payload = {"mock": result.drift.mode == "mock" if result.drift else False, **result.gap.model_dump(),
                "cases": [c.model_dump() for c in result.gap.cases],
-               "drift": result.drift.model_dump() if result.drift else None, "stopped": result.stopped}
+               "drift": result.drift.model_dump() if result.drift else None, "stopped": result.stopped,
+               "single_part_clean": result.single_part_clean, "single_part_total": result.single_part_total, "not_clean": result.not_clean}
     path = out_dir / RESULT_FILE
     path.write_text(json.dumps(payload, indent=2))
     return path

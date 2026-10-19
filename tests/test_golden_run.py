@@ -159,3 +159,9 @@ def test_a_finished_live_run_stores_one_drift_point(settings, tmp_path, monkeypa
     log = tmp_path / "drift.jsonl"
     gr.main(["--confirm-spend", "--out-dir", str(tmp_path), "--checkpoint", str(tmp_path / "cp.json"), "--drift-log", str(log)])
     assert len(drift.DriftHistory(log).points()) == 1
+
+
+def test_single_topic_questions_use_one_worker_and_no_synthesizer(settings, stack):
+    result = gr.run_golden(stack, settings, GOLDEN, mock=True)
+    assert result.single_part_total == 12 and result.single_part_clean == 12 and result.not_clean == []
+    assert "12 of 12 questions used exactly one worker" in gr.render(result, mock=True)

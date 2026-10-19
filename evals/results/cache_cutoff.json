@@ -41,5 +41,45 @@
     "median": 0.4318081523368784,
     "max": 0.6330828985285342
   },
+  "embedding_api_calls": 30,
+  "embedding_cost_usd": 7.92e-06,
+  "paraphrase_pairs": {
+    "n": 15,
+    "min": 0.562111632185502,
+    "median": 0.7382358033994734,
+    "max": 0.8429174915550455,
+    "cosines": [
+      0.5621,
+      0.6325,
+      0.659,
+      0.6625,
+      0.6752,
+      0.7181,
+      0.7213,
+      0.7382,
+      0.7479,
+      0.7505,
+      0.7557,
+      0.773,
+      0.8112,
+      0.8226,
+      0.8429
+    ]
+  },
+  "recommendation": {
+    "floor": 0.84,
+    "recommended": 0.84,
+    "paraphrase_hits_at_recommended": 1,
+    "paraphrase_hits_at_0.95": 0,
+    "n_paraphrases": 15,
+    "hit_rate_by_cutoff": {
+      "0.70": 10,
+      "0.75": 6,
+      "0.80": 3,
+      "0.85": 0,
+      "0.90": 0,
+      "0.95": 0
+    }
+  },
   "configured_cutoff": 0.95
 }

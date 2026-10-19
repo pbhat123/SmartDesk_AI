@@ -215,5 +215,6 @@ def test_the_app_takes_its_cut_off_from_config(settings, tmp_path):
         responder = make_kb_responder(build_stack(config, environ={}, dotenv_path=None, data_dir=tmp_path / name).graph)
         return [responder(f"{name}{i}", text).debug.get("cache", {}) for i, text in enumerate(asked)][1]
 
-    assert second_cache_debug(settings, "strict").get("status") == "miss"
+    strict = settings.model_copy(update={"thresholds": settings.thresholds.model_copy(update={"semantic_cache_cutoff": 0.95})})
+    assert second_cache_debug(strict, "strict").get("status") == "miss"
     assert second_cache_debug(loose, "loose").get("kind") == "semantic"

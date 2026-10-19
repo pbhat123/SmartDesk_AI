@@ -112,8 +112,8 @@ def describe_estimate(estimate: DriftEstimate, golden: Golden) -> list[str]:
     return lines
 
 
-def faithfulness_from_events(events: Sequence[Mapping[str, Any]]) -> float | None:
-    """Grounded verdicts over all verdicts of the grounding judge in a run's trace events."""
+def verdicts_from_events(events: Sequence[Mapping[str, Any]]) -> list[bool]:
+    """The grounding judge's verdicts (True = grounded) in a run's trace events."""
     verdicts = []
     for event in events:
         if event.get("kind") != "llm_call" or event.get("task") != JUDGE_TASK:
@@ -121,6 +121,12 @@ def faithfulness_from_events(events: Sequence[Mapping[str, Any]]) -> float | Non
         found = _GROUNDED.search(str(event.get("completion", "")))
         if found:
             verdicts.append(found.group(1) == "true")
+    return verdicts
+
+
+def faithfulness_from_events(events: Sequence[Mapping[str, Any]]) -> float | None:
+    """Grounded verdicts over all verdicts of the grounding judge in a run's trace events."""
+    verdicts = verdicts_from_events(events)
     return sum(verdicts) / len(verdicts) if verdicts else None
 
 
@@ -194,20 +200,30 @@ def run_drift(
         escalated += classify(state) == "escalated"
         if ceiling_usd is not None and spent() - base > ceiling_usd:
             raise DriftCeilingExceeded(spent() - base, ceiling_usd)
-    models = settings.models
     events = stack.services.trace.events if stack.services.trace is not None else []
+    return make_point(
+        settings, mock=mock, faithfulness=faithfulness_from_events(events), hits=hits, top_scores=top_scores,
+        escalated=escalated, n_questions=len(items), n_kb=len(golden.kb), n_gap=len(golden.gap),
+        reranker_status=stack.registry.get(Component.RERANKER).status.value, usd=spent() - base, clock=clock)
+
+
+def make_point(
+    settings: Settings, *, mock: bool, faithfulness: float | None, hits: Sequence[bool], top_scores: Sequence[float],
+    escalated: int, n_questions: int, n_kb: int, n_gap: int, reranker_status: str, usd: float,
+    clock: Callable[[], datetime] = _utcnow,
+) -> DriftPoint:
+    """The four drift numbers from what a run observed (shared by the drift check and the final gap and KB run)."""
+    models = settings.models
     return DriftPoint(
-        ts=clock().isoformat(timespec="seconds"), mode="mock" if mock else "live",
-        faithfulness=faithfulness_from_events(events),
+        ts=clock().isoformat(timespec="seconds"), mode="mock" if mock else "live", faithfulness=faithfulness,
         recall_at_k=sum(hits) / len(hits) if hits else None,
-        escalation_rate=escalated / len(items) if items else 0.0,
+        escalation_rate=escalated / n_questions if n_questions else 0.0,
         avg_rerank_score=sum(top_scores) / len(top_scores) if top_scores else None,
-        k=k, n_kb=len(golden.kb), n_gap=len(golden.gap), retrieval_strategy=settings.retrieval.strategy,
-        reranker_status=stack.registry.get(Component.RERANKER).status.value,
-        prompt_versions=dict(settings.prompts),
+        k=settings.retrieval.top_n, n_kb=n_kb, n_gap=n_gap, retrieval_strategy=settings.retrieval.strategy,
+        reranker_status=reranker_status, prompt_versions=dict(settings.prompts),
         models={"main": models.main.id, "light": models.light.id, "embedding": models.embedding.id,
                 "reranker": models.reranker.id},
-        usd=round(spent() - base, 6),
+        usd=round(usd, 6),
     )
 
 

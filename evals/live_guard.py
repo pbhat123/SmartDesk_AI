@@ -22,12 +22,34 @@ from smartdesk_ai.ops.spend_ledger import current_run, end_run, start_run
 
 CEILING_MULTIPLIER = 2.0
 
-__all__ = ["CEILING_MULTIPLIER", "EXIT_STALLED", "Checkpoint", "LiveRun", "RunCost", "ceiling_for", "run_items", "signature"]
+__all__ = ["CEILING_MULTIPLIER", "EXIT_STALLED", "Checkpoint", "Estimate", "LiveRun", "RunCost", "ceiling_for", "describe", "run_items",
+           "signature"]
 
 
 def ceiling_for(estimate_usd: float) -> float:
     """The spend ceiling of a run: twice its estimate."""
     return estimate_usd * CEILING_MULTIPLIER
+
+
+@dataclass(frozen=True)
+class Estimate:
+    """What a live run is expected to cost, shown before it runs. The ceiling is twice the estimate."""
+
+    name: str
+    usd: float
+    detail: str = ""
+
+    @property
+    def ceiling_usd(self) -> float:
+        return ceiling_for(self.usd)
+
+
+def describe(estimate: Estimate) -> list[str]:
+    """The lines printed before a live run."""
+    return [f"Estimate for {estimate.name}: about ${estimate.usd:.3f}" + (f" ({estimate.detail})" if estimate.detail else "") + ".",
+            f"The run stops once the ledger shows more than ${estimate.ceiling_usd:.2f} spent (the ceiling, 2x the estimate) or when it makes "
+            "no progress for five minutes; it is recorded in data/spend_ledger.jsonl under source `eval` and resumes from its "
+            "checkpoint if it is run again."]
 
 
 @dataclass(frozen=True)

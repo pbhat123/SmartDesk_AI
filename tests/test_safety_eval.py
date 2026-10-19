@@ -130,3 +130,67 @@ def test_out_dir_gets_a_result_file_with_both_rates_cases_and_spend(engine, sett
     saved = json.loads((out / "safety_eval.json").read_text())
     assert saved["mock"] is True and saved["leakage_rate"] == 0.0 and saved["breach_rate"] == 0.0
     assert [c["id"] for c in saved["cases"]] == [r.id for r in ROWS] and saved["cost_usd"] == 0.0
+
+
+# --- the live run goes through the common guard (estimate, ceiling at 2x, watchdog, checkpoint) ------------------
+
+def test_the_estimate_counts_the_rows_that_reach_the_models(settings):
+    from evals.safety_eval import estimate_safety
+
+    e = estimate_safety(settings, ROWS)
+    assert 0.03 < e.usd < 0.15 and e.name.startswith("the safety run") and "27" in e.detail
+    assert estimate_safety(settings, ROWS[:1]).usd < e.usd
+
+
+def test_run_safety_resumes_from_a_checkpoint_and_stops_at_the_ceiling(settings, tmp_path, monkeypatch):
+    from evals import live_guard as lg
+    from evals import safety_eval as se
+    from smartdesk_ai.ops import spend_ledger as sl
+
+    calls = []
+
+    def fake_case(row, *a, **k):
+        calls.append(row.id)
+        sl.current_run().add_chat(sl.Usage(1, 100_000, 0, 0, 0), settings.models.main.id)
+        return se.CaseResult(id=row.id, category=row.category)
+
+    monkeypatch.setattr(se, "_run_case", fake_case)
+    cp = lg.Checkpoint(tmp_path / "cp.json", "s")
+    with lg.LiveRun(settings, ["x"], ceiling_usd=0.0001, ledger_path=tmp_path / "l.jsonl", on_stall=lambda: None) as run:
+        report = run_safety(ROWS[:3], settings=settings, data_dir=tmp_path, run=run, checkpoint=cp)
+    assert calls == [ROWS[0].id] and [c.id for c in report.cases] == [ROWS[0].id] and "ceiling" in report.stopped
+    calls.clear()
+    with lg.LiveRun(settings, ["x"], ceiling_usd=10.0, ledger_path=tmp_path / "l.jsonl", on_stall=lambda: None) as run:
+        report = run_safety(ROWS[:3], settings=settings, data_dir=tmp_path, run=run, checkpoint=cp)
+    assert calls == [r.id for r in ROWS[1:3]] and len(report.cases) == 3 and report.stopped is None
+
+
+def test_estimate_prints_and_stops(capsys):
+    assert main(["--live", "--estimate"]) == 0
+    out = capsys.readouterr().out
+    assert "Estimate for the safety run" in out and "ceiling" in out
+
+
+def test_a_live_run_goes_through_the_live_guard_with_twice_the_estimate(settings, tmp_path, monkeypatch):
+    from evals import live_guard as lg
+    from evals import safety_eval as se
+
+    seen = {}
+
+    class FakeRun:
+        def __init__(self, settings, argv, *, ceiling_usd, **kw):
+            seen["ceiling"], seen["argv"] = ceiling_usd, argv
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def cost(self):
+            return lg.RunCost(0.0, 0, 0, 0)
+
+    monkeypatch.setattr(se, "LiveRun", FakeRun)
+    monkeypatch.setattr(se, "run_safety", lambda rows, **kw: SafetyReport(cases=[]))
+    assert main(["--live", "--confirm-spend", "--data-dir", str(tmp_path)]) == 0
+    assert seen["ceiling"] == pytest.approx(2 * se.estimate_safety(settings, ROWS).usd) and "evals.safety_eval" in " ".join(seen["argv"])

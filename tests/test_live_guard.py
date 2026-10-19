@@ -180,3 +180,12 @@ def test_run_items_stops_when_the_item_says_so(settings, ledger, tmp_path):
     with lg.LiveRun(settings, ["x"], ceiling_usd=1.0, ledger_path=ledger, on_stall=lambda: None) as run:
         done, stopped = lg.run_items(run, cp, ["a", "b"], lambda i: {}, stop=lambda results: "enough" if "a" in results else None)
     assert set(done) == {"a"} and stopped == "enough"
+
+
+# --- the estimate ----------------------------------------------------------------------------------------------
+
+def test_an_estimate_has_a_ceiling_of_twice_its_cost_and_is_described():
+    e = lg.Estimate("the safety run", 0.07, "27 rows")
+    assert e.ceiling_usd == pytest.approx(0.14)
+    text = "\n".join(lg.describe(e))
+    assert "the safety run" in text and "$0.070" in text and "27 rows" in text and "$0.14" in text and "spend_ledger" in text

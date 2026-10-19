@@ -47,6 +47,7 @@ def _new_conversation() -> None:
     st.session_state["messages"] = []
 
 
+MOCK_TICKETS_CAPTION = "Mock tickets live in memory and reset on restart (numbering starts again at #5)."
 MOCK_CAPTION = ("Mock mode uses fake embeddings (hashing) and no reranker, so mock retrieval is not meaningful: "
                 "the scores and the order only show that the plumbing works.")
 
@@ -88,6 +89,8 @@ def render_chat(ctx: UiContext) -> None:
             if message["role"] == "assistant" and show_debug:
                 _render_panel(message, ctx)
     exchange = st.container()  # the new messages go here, above the input
+    if ctx.settings.modes.tickets == "mock":
+        st.caption(MOCK_TICKETS_CAPTION)
     prompt = st.chat_input("Type your message")  # a top-level element: pinned to the bottom of the window
     if prompt:
         messages.append({"role": "user", "content": prompt})

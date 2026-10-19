@@ -63,7 +63,7 @@ class ToolResult(BaseModel):
     code: ErrorCode | None = None
     error: str | None = None  # safe for the model to read; never holds user input
     reply: str | None = None  # set when unavailable: a polite message for the employee, as is
-    recovered: bool = False  # a create that found its ticket already made (a lost response, an unfinished request)
+    recovered: bool = False  # a create that found a ticket made by an earlier, unfinished request (_settle_unfinished)
 
 
 # The employee's own status checks count as lookups; the ticket agent's duplicate check does not.
@@ -264,8 +264,7 @@ class ToolExecutor:
                     existing = tool.recover(request_id)
                     if existing is not None:
                         attempt_ms.append(((self._clock() - attempt_start) * 1000, "success"))
-                        return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=attempt, data=existing,
-                                          recovered=True)
+                        return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=attempt, data=existing)
                 data = tool.fn(args)
             except TRANSIENT:
                 attempt_ms.append(((self._clock() - attempt_start) * 1000, "transient_failure"))

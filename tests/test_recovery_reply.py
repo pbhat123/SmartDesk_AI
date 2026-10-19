@@ -1,4 +1,5 @@
-"""A ticket found by lost-response recovery is reported as already created, not as newly created (FR-G5, G6, B4).
+"""Only a ticket found by an earlier unfinished request is reported as already created; the in-call retry keeps
+"has been created" (FR-G5, G6, B4).
 Mock tickets only."""
 from smartdesk_ai.tickets import MockTicketClient
 from smartdesk_ai.tickets.sqlite_map import TicketStore
@@ -17,13 +18,13 @@ def new_ticket(ctx, thread):
     return reply.text
 
 
-def test_a_ticket_found_by_the_retry_check_is_reported_as_already_created(tmp_path):
+def test_a_ticket_found_by_the_in_call_retry_check_is_reported_as_created(tmp_path):
     client = MockTicketClient()
     ctx = mock_context(tmp_path, client=client)
     client.lose_responses = 1  # (after the seeding) the first attempt creates the issue, its response is lost
     reply = new_ticket(ctx, "a")
-    assert reply.startswith("Your ticket was already created:") and "#5" in reply
-    assert "has been created" not in reply
+    assert reply.startswith("Your ticket has been created.") and "#5" in reply
+    assert "already created" not in reply
 
 
 def test_a_ticket_found_by_an_earlier_unfinished_request_is_reported_as_already_created(settings, tmp_path):

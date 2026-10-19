@@ -1,0 +1,16 @@
+{"id": "near-01", "entry_a": "HR-LEAVE-02", "entry_b": "HR-LEAVE-01", "a": "How many sick days can I take before I need a medical note?", "b": "How many casual leave days do I get in a year?"}
+{"id": "near-02", "entry_a": "HR-LEAVE-06", "entry_b": "HR-LEAVE-07", "a": "How long is maternity leave?", "b": "How long is paternity leave?"}
+{"id": "near-03", "entry_a": "IT-PWD-01", "entry_b": "IT-PWD-02", "a": "How do I reset my own password?", "b": "How often does my password expire and what must it contain?"}
+{"id": "near-04", "entry_a": "IT-MFA-01", "entry_b": "IT-MFA-02", "a": "How do I set up multi-factor sign-in for the first time?", "b": "I changed phones, how do I move my multi-factor sign-in to the new one?"}
+{"id": "near-05", "entry_a": "IT-VPN-01", "entry_b": "IT-VPN-02", "a": "How do I install the VPN client on my laptop?", "b": "My VPN keeps failing to connect, how do I fix it?"}
+{"id": "near-06", "entry_a": "IT-WIFI-01", "entry_b": "IT-WIFI-02", "a": "How can a visitor use the guest wifi?", "b": "Which wifi network should employees use in the office?"}
+{"id": "near-07", "entry_a": "HR-STOCK-01", "entry_b": "HR-STOCK-02", "a": "When do my stock options vest?", "b": "What happens to my stock options if I resign?"}
+{"id": "near-08", "entry_a": "HR-WFH-02", "entry_b": "HR-WFH-03", "a": "Can I work from a different city for a few weeks?", "b": "Can I work from another country for a few weeks?"}
+{"id": "near-09", "entry_a": "HR-PAY-01", "entry_b": "HR-PAY-02", "a": "On which day of the month is salary paid?", "b": "Where can I get a copy of my payslip?"}
+{"id": "near-10", "entry_a": "IT-EQUIP-03", "entry_b": "IT-EQUIP-04", "a": "My laptop was stolen, what should I do?", "b": "How do I hand back my laptop when I leave the company?"}
+{"id": "near-11", "entry_a": "HR-LEAVE-03", "entry_b": "HR-LEAVE-05", "a": "How does earned leave build up and carry over?", "b": "I fell ill during my earned leave, does that day count as sick leave?"}
+{"id": "near-12", "entry_a": "HR-HARASS-01", "entry_b": "HR-HARASS-02", "a": "What counts as harassment under company policy?", "b": "How do I report harassment and what happens afterwards?"}
+{"id": "near-13", "entry_a": "HR-REIMB-01", "entry_b": "HR-REIMB-02", "a": "How do I submit an expense claim?", "b": "What is the daily allowance limit when I travel?"}
+{"id": "near-14", "entry_a": "IT-SW-01", "entry_b": "IT-SW-02", "a": "How do I ask for new software to be installed?", "b": "Is this tool on the approved software list?"}
+{"id": "near-15", "entry_a": "HR-PERF-01", "entry_b": "HR-PERF-02", "a": "When does the performance review cycle run?", "b": "How does the rating scale work for promotions?"}
+{"id": "near-16", "entry_a": "HR-PROB-01", "entry_b": "HR-PROB-02", "a": "How long is the probation period?", "b": "Can I take leave during probation?"}

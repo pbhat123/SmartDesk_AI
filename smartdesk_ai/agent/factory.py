@@ -14,7 +14,6 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from smartdesk_ai.agent.answer import make_answerer
 from smartdesk_ai.agent.chat_service import Responder
 from smartdesk_ai.agent.chitchat import make_chitchat
 from smartdesk_ai.agent.confirm import make_confirm_parser
@@ -24,6 +23,7 @@ from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
+from smartdesk_ai.agent.workers import MISC_SEARCH, make_worker_answerers
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.injection import make_injection_checker, screen_team_update
@@ -231,14 +231,14 @@ def build_stack(
         hitl=HitlCounters(Path(data_dir) / HITL_LOG),
     )
     prompt_tokens = len(load_prompt("compaction", settings).text) // 3  # a generous size estimate
-    answerer = make_answerer(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))
+    workers = make_worker_answerers(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))
     cache = None
     if cache_backend is not None:
         cache = AnswerCache(cache_backend, kb_version=kb_version(settings, index_dir),
                             embed=costed_embeddings.embed_query, cutoff=settings.thresholds.semantic_cache_cutoff,
                             log=cache_log)
     graph = build_kb_graph(
-        KBDeps(executor=executor, answer=answerer, cache=cache),
+        KBDeps(executor=executor, answer=workers[MISC_SEARCH], cache=cache, workers=workers),
         make_checkpointer(Path(data_dir) / CHECKPOINT_DB, STATE_MODELS),
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,

@@ -41,11 +41,11 @@ def test_an_answered_question_makes_no_offer(built_index_dir, settings, tmp_path
     assert "offer" not in state.steps and "Sources:" in state.reply
 
 
-def test_the_only_way_into_the_offer_node_is_through_the_kb_search(built_index_dir, settings, tmp_path):
+def test_the_only_way_into_the_offer_node_is_through_a_kb_search(built_index_dir, settings, tmp_path):
     graph, _ = build_test_graph(built_index_dir, settings, tmp_path)
     drawn = graph.get_graph()
     into_offer = {e.source for e in drawn.edges if e.target == "offer"}
-    assert into_offer <= {"kb_search", "kb_retry"}  # the retry is a KB search too (T4.9)
+    assert into_offer <= {"it_worker", "hr_worker", "misc_search", "kb_retry"}  # the workers and the retry (T4.9, T7.2)
 
 
 def test_the_trace_is_per_turn(built_index_dir, settings, tmp_path):

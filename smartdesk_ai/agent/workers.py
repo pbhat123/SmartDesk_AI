@@ -22,6 +22,8 @@ WORKER_AGENTS = (IT_WORKER, HR_WORKER, MISC_SEARCH)
 # Graph node per question domain, and the search filter it uses (None is the whole KB).
 NODE_FOR_DOMAIN = {"IT": IT_WORKER, "HR": HR_WORKER, "MISC": MISC_SEARCH}
 FILTER_FOR_NODE: dict[str, str | None] = {IT_WORKER: "IT", HR_WORKER: "HR", MISC_SEARCH: None}
+# The agent a node's calls are recorded under (FR-G9, FR-I9): the orchestrator runs the MISC step and the retry.
+AGENT_FOR_NODE = {IT_WORKER: IT_WORKER, HR_WORKER: HR_WORKER, MISC_SEARCH: ORCHESTRATOR}
 
 Answerer = Callable[[str, Sequence[KBChunk]], AnswerResult]
 

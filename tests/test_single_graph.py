@@ -30,7 +30,7 @@ def stack(built_index_dir, settings, tmp_path):
 
 def test_one_compiled_graph_has_the_kb_ticket_and_status_paths(stack):
     nodes = set(stack.graph.get_graph().nodes)
-    assert {"route", "kb_search", "t_create", "s_lookup", "chitchat"} <= nodes
+    assert {"route", "it_worker", "hr_worker", "misc_search", "kb_retry", "t_create", "s_lookup", "chitchat"} <= nodes
 
 
 def test_that_one_graph_handles_kb_then_create_then_status_in_one_session(stack):

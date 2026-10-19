@@ -84,7 +84,7 @@ def test_every_model_call_in_a_whole_conversation_has_a_cost_entry_and_a_trace_r
     costed = [c for c in costed if c["step"] == "llm"]
     assert len(calls) > 7  # the conversation really exercised several tasks
     assert len(costed) == len(calls) == len(traced), (len(costed), len(calls), len(traced))
-    assert {"orchestrator", "worker_answer"} <= {c["agent"] for c in costed}
+    assert {"orchestrator", "it_worker"} <= {c["agent"] for c in costed}
 
 
 def scope(settings, tmp_path, *, trace=None, budget=None):

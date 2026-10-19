@@ -2,12 +2,13 @@
 
 Every turn starts at `entry`. A reply to a pending offer or email request goes to `offer_reply`
 (FR-A16); anything else goes to `route`, which classifies and picks a path. The KB path is
-`kb_search` -> (`kb_retry`) -> `reply` or `offer`; `offer` is reachable only from the KB nodes,
+a worker (`it_worker`, `hr_worker` or `misc_search`, by the part's domain) -> (`kb_retry`) -> `reply` or `offer`; `offer`
+is reachable only from the KB nodes,
 so retrieval is always attempted before a ticket is offered (FR-A14). The ticket path starts at
 `t_collect`. `steps` is the per-turn trace.
 """
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -15,6 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command
 
+from smartdesk_ai.agent.agents import ORCHESTRATOR
 from smartdesk_ai.agent.answer import (
     INSUFFICIENT_REPLY,
     AnswerError,
@@ -35,6 +37,7 @@ from smartdesk_ai.agent.state import (
     PartResult,
     PendingOffer,
     RouteKind,
+    SubQuestion,
     thread_config,
 )
 from smartdesk_ai.agent.status_flow import (
@@ -63,13 +66,13 @@ from smartdesk_ai.agent.ticket_agent import (
     t_dup_reask,
     t_reask,
 )
+from smartdesk_ai.agent.workers import AGENT_FOR_NODE, FILTER_FOR_NODE, MISC_SEARCH, NODE_FOR_DOMAIN, WORKER_AGENTS, Answerer
 from smartdesk_ai.ops.cache import AnswerCache
 from smartdesk_ai.ops.compaction import Compactor
 from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
-OFFER_AGENT = "kb"
 
 
 class KBFirstViolation(RuntimeError):
@@ -87,8 +90,12 @@ class Unavailable:
 @dataclass(frozen=True)
 class KBDeps:
     executor: ToolExecutor
-    answer: Callable[[str, Sequence[KBChunk]], AnswerResult]
+    answer: Callable[[str, Sequence[KBChunk]], AnswerResult]  # the orchestrator's answering step: MISC parts and the retry
     cache: AnswerCache | None = None  # KB answers only; the ticket and status paths never see it
+    workers: Mapping[str, Answerer] | None = None  # the answering step of each worker node; absent: `answer` for all
+
+    def answerer_for(self, node: str) -> Answerer:
+        return (self.workers or {}).get(node, self.answer)
 
 
 def _question(state: AgentState) -> str:
@@ -115,7 +122,7 @@ def _chunk_refs(found: SearchKBResult) -> list[ChunkRef]:
 
 def entry_node(state: AgentState) -> dict[str, Any]:
     """Start of every turn: a fresh trace and no leftovers from the previous turn."""
-    return {"steps": ["start"], "part_result": None, "reply": ""}
+    return {"steps": ["start"], "part_result": None, "parts": [], "part_results": None, "part_steps": None, "reply": ""}
 
 
 def make_compact_node(compactor: Compactor, budget_level: Callable[[], int]) -> Callable[[AgentState], dict[str, Any]]:
@@ -146,7 +153,7 @@ def make_after_entry(has_router: bool) -> Callable[[AgentState], str]:
             return "s_pick"
         if state.awaiting in ("offer_reply", "email") and state.pending_offer is not None:
             return "offer_reply"
-        return "route" if has_router else "kb_search"
+        return "route" if has_router else "single_part"
 
     return after_entry
 
@@ -172,7 +179,7 @@ def make_after_offer_reply(has_router: bool) -> Callable[[AgentState], str]:
         if last == "offer_reply:agreed":
             return "t_collect"
         if last == "offer_reply:unclear":
-            return "route" if has_router else "kb_search"
+            return "route" if has_router else "single_part"
         return END
 
     return after_offer_reply
@@ -199,10 +206,17 @@ def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
         cleared = dialog_update_for(state, decision.intent)
         if cleared:  # a new topic leaves the status flow too
             cleared = {**cleared, "status_pending_email": False, "status_candidates": []}
+        kind = _route_kind(decision)
+        domain = {"it_worker": "IT", "hr_worker": "HR"}.get(decision.route)
+        parts = []
+        if kind == "kb":  # one part until the orchestrator splits the message (T7.3)
+            text = contextual_question(_question(state), state.last_topic)
+            parts = [SubQuestion(part_id="p1", text=text, domain=domain or "MISC")]
         return {
             **cleared,
-            "route_kind": _route_kind(decision),
-            "search_domain": {"it_worker": "IT", "hr_worker": "HR"}.get(decision.route),
+            "route_kind": kind,
+            "search_domain": domain,
+            "parts": parts,
             "intent": intent,
             "steps": state.steps + ["route"],
         }
@@ -211,7 +225,9 @@ def make_route_node(route: Router) -> Callable[[AgentState], dict[str, Any]]:
 
 
 def after_route(state: AgentState) -> str:
-    return {"kb": "kb_search", "ticket": "t_collect", "status": "s_lookup"}.get(state.route_kind or "", "chitchat")
+    if state.route_kind == "kb":
+        return after_plan(state)
+    return {"ticket": "t_collect", "status": "s_lookup"}.get(state.route_kind or "", "chitchat")
 
 
 def make_chitchat_node(chat: Chitchat) -> Callable[[AgentState], dict[str, Any]]:
@@ -228,32 +244,39 @@ def make_chitchat_node(chat: Chitchat) -> Callable[[AgentState], dict[str, Any]]
 # --- KB path ---------------------------------------------------------------------------------
 
 
-def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> PartResult | Unavailable:
-    """One search plus one answer, or the cached answer for the same sub-question (a hit skips retrieval, the worker and
-    the judge). Returns the result, or `Unavailable` after an outage."""
-    probe = deps.cache.lookup(question, domain) if deps.cache is not None else None
+def _search_and_answer(deps: KBDeps, part: SubQuestion, node: str, *, agent: str | None = None) -> PartResult | Unavailable:
+    """One search plus one answer for a sub-question, or the cached answer for the same sub-question (a hit skips
+    retrieval, the worker and the judge). `node` is the worker that runs it: it fixes the domain filter and the
+    answering step; `agent` is who the calls are recorded under (default: the node's own agent, FR-G9). Returns the
+    result, or `Unavailable` after an outage."""
+    agent = agent or AGENT_FOR_NODE[node]
+    domain = FILTER_FOR_NODE[node]
+    ident = {"part_id": part.part_id, "sub_question": part.text, "agent": agent}
+    probe = deps.cache.lookup(part.text, domain) if deps.cache is not None else None
     if probe is not None and probe.part is not None:
-        return probe.part.model_copy(update={"cache": probe.kind, "cache_similarity": probe.similarity,
+        return probe.part.model_copy(update={**ident, "cache": probe.kind, "cache_similarity": probe.similarity,
                                                 "cache_saved_ms": probe.saved_ms})
     started = time.perf_counter()
-    args: dict[str, Any] = {"query": question}
+    args: dict[str, Any] = {"query": part.text}
     if domain is not None:
         args["domain"] = domain
-    result = deps.executor.execute("search_kb", args, agent=OFFER_AGENT)
+    result = deps.executor.execute("search_kb", args, agent=agent)
     if result.outcome is not Outcome.SUCCESS:
         return Unavailable(result.reply or "Sorry, I can't look that up right now. Please try again later.",
                            "search_failed")
     found: SearchKBResult = result.data
     try:
-        answer = deps.answer(question, found.chunks)
+        answer = deps.answerer_for(node)(part.text, found.chunks)
     except AnswerUnavailable as outage:  # every model tier is down: tell them, never offer a ticket
         return Unavailable(outage.message, "llm_unavailable")
     except AnswerError:
         answer = AnswerResult(text=INSUFFICIENT_REPLY, answer="", insufficient=True)  # signal 3
     if should_escalate(found, answer):  # never show an answer that a signal rejected
         answer = AnswerResult(text=INSUFFICIENT_REPLY, answer="", insufficient=answer.insufficient)
-    part = PartResult(
+    made = PartResult(
+        **ident,
         answer=answer.text,
+        body=answer.answer,
         citations=answer.citations,
         chunks=_chunk_refs(found),
         answerable=found.answerable,
@@ -263,9 +286,9 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
         threshold=found.threshold,
     )
     if probe is None or probe.kind == "bypass":
-        return part
-    deps.cache.store(probe, part, (time.perf_counter() - started) * 1000)
-    return part.model_copy(update={"cache": "miss"})
+        return made
+    deps.cache.store(probe, made, (time.perf_counter() - started) * 1000)
+    return made.model_copy(update={"cache": "miss"})
 
 
 def _kb_steps(steps: list[str], part: PartResult) -> list[str]:
@@ -273,17 +296,37 @@ def _kb_steps(steps: list[str], part: PartResult) -> list[str]:
     return steps + ([f"cache_hit:{part.cache}"] if part.cache in ("exact", "semantic") else ["search_kb", "answer"])
 
 
-def make_kb_search_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
-    def kb_search(state: AgentState) -> dict[str, Any]:
+def make_single_part_node() -> Callable[[AgentState], dict[str, Any]]:
+    """Without a router there is no orchestrator call: the whole message is one part, searched with the domain the
+    caller forced (`search_domain`) or with the whole KB."""
+
+    def single_part(state: AgentState) -> dict[str, Any]:
+        text = contextual_question(_question(state), state.last_topic)
+        return {"parts": [SubQuestion(part_id="p1", text=text, domain=state.search_domain or "MISC")]}
+
+    return single_part
+
+
+def after_plan(state: AgentState) -> str:
+    """The worker for the (first) part's domain (FR-I2)."""
+    return NODE_FOR_DOMAIN[state.parts[0].domain]
+
+
+def make_worker_node(deps: KBDeps, node: str) -> Callable[[AgentState], dict[str, Any]]:
+    """An IT, HR or MISC worker: answers its part from the KB, or the cached answer for it (FR-I2, FR-G2)."""
+
+    def worker(state: AgentState) -> dict[str, Any]:
+        part = state.parts[0]
         text = _question(state)
-        outcome = _search_and_answer(deps, contextual_question(text, state.last_topic), state.search_domain)
+        outcome = _search_and_answer(deps, part, node)
         if isinstance(outcome, Unavailable):
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
         return {"steps": _kb_steps(state.steps, outcome), "part_result": outcome, "reply": outcome.answer,
+                "part_results": {part.part_id: outcome},
                 "last_topic": topic_after(text, state.last_topic)}
 
-    return kb_search
+    return worker
 
 
 def needs_offer(state: AgentState) -> bool:
@@ -292,15 +335,17 @@ def needs_offer(state: AgentState) -> bool:
 
 
 def make_kb_retry_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
-    """The one whole-KB retry (FR-A19): the same question with no domain filter."""
+    """The one whole-KB retry (FR-A19, FR-I6): the same sub-question with no domain filter, run by the orchestrator."""
 
     def kb_retry(state: AgentState) -> dict[str, Any]:
-        outcome = _search_and_answer(deps, contextual_question(_question(state), state.last_topic), None)
+        part = state.parts[0]
+        outcome = _search_and_answer(deps, part, MISC_SEARCH)
         if isinstance(outcome, Unavailable):
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
-        part = outcome.model_copy(update={"retried": True})
-        return {"steps": _kb_steps(state.steps, part), "part_result": part, "reply": part.answer}
+        retried = outcome.model_copy(update={"retried": True})
+        return {"steps": _kb_steps(state.steps, retried), "part_result": retried, "reply": retried.answer,
+                "part_results": {part.part_id: retried}}
 
     return kb_retry
 
@@ -371,7 +416,11 @@ def build_kb_graph(
     builder = StateGraph(AgentState)
     builder.add_node("entry", entry_node)
     builder.add_node("offer_reply", offer_reply_node)
-    builder.add_node("kb_search", make_kb_search_node(deps))
+    for worker in WORKER_AGENTS:
+        builder.add_node(worker, make_worker_node(deps, worker))
+        builder.add_conditional_edges(worker, after_kb_search, ["kb_retry", "offer", "reply", END])
+    builder.add_node("single_part", make_single_part_node())
+    builder.add_conditional_edges("single_part", after_plan, list(WORKER_AGENTS))
     builder.add_node("kb_retry", make_kb_retry_node(deps))
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
@@ -384,11 +433,11 @@ def build_kb_graph(
         builder.add_edge(START, "entry")
     builder.add_conditional_edges(
         "entry", make_after_entry(route is not None),
-        ["offer_reply", "route", "kb_search", "s_email_reply", "s_pick"] if route else ["offer_reply", "kb_search"],
+        ["offer_reply", "route", "single_part", "s_email_reply", "s_pick"] if route else ["offer_reply", "single_part"],
     )
     builder.add_conditional_edges(
         "offer_reply", make_after_offer_reply(route is not None),
-        ["t_collect", "route", "kb_search", END] if route else ["t_collect", "kb_search", END],
+        ["t_collect", "route", "single_part", END] if route else ["t_collect", "single_part", END],
     )
     if route is not None:
         builder.add_node("route", make_route_node(route))
@@ -397,11 +446,10 @@ def build_kb_graph(
         builder.add_node("s_email_reply", s_email_reply)
         builder.add_node("s_pick", make_s_pick_node(deps.executor))
         builder.add_conditional_edges("s_pick", after_s_pick, ["route", END])
-        builder.add_conditional_edges("route", after_route, ["kb_search", "t_collect", "s_lookup", "chitchat"])
+        builder.add_conditional_edges("route", after_route, [*WORKER_AGENTS, "t_collect", "s_lookup", "chitchat"])
         builder.add_conditional_edges("s_email_reply", after_s_email_reply, ["s_lookup", "route", END])
         builder.add_edge("chitchat", END)
         builder.add_edge("s_lookup", END)
-    builder.add_conditional_edges("kb_search", after_kb_search, ["kb_retry", "offer", "reply", END])
     builder.add_conditional_edges("kb_retry", after_kb_retry, ["offer", "reply", END])
     builder.add_edge("offer", END)
     builder.add_edge("reply", END)

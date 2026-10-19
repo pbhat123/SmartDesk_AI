@@ -195,6 +195,6 @@ def test_a_cache_hit_adds_no_cost_beyond_the_orchestrator_call(tmp_path):
     def agents(session):
         return {e.agent for e in ctx.service.services.cost.entries if e.session_id == session}
 
-    assert {"worker_answer", "grounding_judge"} <= agents("s1") and "retrieval" in agents("s1")
-    assert agents("s2") and not agents("s2") & {"worker_answer", "grounding_judge", "retrieval"}
+    assert {"it_worker", "grounding_judge"} <= agents("s1") and "retrieval" in agents("s1")
+    assert agents("s2") and not agents("s2") & {"it_worker", "grounding_judge", "retrieval"}
     assert "search_kb" not in second.debug["steps"]

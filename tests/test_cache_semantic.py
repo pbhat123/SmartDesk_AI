@@ -193,7 +193,7 @@ def test_a_semantic_hit_in_the_mock_app_costs_one_embedding_and_skips_search_wor
     assert cache["status"] == "hit" and cache["kind"] == "semantic" and cache["similarity"] >= CUTOFF
     mine = [e for e in ctx.service.services.cost.entries if e.session_id == "s2"]
     assert [e.agent for e in mine if e.step == "embedding"] == ["retrieval"]  # exactly one
-    assert not {e.agent for e in mine} & {"worker_answer", "grounding_judge"}
+    assert not {e.agent for e in mine} & {"it_worker", "hr_worker", "grounding_judge"}
     assert paraphrase.text == first.text and "search_kb" not in paraphrase.debug["steps"]
     assert "cache_hit:semantic" in paraphrase.debug["steps"]
 

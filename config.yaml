@@ -123,6 +123,8 @@ chunking:
 prompts:
   orchestrator: 3
   answer: 4
+  worker_it: 1             # the IT worker's answer prompt: answer v4 verbatim (FR-I1)
+  worker_hr: 1
   synthesizer: 1
   grounding_judge: 3
   ticket_summary: 1

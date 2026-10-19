@@ -1,0 +1,4155 @@
+{
+ "questions": {
+  "gap-001": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-PWD-02",
+     0.031281
+    ],
+    [
+     "HR-ONB-03",
+     0.030886
+    ],
+    [
+     "IT-SW-01",
+     0.03009
+    ],
+    [
+     "IT-HELP-01",
+     0.029031
+    ],
+    [
+     "HR-ONB-01",
+     0.02837
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "684552232e221e47"
+    ],
+    [
+     "MockAnswerModel",
+     "17698e76a6f271f5"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-002": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-WFH-01",
+     0.030077
+    ],
+    [
+     "HR-TAX-01",
+     0.029236
+    ],
+    [
+     "HR-LEAVE-05",
+     0.016393
+    ],
+    [
+     "IT-WIFI-01",
+     0.016393
+    ],
+    [
+     "HR-ONB-02",
+     0.016129
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "b4a6fdfe126927fc"
+    ],
+    [
+     "MockAnswerModel",
+     "78ed9c60742f5061"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-003": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PERF-02",
+     0.031498
+    ],
+    [
+     "IT-HELP-01",
+     0.030777
+    ],
+    [
+     "HR-LEAVE-07",
+     0.02938
+    ],
+    [
+     "IT-VPN-03",
+     0.027425
+    ],
+    [
+     "IT-VPN-02",
+     0.016393
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "ef9d54a1c8a75a9d"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-004": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-WFH-01",
+     0.030886
+    ],
+    [
+     "HR-WFH-02",
+     0.030159
+    ],
+    [
+     "HR-ABOUT-01",
+     0.030018
+    ],
+    [
+     "HR-PROB-02",
+     0.029727
+    ],
+    [
+     "HR-LEAVE-01",
+     0.029287
+    ]
+   ],
+   "citations": [
+    "HR-WFH-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "d663af8ca84a63dc"
+    ],
+    [
+     "MockAnswerModel",
+     "ab20500219f96854"
+    ],
+    [
+     "MockGroundingModel",
+     "bf879cffb9c4449c"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI works a hybrid model.\n\nSources: HR-WFH-01 (Hybrid schedule and core office days)",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "gap-005": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-EQUIP-02",
+     0.031099
+    ],
+    [
+     "HR-WFH-02",
+     0.030622
+    ],
+    [
+     "HR-HARASS-01",
+     0.030331
+    ],
+    [
+     "IT-VPN-03",
+     0.030077
+    ],
+    [
+     "IT-SW-01",
+     0.029551
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "90caf4226da73a32"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-006": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-COND-01",
+     0.030331
+    ],
+    [
+     "HR-WFH-03",
+     0.029958
+    ],
+    [
+     "IT-SW-03",
+     0.029877
+    ],
+    [
+     "IT-EQUIP-02",
+     0.029462
+    ],
+    [
+     "HR-LEAVE-08",
+     0.028992
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "159abd32e8cd0faf"
+    ],
+    [
+     "MockAnswerModel",
+     "3c24dd55fb16d42f"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-007": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-EQUIP-04",
+     0.016393
+    ],
+    [
+     "HR-WFH-01",
+     0.016129
+    ],
+    [
+     "IT-MAIL-01",
+     0.015873
+    ],
+    [
+     "HR-SAL-01",
+     0.015625
+    ],
+    [
+     "IT-VPN-01",
+     0.015385
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "d2ea318bf3cf2bd3"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-008": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-WFH-02",
+     0.032522
+    ],
+    [
+     "HR-WFH-01",
+     0.032266
+    ],
+    [
+     "IT-WIFI-02",
+     0.030835
+    ],
+    [
+     "IT-VPN-03",
+     0.030777
+    ],
+    [
+     "HR-ONB-01",
+     0.03055
+    ]
+   ],
+   "citations": [
+    "HR-WFH-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "77b2dcd3e90bc1be"
+    ],
+    [
+     "MockGroundingModel",
+     "6653ab2ef1189385"
+    ]
+   ],
+   "offered": false,
+   "reply": "You may work from a city other than Bengaluru or Pune for up to **20 working days per leave year**, for example to be with family.\n\nSources: HR-WFH-02 (Request to work from another city)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "gap-009": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-WFH-01",
+     0.032787
+    ],
+    [
+     "HR-WFH-02",
+     0.032258
+    ],
+    [
+     "HR-ONB-01",
+     0.031498
+    ],
+    [
+     "HR-ABOUT-01",
+     0.031258
+    ],
+    [
+     "HR-HARASS-02",
+     0.030777
+    ]
+   ],
+   "citations": [
+    "HR-WFH-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "8b9b72c31890c735"
+    ],
+    [
+     "MockGroundingModel",
+     "02c1e5d43fdf8725"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI works a hybrid model.\n\nSources: HR-WFH-01 (Hybrid schedule and core office days)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "gap-010": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-WFH-02",
+     0.032266
+    ],
+    [
+     "HR-ABOUT-01",
+     0.031545
+    ],
+    [
+     "HR-WFH-01",
+     0.031498
+    ],
+    [
+     "IT-PWD-02",
+     0.030769
+    ],
+    [
+     "IT-HELP-01",
+     0.030214
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "c6cbbb958742ee11"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-011": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-WFH-01",
+     0.031778
+    ],
+    [
+     "HR-WFH-02",
+     0.031319
+    ],
+    [
+     "HR-LEAVE-03",
+     0.031281
+    ],
+    [
+     "IT-MAIL-01",
+     0.030835
+    ],
+    [
+     "IT-MFA-01",
+     0.030366
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "ff17560c5338493d"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-012": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-ABOUT-01",
+     0.031514
+    ],
+    [
+     "IT-PWD-01",
+     0.031514
+    ],
+    [
+     "HR-WFH-02",
+     0.030886
+    ],
+    [
+     "IT-WIFI-02",
+     0.030798
+    ],
+    [
+     "HR-LEAVE-04",
+     0.02971
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "ad14f38b382b6cd5"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-013": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-ABOUT-01",
+     0.032002
+    ],
+    [
+     "IT-VPN-01",
+     0.032002
+    ],
+    [
+     "IT-WIFI-01",
+     0.03101
+    ],
+    [
+     "IT-EQUIP-01",
+     0.029851
+    ],
+    [
+     "HR-PERF-01",
+     0.029437
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "b8267e716264b4ac"
+    ],
+    [
+     "MockAnswerModel",
+     "ddb488c312417ebc"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-014": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-STOCK-01",
+     0.032787
+    ],
+    [
+     "HR-PAY-01",
+     0.031258
+    ],
+    [
+     "HR-PROB-01",
+     0.031054
+    ],
+    [
+     "HR-SAL-01",
+     0.030777
+    ],
+    [
+     "HR-WFH-01",
+     0.030214
+    ]
+   ],
+   "citations": [
+    "HR-STOCK-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "61be43a43c1d450a"
+    ],
+    [
+     "MockGroundingModel",
+     "d84ccd57a2da061c"
+    ]
+   ],
+   "offered": false,
+   "reply": "Eligible employees receive stock options as part of their offer or after a promotion or strong review.\n\nSources: HR-STOCK-01 (Stock-option vesting schedule)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "gap-015": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PERF-01",
+     0.032266
+    ],
+    [
+     "HR-SAL-01",
+     0.030769
+    ],
+    [
+     "HR-LEAVE-01",
+     0.030415
+    ],
+    [
+     "HR-LEAVE-03",
+     0.030415
+    ],
+    [
+     "HR-PERF-02",
+     0.029387
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "430fff3952c896ae"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-016": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-WFH-03",
+     0.030679
+    ],
+    [
+     "HR-PERF-01",
+     0.030536
+    ],
+    [
+     "IT-EQUIP-02",
+     0.030118
+    ],
+    [
+     "HR-REIMB-03",
+     0.029828
+    ],
+    [
+     "IT-PWD-01",
+     0.029287
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "4fc2233cb35f6906"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-017": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-REIMB-03",
+     0.032522
+    ],
+    [
+     "HR-REIMB-01",
+     0.031281
+    ],
+    [
+     "HR-SAL-01",
+     0.03055
+    ],
+    [
+     "IT-WIFI-02",
+     0.030366
+    ],
+    [
+     "HR-TAX-01",
+     0.03031
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "1bc9fcf0b549a4bd"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-018": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-SAL-01",
+     0.032522
+    ],
+    [
+     "IT-SW-02",
+     0.031545
+    ],
+    [
+     "HR-LEAVE-07",
+     0.031258
+    ],
+    [
+     "HR-LEAVE-06",
+     0.029514
+    ],
+    [
+     "HR-ABOUT-01",
+     0.029083
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "2bcf347028b86b0b"
+    ],
+    [
+     "MockAnswerModel",
+     "f3a86c47a977f4dd"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-019": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-REIMB-03",
+     0.032522
+    ],
+    [
+     "HR-REIMB-01",
+     0.031498
+    ],
+    [
+     "HR-TAX-01",
+     0.030536
+    ],
+    [
+     "IT-MAIL-02",
+     0.029644
+    ],
+    [
+     "IT-SW-01",
+     0.029214
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "5b14ed74b54de316"
+    ],
+    [
+     "MockAnswerModel",
+     "e00c050f29686e0f"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-020": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-HARASS-02",
+     0.032787
+    ],
+    [
+     "HR-PERF-03",
+     0.032258
+    ],
+    [
+     "HR-HARASS-01",
+     0.031498
+    ],
+    [
+     "HR-PERF-01",
+     0.030366
+    ],
+    [
+     "HR-LEAVE-06",
+     0.029469
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "7a19572d79c99e1b"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "gap-021": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-SAL-01",
+     0.032266
+    ],
+    [
+     "HR-PERF-01",
+     0.031319
+    ],
+    [
+     "HR-LEAVE-03",
+     0.030622
+    ],
+    [
+     "HR-ONB-01",
+     0.02971
+    ],
+    [
+     "IT-WIFI-02",
+     0.029274
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "b34684b6a5d29521"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-001": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-MFA-02",
+     0.032522
+    ],
+    [
+     "IT-MFA-01",
+     0.031754
+    ],
+    [
+     "IT-MAIL-01",
+     0.031746
+    ],
+    [
+     "IT-HELP-01",
+     0.031319
+    ],
+    [
+     "IT-PWD-01",
+     0.030303
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "3cc960d04c28c46f"
+    ],
+    [
+     "MockAnswerModel",
+     "3cc960d04c28c46f"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-002": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-PWD-02",
+     0.032787
+    ],
+    [
+     "IT-PWD-01",
+     0.032002
+    ],
+    [
+     "IT-VPN-01",
+     0.03055
+    ],
+    [
+     "IT-MAIL-01",
+     0.030536
+    ],
+    [
+     "IT-HELP-01",
+     0.029643
+    ]
+   ],
+   "citations": [
+    "IT-PWD-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "530dbdb415531e83"
+    ],
+    [
+     "MockGroundingModel",
+     "9e822b9cb8c4a6eb"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI passwords must:\n\n- be at least **14 characters** long (a passphrase of several unrelated words is fine and easier to remember);\n- not repeat any of your last 10 passwords;\n- not contain your name, employee ID or work email address;\n- not appear on the blocked list of commonly used passwords, which the reset page checks automatically.\n\nSources: IT-PWD-02 (Password rules and expiry)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-003": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-PWD-01",
+     0.032002
+    ],
+    [
+     "IT-PWD-02",
+     0.031099
+    ],
+    [
+     "IT-MAIL-01",
+     0.030159
+    ],
+    [
+     "IT-WIFI-02",
+     0.029877
+    ],
+    [
+     "IT-SW-02",
+     0.029631
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "8c60f8fe60abda29"
+    ],
+    [
+     "MockAnswerModel",
+     "8c60f8fe60abda29"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-004": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-MFA-02",
+     0.032787
+    ],
+    [
+     "IT-EQUIP-01",
+     0.032002
+    ],
+    [
+     "IT-MAIL-01",
+     0.031498
+    ],
+    [
+     "IT-PWD-01",
+     0.030835
+    ],
+    [
+     "IT-SW-01",
+     0.03055
+    ]
+   ],
+   "citations": [
+    "IT-MFA-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "a32571389fdcf5aa"
+    ],
+    [
+     "MockGroundingModel",
+     "03a618ce449a9b09"
+    ]
+   ],
+   "offered": false,
+   "reply": "**Switching to a new phone while the old one still works.**\n\n1.\n\nSources: IT-MFA-02 (New or lost phone, re-enrol MFA)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-005": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-MFA-01",
+     0.032018
+    ],
+    [
+     "IT-MAIL-01",
+     0.032002
+    ],
+    [
+     "IT-MFA-02",
+     0.031778
+    ],
+    [
+     "IT-VPN-01",
+     0.03101
+    ],
+    [
+     "HR-PERF-01",
+     0.030415
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "c6d161db2772bcad"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-006": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-VPN-01",
+     0.032522
+    ],
+    [
+     "IT-VPN-03",
+     0.032266
+    ],
+    [
+     "IT-MFA-01",
+     0.032002
+    ],
+    [
+     "IT-WIFI-02",
+     0.03101
+    ],
+    [
+     "IT-VPN-02",
+     0.03055
+    ]
+   ],
+   "citations": [
+    "IT-VPN-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "c50aed81ecc7cfa6"
+    ],
+    [
+     "MockGroundingModel",
+     "8bf369907930c110"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI uses the **SmartDesk Connect** VPN client on company laptops.\n\nSources: IT-VPN-01 (Install and configure the VPN client)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-007": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-VPN-02",
+     0.032522
+    ],
+    [
+     "IT-VPN-03",
+     0.032018
+    ],
+    [
+     "IT-VPN-01",
+     0.032002
+    ],
+    [
+     "IT-EQUIP-01",
+     0.031025
+    ],
+    [
+     "IT-PWD-01",
+     0.030769
+    ]
+   ],
+   "citations": [
+    "IT-VPN-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "33659636b2902aaf"
+    ],
+    [
+     "MockGroundingModel",
+     "eb83123be3ab9692"
+    ]
+   ],
+   "offered": false,
+   "reply": "Try these in order.\n\nSources: IT-VPN-02 (Fixing common VPN connection errors)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-008": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-VPN-03",
+     0.032787
+    ],
+    [
+     "IT-VPN-01",
+     0.032258
+    ],
+    [
+     "IT-WIFI-02",
+     0.030798
+    ],
+    [
+     "IT-VPN-02",
+     0.030777
+    ],
+    [
+     "IT-HELP-01",
+     0.030769
+    ]
+   ],
+   "citations": [
+    "IT-VPN-03"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "0f39b58ae3d299e4"
+    ],
+    [
+     "MockGroundingModel",
+     "20ac9f41d12d7d85"
+    ]
+   ],
+   "offered": false,
+   "reply": "The VPN is **required** whenever you are off the SmartDesk AI office network and need an internal system: the code repositories, the finance and HR portals, internal file shares or customer data.\n\nSources: IT-VPN-03 (When the VPN is required, and split tunnelling)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-009": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-SW-01",
+     0.032787
+    ],
+    [
+     "IT-HELP-01",
+     0.032002
+    ],
+    [
+     "IT-SW-02",
+     0.032002
+    ],
+    [
+     "IT-PWD-02",
+     0.030331
+    ],
+    [
+     "IT-EQUIP-01",
+     0.029857
+    ]
+   ],
+   "citations": [
+    "IT-SW-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "2c14d1e00e5b710d"
+    ],
+    [
+     "MockGroundingModel",
+     "95e948b4457a3cbb"
+    ]
+   ],
+   "offered": false,
+   "reply": "First check the **Software Centre** on your laptop.\n\nSources: IT-SW-01 (Request new software)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-010": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-VPN-01",
+     0.032787
+    ],
+    [
+     "IT-SW-02",
+     0.032258
+    ],
+    [
+     "IT-EQUIP-01",
+     0.031498
+    ],
+    [
+     "IT-EQUIP-03",
+     0.031025
+    ],
+    [
+     "IT-WIFI-02",
+     0.03031
+    ]
+   ],
+   "citations": [
+    "IT-VPN-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "6eb607599619a301"
+    ],
+    [
+     "MockGroundingModel",
+     "477cf52c1de22c3c"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI uses the **SmartDesk Connect** VPN client on company laptops.\n\nSources: IT-VPN-01 (Install and configure the VPN client)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-011": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-SW-03",
+     0.032787
+    ],
+    [
+     "HR-COND-01",
+     0.030622
+    ],
+    [
+     "HR-SAL-01",
+     0.030536
+    ],
+    [
+     "IT-VPN-02",
+     0.029031
+    ],
+    [
+     "HR-LEAVE-03",
+     0.028814
+    ]
+   ],
+   "citations": [
+    "IT-SW-03"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "be2a3719b794daf3"
+    ],
+    [
+     "MockGroundingModel",
+     "ff437350ae373f9b"
+    ]
+   ],
+   "offered": false,
+   "reply": "**Can I use a free or open-source tool that is not on the list?** Often yes, but request it first through https://helpdesk.smartdesk.example.\n\nSources: IT-SW-03 (Using an open-source or personal tool for work)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-012": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-VPN-01",
+     0.032266
+    ],
+    [
+     "IT-VPN-02",
+     0.031514
+    ],
+    [
+     "IT-EQUIP-01",
+     0.031498
+    ],
+    [
+     "HR-REIMB-03",
+     0.03101
+    ],
+    [
+     "IT-WIFI-01",
+     0.030679
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "c6e5518c1a1f3fa0"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-013": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-WIFI-01",
+     0.032522
+    ],
+    [
+     "IT-WIFI-02",
+     0.032266
+    ],
+    [
+     "IT-VPN-03",
+     0.031281
+    ],
+    [
+     "IT-MFA-02",
+     0.031025
+    ],
+    [
+     "IT-VPN-02",
+     0.03101
+    ]
+   ],
+   "citations": [
+    "IT-WIFI-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "31e353ba9a41185a"
+    ],
+    [
+     "MockGroundingModel",
+     "26da6fe3f21d861b"
+    ]
+   ],
+   "offered": false,
+   "reply": "Guests use the **SmartDesk-Guest** network.\n\nSources: IT-WIFI-01 (Connect a visitor to guest Wi-Fi)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-014": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-COND-01",
+     0.032266
+    ],
+    [
+     "IT-MAIL-01",
+     0.032002
+    ],
+    [
+     "IT-MAIL-02",
+     0.031778
+    ],
+    [
+     "HR-WFH-01",
+     0.031281
+    ],
+    [
+     "HR-SAL-01",
+     0.030777
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "d22ae3b73d7cf009"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-015": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-SEC-01",
+     0.032787
+    ],
+    [
+     "IT-WIFI-02",
+     0.031498
+    ],
+    [
+     "IT-MAIL-02",
+     0.031281
+    ],
+    [
+     "IT-WIFI-01",
+     0.030018
+    ],
+    [
+     "IT-SW-01",
+     0.02886
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "df6081a7affabd1f"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-016": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PAY-01",
+     0.032787
+    ],
+    [
+     "IT-MAIL-02",
+     0.031258
+    ],
+    [
+     "IT-WIFI-02",
+     0.031025
+    ],
+    [
+     "HR-ONB-01",
+     0.030622
+    ],
+    [
+     "IT-WIFI-01",
+     0.03031
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "33ea7969443efe09"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-017": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-EQUIP-01",
+     0.032787
+    ],
+    [
+     "IT-MFA-01",
+     0.032002
+    ],
+    [
+     "HR-ONB-01",
+     0.031754
+    ],
+    [
+     "IT-EQUIP-04",
+     0.031025
+    ],
+    [
+     "HR-LEAVE-06",
+     0.030777
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "c957bb06e8057344"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-018": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-REIMB-03",
+     0.032522
+    ],
+    [
+     "IT-EQUIP-02",
+     0.031746
+    ],
+    [
+     "HR-PAY-01",
+     0.03101
+    ],
+    [
+     "IT-EQUIP-04",
+     0.029083
+    ],
+    [
+     "HR-WFH-02",
+     0.028958
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "89f67655816d1a28"
+    ],
+    [
+     "MockAnswerModel",
+     "2e4ca4c9037fccd2"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-019": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-EQUIP-03",
+     0.032266
+    ],
+    [
+     "IT-SW-01",
+     0.032266
+    ],
+    [
+     "IT-EQUIP-01",
+     0.031514
+    ],
+    [
+     "IT-MFA-02",
+     0.03125
+    ],
+    [
+     "IT-SW-02",
+     0.030415
+    ]
+   ],
+   "citations": [
+    "IT-EQUIP-03"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "e1603d39b4d5bfb9"
+    ],
+    [
+     "MockGroundingModel",
+     "b53523542ae91ad1"
+    ]
+   ],
+   "offered": false,
+   "reply": "If your laptop is lost or stolen, act in this order:\n\n1.\n\nSources: IT-EQUIP-03 (Lost or stolen laptop)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-020": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PAY-01",
+     0.031754
+    ],
+    [
+     "HR-REIMB-01",
+     0.031514
+    ],
+    [
+     "HR-REIMB-03",
+     0.030366
+    ],
+    [
+     "HR-HARASS-02",
+     0.02967
+    ],
+    [
+     "HR-LEAVE-03",
+     0.028612
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "4613cd487d934717"
+    ],
+    [
+     "MockAnswerModel",
+     "4613cd487d934717"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-021": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-HARASS-02",
+     0.030679
+    ],
+    [
+     "IT-VPN-03",
+     0.030536
+    ],
+    [
+     "HR-WFH-01",
+     0.030415
+    ],
+    [
+     "HR-HARASS-01",
+     0.030366
+    ],
+    [
+     "HR-ABOUT-01",
+     0.030077
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "b92a205fe1a080a2"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-022": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-ONB-02",
+     0.032787
+    ],
+    [
+     "HR-LEAVE-02",
+     0.03101
+    ],
+    [
+     "HR-REIMB-02",
+     0.030579
+    ],
+    [
+     "HR-SAL-01",
+     0.030579
+    ],
+    [
+     "HR-PERF-03",
+     0.030415
+    ]
+   ],
+   "citations": [
+    "HR-ONB-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "97dd3ad5854d46f5"
+    ],
+    [
+     "MockGroundingModel",
+     "714cf9a23df18310"
+    ]
+   ],
+   "offered": false,
+   "reply": "All permanent employees are covered by a benefits package.\n\nSources: HR-ONB-02 (Enrol in benefits)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-023": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-ONB-03",
+     0.032018
+    ],
+    [
+     "IT-MFA-02",
+     0.031498
+    ],
+    [
+     "IT-PWD-02",
+     0.030159
+    ],
+    [
+     "IT-MAIL-02",
+     0.029877
+    ],
+    [
+     "IT-PWD-01",
+     0.029462
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "7651ca15e9af57fd"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-024": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PERF-03",
+     0.031754
+    ],
+    [
+     "HR-TAX-01",
+     0.031099
+    ],
+    [
+     "HR-LEAVE-07",
+     0.030303
+    ],
+    [
+     "HR-PROB-01",
+     0.030282
+    ],
+    [
+     "HR-ONB-03",
+     0.028958
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "7bdb474d2ae0f879"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-025": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-PROB-02",
+     0.032522
+    ],
+    [
+     "HR-LEAVE-03",
+     0.031778
+    ],
+    [
+     "HR-LEAVE-06",
+     0.031054
+    ],
+    [
+     "HR-LEAVE-01",
+     0.030798
+    ],
+    [
+     "HR-LEAVE-02",
+     0.030331
+    ]
+   ],
+   "citations": [
+    "HR-PROB-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "c527f02cd4ae66a9"
+    ],
+    [
+     "MockGroundingModel",
+     "255e69ae8da4d62f"
+    ]
+   ],
+   "offered": false,
+   "reply": "Probation does not stop you taking leave, but some leave types work differently while it lasts.\n\nSources: HR-PROB-02 (Taking leave during probation)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-026": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-LEAVE-01",
+     0.032787
+    ],
+    [
+     "HR-LEAVE-08",
+     0.032258
+    ],
+    [
+     "HR-LEAVE-02",
+     0.031498
+    ],
+    [
+     "HR-PROB-02",
+     0.030118
+    ],
+    [
+     "HR-WFH-02",
+     0.029572
+    ]
+   ],
+   "citations": [
+    "HR-LEAVE-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "12d1b7e73e02902a"
+    ],
+    [
+     "MockGroundingModel",
+     "68492dae5e3594d6"
+    ]
+   ],
+   "offered": false,
+   "reply": "Every permanent employee gets **8 days of casual leave** per leave year.\n\nSources: HR-LEAVE-01 (Casual leave entitlement)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-027": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-LEAVE-02",
+     0.031099
+    ],
+    [
+     "IT-WIFI-02",
+     0.030886
+    ],
+    [
+     "HR-SAL-01",
+     0.029514
+    ],
+    [
+     "IT-VPN-02",
+     0.029469
+    ],
+    [
+     "HR-LEAVE-03",
+     0.029324
+    ]
+   ],
+   "citations": [
+    "HR-LEAVE-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "2cf999e671fa7c03"
+    ],
+    [
+     "MockGroundingModel",
+     "6901852140f8a40a"
+    ]
+   ],
+   "offered": false,
+   "reply": "You get **10 days of sick leave** per leave year (1 April to 31 March).\n\nSources: HR-LEAVE-02 (Sick leave and medical certificates)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-028": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-LEAVE-03",
+     0.032787
+    ],
+    [
+     "HR-LEAVE-02",
+     0.032002
+    ],
+    [
+     "HR-LEAVE-01",
+     0.031754
+    ],
+    [
+     "HR-PROB-02",
+     0.029412
+    ],
+    [
+     "HR-WFH-02",
+     0.028694
+    ]
+   ],
+   "citations": [
+    "HR-LEAVE-03"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "85ebae6926c68432"
+    ],
+    [
+     "MockGroundingModel",
+     "55b23c92aeaa0686"
+    ]
+   ],
+   "offered": false,
+   "reply": "Earned leave is the main leave for holidays and longer breaks.\n\nSources: HR-LEAVE-03 (Earned leave accrual and carry-over)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-029": {
+   "awaiting": "email",
+   "chunks": [],
+   "citations": [],
+   "intent": "create_ticket",
+   "llm_inputs": [],
+   "offered": true,
+   "reply": "To open a ticket I need your work email address. What is it?",
+   "retried": null,
+   "route_kind": "ticket",
+   "steps": [
+    "start",
+    "route",
+    "t_collect"
+   ]
+  },
+  "kb-030": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-LEAVE-05",
+     0.032787
+    ],
+    [
+     "HR-LEAVE-02",
+     0.032002
+    ],
+    [
+     "HR-PROB-02",
+     0.031754
+    ],
+    [
+     "HR-LEAVE-03",
+     0.031498
+    ],
+    [
+     "HR-LEAVE-04",
+     0.030077
+    ]
+   ],
+   "citations": [
+    "HR-LEAVE-05"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "582d8eb4d666b221"
+    ],
+    [
+     "MockGroundingModel",
+     "1e8c465d2ef2c575"
+    ]
+   ],
+   "offered": false,
+   "reply": "This entry covers two common questions.\n\nSources: HR-LEAVE-05 (Falling sick during earned leave, and how half-days count)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-031": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-LEAVE-06",
+     0.032787
+    ],
+    [
+     "HR-PROB-02",
+     0.031514
+    ],
+    [
+     "HR-LEAVE-07",
+     0.031025
+    ],
+    [
+     "HR-LEAVE-03",
+     0.030777
+    ],
+    [
+     "HR-LEAVE-04",
+     0.03031
+    ]
+   ],
+   "citations": [
+    "HR-LEAVE-06"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "915e2a701672985b"
+    ],
+    [
+     "MockGroundingModel",
+     "85a825064985cc4f"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI provides paid maternity leave on full pay to employees who give birth.\n\nSources: HR-LEAVE-06 (Maternity leave)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-032": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-LEAVE-02",
+     0.031778
+    ],
+    [
+     "HR-LEAVE-07",
+     0.031545
+    ],
+    [
+     "HR-WFH-01",
+     0.030536
+    ],
+    [
+     "HR-LEAVE-08",
+     0.030118
+    ],
+    [
+     "HR-ONB-02",
+     0.02901
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "fe2739f790a592ab"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-033": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-LEAVE-08",
+     0.032522
+    ],
+    [
+     "IT-EQUIP-03",
+     0.032018
+    ],
+    [
+     "IT-SW-03",
+     0.030579
+    ],
+    [
+     "HR-WFH-01",
+     0.030077
+    ],
+    [
+     "HR-STOCK-02",
+     0.029206
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "68bc1388794b09b8"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-034": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-SW-01",
+     0.031498
+    ],
+    [
+     "HR-WFH-01",
+     0.030536
+    ],
+    [
+     "HR-WFH-03",
+     0.030415
+    ],
+    [
+     "HR-ONB-03",
+     0.030282
+    ],
+    [
+     "HR-WFH-02",
+     0.029727
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "3999101ec0faa593"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-035": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-ONB-03",
+     0.032522
+    ],
+    [
+     "HR-WFH-03",
+     0.031099
+    ],
+    [
+     "HR-LEAVE-02",
+     0.03101
+    ],
+    [
+     "HR-ONB-02",
+     0.03101
+    ],
+    [
+     "HR-REIMB-03",
+     0.029211
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "3b006b4cf8463811"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-036": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-WFH-03",
+     0.032522
+    ],
+    [
+     "IT-EQUIP-04",
+     0.032002
+    ],
+    [
+     "HR-REIMB-02",
+     0.031545
+    ],
+    [
+     "IT-SW-03",
+     0.030159
+    ],
+    [
+     "HR-WFH-01",
+     0.029274
+    ]
+   ],
+   "citations": [
+    "HR-WFH-03"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "4ad0adc47e7a481e"
+    ],
+    [
+     "MockGroundingModel",
+     "afd5fdb4919531ba"
+    ]
+   ],
+   "offered": false,
+   "reply": "Working from another country is **not allowed without prior written approval** from both the People Team and Legal.\n\nSources: HR-WFH-03 (Working from abroad)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-037": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-VPN-01",
+     0.032266
+    ],
+    [
+     "HR-REIMB-02",
+     0.031498
+    ],
+    [
+     "IT-HELP-01",
+     0.029911
+    ],
+    [
+     "HR-ONB-03",
+     0.029643
+    ],
+    [
+     "HR-HARASS-01",
+     0.029418
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "6e536a727c8b661e"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-038": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-VPN-02",
+     0.032266
+    ],
+    [
+     "HR-REIMB-02",
+     0.031054
+    ],
+    [
+     "IT-WIFI-02",
+     0.031054
+    ],
+    [
+     "IT-EQUIP-03",
+     0.030366
+    ],
+    [
+     "HR-REIMB-01",
+     0.030282
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "f11de1d403a338f9"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-039": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-SAL-01",
+     0.032787
+    ],
+    [
+     "HR-REIMB-03",
+     0.032002
+    ],
+    [
+     "HR-WFH-01",
+     0.032002
+    ],
+    [
+     "HR-COND-01",
+     0.03031
+    ],
+    [
+     "IT-SW-03",
+     0.029911
+    ]
+   ],
+   "citations": [
+    "HR-SAL-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "a58040d7922baa4a"
+    ],
+    [
+     "MockGroundingModel",
+     "0ca5a67370c7b449"
+    ]
+   ],
+   "offered": false,
+   "reply": "Your offer letter states your **annual CTC** (cost to company).\n\nSources: HR-SAL-01 (Salary structure explained)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-040": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-PWD-01",
+     0.032258
+    ],
+    [
+     "HR-PERF-02",
+     0.031545
+    ],
+    [
+     "IT-WIFI-01",
+     0.030118
+    ],
+    [
+     "HR-HARASS-01",
+     0.029958
+    ],
+    [
+     "IT-MFA-02",
+     0.028259
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "d2dcb03db8da82da"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-041": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-COND-02",
+     0.032522
+    ],
+    [
+     "IT-WIFI-02",
+     0.03125
+    ],
+    [
+     "IT-MAIL-01",
+     0.03031
+    ],
+    [
+     "IT-MAIL-02",
+     0.02938
+    ],
+    [
+     "IT-SEC-01",
+     0.016129
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "cc02d49db51a7cb3"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-042": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-HARASS-01",
+     0.032787
+    ],
+    [
+     "HR-COND-01",
+     0.031514
+    ],
+    [
+     "HR-HARASS-02",
+     0.03125
+    ],
+    [
+     "HR-WFH-01",
+     0.030622
+    ],
+    [
+     "HR-COND-02",
+     0.02967
+    ]
+   ],
+   "citations": [
+    "HR-HARASS-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "3b0f6552806a35b0"
+    ],
+    [
+     "MockGroundingModel",
+     "a0b1cdb7e97edc3e"
+    ]
+   ],
+   "offered": false,
+   "reply": "SmartDesk AI does not tolerate harassment of any kind.\n\nSources: HR-HARASS-01 (Anti-harassment policy)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-043": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "IT-WIFI-02",
+     0.032002
+    ],
+    [
+     "IT-EQUIP-03",
+     0.031545
+    ],
+    [
+     "HR-HARASS-02",
+     0.031281
+    ],
+    [
+     "HR-LEAVE-04",
+     0.029631
+    ],
+    [
+     "HR-HARASS-01",
+     0.029052
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "58e51770e7ede987"
+    ],
+    [
+     "MockAnswerModel",
+     "4b77e17f746db32b"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-044": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-COND-01",
+     0.032787
+    ],
+    [
+     "HR-PERF-01",
+     0.032258
+    ],
+    [
+     "HR-LEAVE-02",
+     0.031025
+    ],
+    [
+     "HR-LEAVE-01",
+     0.03101
+    ],
+    [
+     "HR-STOCK-01",
+     0.029877
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "d453854e9d1f9eb8"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-045": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PERF-02",
+     0.032787
+    ],
+    [
+     "HR-PERF-01",
+     0.032258
+    ],
+    [
+     "HR-WFH-01",
+     0.030798
+    ],
+    [
+     "HR-SAL-01",
+     0.030579
+    ],
+    [
+     "HR-PROB-01",
+     0.030118
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "b1c14dfa001766c6"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-046": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-PERF-03",
+     0.032522
+    ],
+    [
+     "HR-SAL-01",
+     0.031545
+    ],
+    [
+     "HR-PERF-01",
+     0.031054
+    ],
+    [
+     "IT-WIFI-02",
+     0.029958
+    ],
+    [
+     "HR-COND-01",
+     0.028382
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "0e2baa7294a5f904"
+    ],
+    [
+     "MockAnswerModel",
+     "6eb7b8bbe6274530"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-047": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-PAY-01",
+     0.032787
+    ],
+    [
+     "HR-STOCK-02",
+     0.031498
+    ],
+    [
+     "HR-ONB-01",
+     0.029643
+    ],
+    [
+     "IT-EQUIP-01",
+     0.028783
+    ],
+    [
+     "HR-STOCK-01",
+     0.028665
+    ]
+   ],
+   "citations": [
+    "HR-PAY-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "0f0eefea1017aeae"
+    ],
+    [
+     "MockAnswerModel",
+     "a732c79d3a379368"
+    ],
+    [
+     "MockGroundingModel",
+     "8d074d4f12765867"
+    ]
+   ],
+   "offered": false,
+   "reply": "Salaries are paid monthly, on the **last working day of the month**, directly to the bank account registered in the people portal.\n\nSources: HR-PAY-01 (Pay-day schedule and holiday exceptions)",
+   "retried": true,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-048": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-PAY-01",
+     0.032787
+    ],
+    [
+     "HR-REIMB-01",
+     0.032002
+    ],
+    [
+     "HR-TAX-01",
+     0.031754
+    ],
+    [
+     "HR-REIMB-03",
+     0.031498
+    ],
+    [
+     "HR-PROB-01",
+     0.030536
+    ]
+   ],
+   "citations": [
+    "HR-PAY-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "dcf2935c15651093"
+    ],
+    [
+     "MockGroundingModel",
+     "2e35ce9c5e0fff38"
+    ]
+   ],
+   "offered": false,
+   "reply": "Salaries are paid monthly, on the **last working day of the month**, directly to the bank account registered in the people portal.\n\nSources: HR-PAY-01 (Pay-day schedule and holiday exceptions)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-049": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-TAX-01",
+     0.032787
+    ],
+    [
+     "HR-SAL-01",
+     0.032258
+    ],
+    [
+     "HR-PAY-02",
+     0.031746
+    ],
+    [
+     "HR-PAY-01",
+     0.030777
+    ],
+    [
+     "HR-WFH-03",
+     0.029877
+    ]
+   ],
+   "citations": [
+    "HR-TAX-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "5d94f364a3dc4cc7"
+    ],
+    [
+     "MockGroundingModel",
+     "4eab952d445282ca"
+    ]
+   ],
+   "offered": false,
+   "reply": "Payroll deducts income tax at source each month, based on your declared choices for the year.\n\nSources: HR-TAX-01 (Submit your tax declaration)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-050": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "HR-ONB-02",
+     0.032522
+    ],
+    [
+     "HR-SAL-01",
+     0.032522
+    ],
+    [
+     "HR-PAY-01",
+     0.031025
+    ],
+    [
+     "HR-PAY-02",
+     0.03101
+    ],
+    [
+     "HR-LEAVE-03",
+     0.030579
+    ]
+   ],
+   "citations": [
+    "HR-ONB-02"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "07be70fa71099d5f"
+    ],
+    [
+     "MockGroundingModel",
+     "e47a953376e0052d"
+    ]
+   ],
+   "offered": false,
+   "reply": "All permanent employees are covered by a benefits package.\n\nSources: HR-ONB-02 (Enrol in benefits)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  },
+  "kb-051": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-STOCK-01",
+     0.032522
+    ],
+    [
+     "HR-STOCK-02",
+     0.032522
+    ],
+    [
+     "IT-EQUIP-01",
+     0.031498
+    ],
+    [
+     "HR-ONB-01",
+     0.03055
+    ],
+    [
+     "HR-LEAVE-06",
+     0.030366
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "1643593d55584ac0"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-052": {
+   "awaiting": "email",
+   "chunks": [
+    [
+     "HR-STOCK-02",
+     0.032787
+    ],
+    [
+     "HR-STOCK-01",
+     0.032002
+    ],
+    [
+     "HR-LEAVE-02",
+     0.031498
+    ],
+    [
+     "HR-LEAVE-05",
+     0.031281
+    ],
+    [
+     "HR-LEAVE-03",
+     0.03031
+    ]
+   ],
+   "citations": [],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "677e0bc00bd6a753"
+    ]
+   ],
+   "offered": true,
+   "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "offer"
+   ]
+  },
+  "kb-053": {
+   "awaiting": "none",
+   "chunks": [
+    [
+     "IT-HELP-01",
+     0.032522
+    ],
+    [
+     "IT-EQUIP-01",
+     0.032018
+    ],
+    [
+     "HR-ABOUT-01",
+     0.031281
+    ],
+    [
+     "HR-PERF-01",
+     0.03031
+    ],
+    [
+     "HR-HARASS-02",
+     0.029762
+    ]
+   ],
+   "citations": [
+    "IT-HELP-01"
+   ],
+   "intent": "kb_query",
+   "llm_inputs": [
+    [
+     "MockAnswerModel",
+     "33efb74ebc894eee"
+    ],
+    [
+     "MockGroundingModel",
+     "2574b9c08021c555"
+    ]
+   ],
+   "offered": false,
+   "reply": "The SmartDesk AI IT help desk handles account and access problems, password and MFA issues, software requests, VPN, email and security reports.\n\nSources: IT-HELP-01 (Contacting the IT help desk, hours and response times)",
+   "retried": false,
+   "route_kind": "kb",
+   "steps": [
+    "start",
+    "route",
+    "search_kb",
+    "answer",
+    "reply"
+   ]
+  }
+ },
+ "scenarios": {
+  "api_down": [
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Here is the ticket I'm ready to create:\n\nTitle: Please raise a ticket for my flickering monitor\nDescription: Please raise a ticket for my flickering monitor\nCategory: IT\nPriority: Medium\nEmail: priya.k@smartdesk.example\n\nShall I go ahead and create this?",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "route",
+     "t_collect",
+     "t_draft",
+     "t_dup_check",
+     "dup_check_skipped",
+     "t_present"
+    ],
+    "user": "Please raise a ticket for my flickering monitor"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Sorry, I can't reach the ticket system right now, so I couldn't confirm that your ticket was created. Please try again later.",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "t_confirm",
+     "t_create",
+     "create_failed"
+    ],
+    "user": "Yes"
+   }
+  ],
+  "degraded_mode": [
+   {
+    "awaiting": "none",
+    "chunks": [
+     [
+      "IT-PWD-01",
+      0.032787
+     ],
+     [
+      "IT-PWD-02",
+      0.032258
+     ],
+     [
+      "IT-SEC-01",
+      0.031746
+     ],
+     [
+      "IT-VPN-02",
+      0.03101
+     ],
+     [
+      "IT-EQUIP-03",
+      0.03009
+     ]
+    ],
+    "citations": [
+     "IT-PWD-01"
+    ],
+    "intent": "kb_query",
+    "llm_inputs": [
+     [
+      "MockAnswerModel",
+      "5756554a31bd284e"
+     ],
+     [
+      "MockGroundingModel",
+      "bbcf5a434a0e9315"
+     ]
+    ],
+    "offered": false,
+    "reply": "You can reset a forgotten or expired password without contacting the help desk, as long as multi-factor authentication (MFA) is already set up on your phone.\n\nSources: IT-PWD-01 (Reset your password yourself)",
+    "retried": false,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "route",
+     "search_kb",
+     "answer",
+     "reply"
+    ],
+    "user": "How do I reset my password?"
+   },
+   {
+    "awaiting": "offer_reply",
+    "chunks": [
+     [
+      "HR-WFH-01",
+      0.032787
+     ],
+     [
+      "HR-WFH-02",
+      0.032258
+     ],
+     [
+      "HR-ABOUT-01",
+      0.030366
+     ],
+     [
+      "HR-HARASS-01",
+      0.030077
+     ],
+     [
+      "IT-WIFI-02",
+      0.02967
+     ]
+    ],
+    "citations": [],
+    "intent": "kb_query",
+    "llm_inputs": [
+     [
+      "MockAnswerModel",
+      "160cc671b2dc2782"
+     ]
+    ],
+    "offered": true,
+    "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. Would you like me to open a support ticket for this? Please answer yes or no.",
+    "retried": false,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "route",
+     "search_kb",
+     "answer",
+     "offer"
+    ],
+    "user": "Where can I park my car when I visit the office?"
+   }
+  ],
+  "flow_a": [
+   {
+    "awaiting": "none",
+    "chunks": [
+     [
+      "IT-PWD-01",
+      0.032787
+     ],
+     [
+      "IT-PWD-02",
+      0.032258
+     ],
+     [
+      "IT-SEC-01",
+      0.031746
+     ],
+     [
+      "IT-VPN-02",
+      0.03101
+     ],
+     [
+      "IT-EQUIP-03",
+      0.03009
+     ]
+    ],
+    "citations": [
+     "IT-PWD-01"
+    ],
+    "intent": "kb_query",
+    "llm_inputs": [
+     [
+      "MockAnswerModel",
+      "5756554a31bd284e"
+     ],
+     [
+      "MockGroundingModel",
+      "bbcf5a434a0e9315"
+     ]
+    ],
+    "offered": false,
+    "reply": "You can reset a forgotten or expired password without contacting the help desk, as long as multi-factor authentication (MFA) is already set up on your phone.\n\nSources: IT-PWD-01 (Reset your password yourself)",
+    "retried": false,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "route",
+     "search_kb",
+     "answer",
+     "reply"
+    ],
+    "user": "How do I reset my password?"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "smalltalk",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Glad I could help! Is there anything else you need?",
+    "retried": null,
+    "route_kind": "smalltalk",
+    "steps": [
+     "start",
+     "route",
+     "chitchat"
+    ],
+    "user": "Thanks, that worked!"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "smalltalk",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Goodbye, have a great day! Come back any time.",
+    "retried": null,
+    "route_kind": "smalltalk",
+    "steps": [
+     "start",
+     "route",
+     "chitchat"
+    ],
+    "user": "Bye"
+   }
+  ],
+  "flow_b": [
+   {
+    "awaiting": "email",
+    "chunks": [
+     [
+      "IT-VPN-03",
+      0.032522
+     ],
+     [
+      "IT-WIFI-02",
+      0.030679
+     ],
+     [
+      "HR-ONB-02",
+      0.016129
+     ],
+     [
+      "HR-PERF-01",
+      0.015873
+     ],
+     [
+      "HR-WFH-02",
+      0.015625
+     ]
+    ],
+    "citations": [],
+    "intent": "kb_query",
+    "llm_inputs": [
+     [
+      "MockAnswerModel",
+      "730dcd08ab54857f"
+     ],
+     [
+      "MockAnswerModel",
+      "d6e1d0c10cf0b132"
+     ]
+    ],
+    "offered": true,
+    "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. I can open a support ticket for you. If you'd like that, please share your work email address.",
+    "retried": true,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "route",
+     "search_kb",
+     "answer",
+     "search_kb",
+     "answer",
+     "offer"
+    ],
+    "user": "My monitor keeps flickering"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": true,
+    "reply": "Here is the ticket I'm ready to create:\n\nTitle: My monitor keeps flickering\nDescription: My monitor keeps flickering\nCategory: IT\nPriority: Medium\nEmail: priya.k@smartdesk.example\n\nShall I go ahead and create this?",
+    "retried": null,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "offer_reply:agreed",
+     "t_collect",
+     "t_draft",
+     "t_dup_check",
+     "t_present"
+    ],
+    "user": "priya.k@smartdesk.example"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Your ticket has been created. Ticket #5 (mock): Open\n\nYou can ask me for updates on it anytime.",
+    "retried": null,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "t_confirm",
+     "t_create"
+    ],
+    "user": "Yes, create it"
+   }
+  ],
+  "flow_c": [
+   {
+    "awaiting": "email",
+    "chunks": [],
+    "citations": [],
+    "intent": "ticket_status",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "To check on your tickets I need your work email address. What is it?",
+    "retried": null,
+    "route_kind": "status",
+    "steps": [
+     "start",
+     "route",
+     "s_lookup"
+    ],
+    "user": "What's the status of my ticket?"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "ticket_status",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Ticket #1 (mock): Monitor flickers after docking\nStatus: In Progress\n\nLatest update from the support team:\n> We are testing a replacement docking cable and will update you tomorrow.",
+    "retried": null,
+    "route_kind": "status",
+    "steps": [
+     "start",
+     "s_email:ok",
+     "s_lookup"
+    ],
+    "user": "one.ticket@smartdesk.example"
+   }
+  ],
+  "kb_answer": [
+   {
+    "awaiting": "none",
+    "chunks": [
+     [
+      "HR-LEAVE-01",
+      0.032787
+     ],
+     [
+      "HR-PROB-02",
+      0.032002
+     ],
+     [
+      "HR-LEAVE-02",
+      0.03101
+     ],
+     [
+      "HR-LEAVE-03",
+      0.030835
+     ],
+     [
+      "HR-LEAVE-04",
+      0.03055
+     ]
+    ],
+    "citations": [
+     "HR-LEAVE-01"
+    ],
+    "intent": "kb_query",
+    "llm_inputs": [
+     [
+      "MockAnswerModel",
+      "260eddb3c49c1438"
+     ],
+     [
+      "MockGroundingModel",
+      "e1e6b400c767e1d6"
+     ]
+    ],
+    "offered": false,
+    "reply": "Every permanent employee gets **8 days of casual leave** per leave year.\n\nSources: HR-LEAVE-01 (Casual leave entitlement)",
+    "retried": false,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "route",
+     "search_kb",
+     "answer",
+     "reply"
+    ],
+    "user": "How many casual leave days do I get in a year?"
+   }
+  ],
+  "status_0": [
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "ticket_status",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "You have no tickets on file. If you expected to see one, please check the email address you gave me.",
+    "retried": null,
+    "route_kind": "status",
+    "steps": [
+     "start",
+     "route",
+     "s_lookup"
+    ],
+    "user": "What's the status of my ticket?"
+   }
+  ],
+  "status_1": [
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "ticket_status",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Ticket #1 (mock): Monitor flickers after docking\nStatus: In Progress\n\nLatest update from the support team:\n> We are testing a replacement docking cable and will update you tomorrow.",
+    "retried": null,
+    "route_kind": "status",
+    "steps": [
+     "start",
+     "route",
+     "s_lookup"
+    ],
+    "user": "Any updates on my monitor ticket?"
+   }
+  ],
+  "status_2plus": [
+   {
+    "awaiting": "ticket_pick",
+    "chunks": [],
+    "citations": [],
+    "intent": "ticket_status",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "I found 2 tickets for you:\n1. #3 Question about a payslip deduction (Open)\n2. #2 VPN drops every hour from home (Resolved)\n\nWhich one would you like to know more about? You can say \"the second one\" or give its number.",
+    "retried": null,
+    "route_kind": "status",
+    "steps": [
+     "start",
+     "route",
+     "s_lookup"
+    ],
+    "user": "Any updates on my tickets?"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "ticket_status",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Ticket #2 (mock): VPN drops every hour from home\nStatus: Resolved\n\nLatest update from the support team:\n> Fixed: the VPN profile was updated. Please reconnect and let us know if it persists.",
+    "retried": null,
+    "route_kind": "status",
+    "steps": [
+     "start",
+     "s_pick:ok"
+    ],
+    "user": "The second one"
+   }
+  ],
+  "ticket_create_edit": [
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Here is the ticket I'm ready to create:\n\nTitle: Please raise a ticket for my broken VPN\nDescription: Please raise a ticket for my broken VPN\nCategory: IT\nPriority: Medium\nEmail: priya.k@smartdesk.example\n\nShall I go ahead and create this?",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "route",
+     "t_collect",
+     "t_draft",
+     "t_dup_check",
+     "t_present"
+    ],
+    "user": "Please raise a ticket for my broken VPN"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Here is the ticket I'm ready to create:\n\nTitle: Please raise a ticket for my broken VPN\nDescription: Please raise a ticket for my broken VPN\nCategory: IT\nPriority: High\nEmail: priya.k@smartdesk.example\n\nShall I go ahead and create this?",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "t_confirm",
+     "t_apply_edit",
+     "t_present"
+    ],
+    "user": "Make the priority high"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Your ticket has been created. Ticket #5 (mock): Open\n\nYou can ask me for updates on it anytime.",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "t_confirm",
+     "t_create"
+    ],
+    "user": "Yes"
+   }
+  ],
+  "ticket_create_no": [
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Here is the ticket I'm ready to create:\n\nTitle: Please raise a ticket for my broken VPN\nDescription: Please raise a ticket for my broken VPN\nCategory: IT\nPriority: Medium\nEmail: priya.k@smartdesk.example\n\nShall I go ahead and create this?",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "route",
+     "t_collect",
+     "t_draft",
+     "t_dup_check",
+     "t_present"
+    ],
+    "user": "Please raise a ticket for my broken VPN"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Okay, I won't create the ticket. Is there anything else I can help with?",
+    "retried": null,
+    "route_kind": "ticket",
+    "steps": [
+     "start",
+     "t_confirm",
+     "t_cancel"
+    ],
+    "user": "No, cancel that"
+   }
+  ],
+  "ticket_create_yes": [
+   {
+    "awaiting": "offer_reply",
+    "chunks": [
+     [
+      "HR-WFH-01",
+      0.032787
+     ],
+     [
+      "HR-WFH-02",
+      0.032258
+     ],
+     [
+      "HR-ABOUT-01",
+      0.030579
+     ],
+     [
+      "HR-HARASS-01",
+      0.029469
+     ],
+     [
+      "HR-ONB-01",
+      0.028665
+     ]
+    ],
+    "citations": [],
+    "intent": "kb_query",
+    "llm_inputs": [
+     [
+      "MockAnswerModel",
+      "6fbfdc5e507c81f8"
+     ]
+    ],
+    "offered": true,
+    "reply": "I'm sorry you're running into this. I don't know the answer to that from our knowledge base. Would you like me to open a support ticket for this? Please answer yes or no.",
+    "retried": false,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "route",
+     "search_kb",
+     "answer",
+     "offer"
+    ],
+    "user": "Where can I park my car when I visit the Bengaluru office?"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": true,
+    "reply": "Here is the ticket I'm ready to create:\n\nTitle: Where can I park my car when I visit the Bengaluru office\nDescription: Where can I park my car when I visit the Bengaluru office?\nCategory: MISC\nEmail: priya.k@smartdesk.example\n\nShall I go ahead and create this?",
+    "retried": null,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "offer_reply:agreed",
+     "t_collect",
+     "t_draft",
+     "t_dup_check",
+     "t_present"
+    ],
+    "user": "Yes please"
+   },
+   {
+    "awaiting": "none",
+    "chunks": [],
+    "citations": [],
+    "intent": "create_ticket",
+    "llm_inputs": [],
+    "offered": false,
+    "reply": "Your ticket has been created. Ticket #5 (mock): Open\n\nYou can ask me for updates on it anytime.",
+    "retried": null,
+    "route_kind": "kb",
+    "steps": [
+     "start",
+     "t_confirm",
+     "t_create"
+    ],
+    "user": "Yes, go ahead"
+   }
+  ]
+ },
+ "volatile": {
+  "gap-006": [
+   "llm_inputs"
+  ]
+ }
+}

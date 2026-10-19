@@ -18,6 +18,7 @@ Category = Literal["IT", "HR", "MISC"]
 Priority = Literal["low", "medium", "high", "critical"]
 Domain = Literal["IT", "HR"]
 RouteKind = Literal["kb", "ticket", "status", "smalltalk", "deflect", "clarify"]
+PartDomain = Literal["IT", "HR", "MISC"]  # the domain the orchestrator tags a sub-question with (FR-I4)
 
 
 class IntentResult(BaseModel):
@@ -33,6 +34,7 @@ class PendingOffer(BaseModel):
     """A ticket was offered after a KB gap and the employee has not answered yet."""
 
     unanswered_text: str
+    unanswered_parts: list[str] = []  # the sub-questions the KB could not answer; the ticket covers only these (FR-I7)
 
 
 class TicketDraft(BaseModel):
@@ -76,9 +78,21 @@ class ChunkRef(BaseModel):
     rerank: float | None = None
 
 
+class SubQuestion(BaseModel):
+    """One part of the employee's message, rewritten as a standalone question by the orchestrator (FR-I3, FR-I4)."""
+
+    part_id: str
+    text: str
+    domain: PartDomain
+
+
 class PartResult(BaseModel):
     """Outcome of answering one question from the KB (PLAN 4.1)."""
 
+    part_id: str = "p1"
+    sub_question: str = ""
+    agent: str = ""  # the node that answered: it_worker, hr_worker or misc_search
+    body: str = ""  # the answer without its Sources line, which is what the synthesizer merges
     answer: str  # what the employee sees, with sources; the I-don't-know text when unanswered
     citations: list[str] = []
     chunks: list[ChunkRef] = []
@@ -91,6 +105,14 @@ class PartResult(BaseModel):
     cache: Literal["exact", "semantic", "miss"] | None = None  # how the answer cache served this part; None: not consulted
     cache_similarity: float | None = None  # semantic hits: the cosine to the cached question
     cache_saved_ms: float | None = None  # hits: what the cached answer's search and answer took, less the lookup
+
+
+def merge_by_key(old: dict | None, new: dict | None) -> dict:
+    """Reducer for fields that parallel nodes write one key each. A later write of the same key replaces it (the
+    whole-KB retry); a `None` write clears the field, which the entry node does at the start of every turn."""
+    if new is None:
+        return {}
+    return {**(old or {}), **new}
 
 
 class AgentState(BaseModel):
@@ -111,13 +133,16 @@ class AgentState(BaseModel):
     gate: ConfirmDecision | None = None  # the last reply at the approval gate
     gate_unclear: int = 0  # unclear replies at the current gate; the second one cancels (FR-G12)
     search_domain: Domain | None = None  # KB filter chosen by routing for this turn
-    part_result: PartResult | None = None
+    part_result: PartResult | None = None  # the one part's result when the turn had a single part
+    parts: list[SubQuestion] = []  # the orchestrator's sub-questions for this turn (FR-I3)
+    part_results: Annotated[dict[str, PartResult], merge_by_key] = {}  # by part_id, written in parallel (FR-I4)
+    part_steps: Annotated[dict[str, list[str]], merge_by_key] = {}  # each part's trace, folded into `steps` at the join
     steps: list[str] = []  # this turn's trace, e.g. ["search_kb", "answer", "offer"] (FR-H11)
     reply: str = ""
 
 
 STATE_MODELS: tuple[type[BaseModel], ...] = (
-    IntentResult, PendingOffer, TicketDraft, TicketRef, ConfirmDecision, ChunkRef, PartResult, AgentState,
+    IntentResult, PendingOffer, TicketDraft, TicketRef, ConfirmDecision, ChunkRef, SubQuestion, PartResult, AgentState,
 )
 
 

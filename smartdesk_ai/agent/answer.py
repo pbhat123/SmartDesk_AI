@@ -133,17 +133,20 @@ def make_answerer(
     structured: bool | None = None,
     sleep: Callable[[float], None] = time.sleep,
     judge: Judge | None = None,
+    agent: str | None = None,
+    prompt_name: str = "answer",
 ) -> Callable[[str, Sequence[KBChunk]], AnswerResult]:
     """An answerer for the WORKER_ANSWER task and the active answer prompt. Every call goes
     through the Main/Light outage fallback. The live client uses structured-output mode; a custom
     builder (the mock path) gets plain JSON unless `structured=True`. The grounding `judge` runs once per
-    answered part, inside this step (FR-H2)."""
+    answered part, inside this step (FR-H2). `agent` labels the calls and `prompt_name` picks the prompt, for an IT or HR
+    worker (FR-I1); the defaults are the task name and answer v4."""
     use_schema = structured if structured is not None else builder is openai_builder
     llm = FallbackChat(
         "WORKER_ANSWER", settings, builder=builder, budget_level=budget_level,
-        schema=AnswerReply if use_schema else None, sleep=sleep,
+        schema=AnswerReply if use_schema else None, sleep=sleep, agent=agent,
     )
-    prompt = load_prompt("answer", settings).text
+    prompt = load_prompt(prompt_name, settings).text
 
     def answer(question: str, chunks: Sequence[KBChunk]) -> AnswerResult:
         return answer_from_context(llm, prompt, question, chunks, judge)

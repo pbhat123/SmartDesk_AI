@@ -14,6 +14,7 @@ from typing import Any
 
 from langchain_core.messages import BaseMessage
 
+from smartdesk_ai.agent.agents import AGENT_PROMPTS, HR_WORKER, IT_WORKER
 from smartdesk_ai.guardrails.pii import PiiRedactor, mask_emails_in
 from smartdesk_ai.llm.fallback import LLMCall
 from smartdesk_ai.ops.runtime import RequestContext
@@ -29,6 +30,10 @@ TASK_PROMPTS = {
     "INJECTION_CLASSIFIER": "injection_classifier", "COMPACTION": "compaction", "CONFIRM_PARSE": "confirm_parse",
     "CHITCHAT": "chitchat",
 }
+
+
+# An IT worker and an HR worker both run WORKER_ANSWER but each loads its own prompt; any other caller uses answer.
+WORKER_PROMPTS = {IT_WORKER: AGENT_PROMPTS[IT_WORKER], HR_WORKER: AGENT_PROMPTS[HR_WORKER]}
 
 
 def prompt_text(prompt: object) -> str:
@@ -111,7 +116,8 @@ class TraceLog:
 
     def llm_record(self, ctx: RequestContext | None, agent: str, call: LLMCall) -> None:
         """One record per LLM call (FR-H9). Prompt and completion are redacted by the masker."""
-        prompt_name = TASK_PROMPTS.get(call.task)
+        prompt_name = WORKER_PROMPTS.get(agent) if call.task == "WORKER_ANSWER" else None
+        prompt_name = prompt_name or TASK_PROMPTS.get(call.task)
         version = self._prompt_versions.get(prompt_name) if prompt_name else None
         self.event(
             "llm_call", agent=agent, task=call.task,

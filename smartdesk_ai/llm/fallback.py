@@ -216,11 +216,12 @@ class FallbackChat:
         sleep: Callable[[float], None] = time.sleep,
         tier: Tier | None = None,
         tools: list[Any] | None = None,
+        agent: str | None = None,
     ) -> None:
         self._args = (task, settings)
         self._budget_level = budget_level
         self._kwargs = {"builder": builder, "sleep": sleep, "schema": schema, "tier": tier, "tools": tools}
-        self.agent = task.lower()
+        self.agent = agent or task.lower()  # the label on cost, trace and LLM records; an agent name (FR-I9) or the task
 
     def invoke(self, messages: Any) -> SimpleNamespace:
         from smartdesk_ai.ops.runtime import current_scope  # ops imports this module, so import late

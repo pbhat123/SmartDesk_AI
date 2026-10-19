@@ -8,6 +8,16 @@ import sqlite3
 import threading
 from pathlib import Path
 
+from smartdesk_ai.ops.runtime import salted_digest
+
+MAX_PENDING_CHECKED = 5  # unresolved requests of one employee and title that are looked up before a new create
+
+
+def request_fingerprint(email: str, title: str) -> str:
+    """Which ticket a create request was for: a salted hash of the employee and the title, never the text itself, so the
+    request log keeps no email (FR-G11). A retry of the same ticket has the same fingerprint."""
+    return salted_digest(f"{_key(email)}\n{' '.join(title.lower().split())}")
+
 
 class TicketStore:
     """One connection shared by every thread: Streamlit runs each rerun on a different thread and keeps one app
@@ -20,20 +30,39 @@ class TicketStore:
         with self._lock, self._conn:
             self._conn.execute(
                 "CREATE TABLE IF NOT EXISTS create_requests ("
-                "request_id TEXT PRIMARY KEY, status TEXT NOT NULL, issue_number INTEGER)"
+                "request_id TEXT PRIMARY KEY, status TEXT NOT NULL, issue_number INTEGER, fingerprint TEXT)"
             )
+            columns = {row[1] for row in self._conn.execute("PRAGMA table_info(create_requests)")}
+            if "fingerprint" not in columns:  # a map written before crash recovery existed
+                self._conn.execute("ALTER TABLE create_requests ADD COLUMN fingerprint TEXT")
             self._conn.execute(
                 "CREATE TABLE IF NOT EXISTS email_tickets ("
                 "email TEXT NOT NULL, issue_number INTEGER NOT NULL, PRIMARY KEY (email, issue_number))"
             )
 
-    def begin(self, request_id: str) -> None:
-        """Record the intent to create, before the GitHub call. Idempotent."""
+    def begin(self, request_id: str, fingerprint: str | None = None) -> None:
+        """Record the intent to create, before the GitHub call. Idempotent. The row stays `pending` until the call is
+        known to have succeeded (`complete`) or known never to have reached GitHub (`abandon`)."""
         with self._lock, self._conn:
             self._conn.execute(
-                "INSERT OR IGNORE INTO create_requests (request_id, status) VALUES (?, 'pending')",
-                (request_id,),
+                "INSERT OR IGNORE INTO create_requests (request_id, status, fingerprint) VALUES (?, 'pending', ?)",
+                (request_id, fingerprint),
             )
+
+    def pending_for(self, fingerprint: str) -> list[str]:
+        """Unresolved requests for this ticket, newest first: each may or may not have created an issue."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT request_id FROM create_requests WHERE fingerprint = ? AND status = 'pending' "
+                "ORDER BY rowid DESC LIMIT ?", (fingerprint, MAX_PENDING_CHECKED)).fetchall()
+        return [r[0] for r in rows]
+
+    def abandon(self, request_id: str) -> None:
+        """The request is known never to have created an issue; it will not be looked up again."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE create_requests SET status = 'abandoned' WHERE request_id = ? AND status = 'pending'",
+                (request_id,))
 
     def complete(self, request_id: str, issue_number: int) -> None:
         with self._lock, self._conn:

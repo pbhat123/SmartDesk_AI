@@ -184,3 +184,22 @@ def test_a_full_browser_style_run_reads_one_rejection_one_edit_one_approval(tmp_
     assert (counts.approvals, counts.rejections, counts.edits) == (1, 1, 1)
     metrics = {m.label: m.value for m in monitoring_app(ctx).main.metric}
     assert (metrics["Approvals"], metrics["Rejections"], metrics["Edits"]) == ("1", "1", "1")
+
+
+def test_an_edit_is_counted_when_it_happens_even_if_the_employee_never_approves(tmp_path):
+    ctx = mock_context(tmp_path)
+    _turns(ctx, "a", "My laptop screen is cracked, please raise a ticket", EMAIL)
+    ctx.service.handle("a", "change the title to Cracked laptop screen")
+    assert load_counts(tmp_path / "hitl.jsonl") == HitlCounts(edits=1)  # no yes, no no: the edit is already there
+
+
+def test_an_approval_is_counted_at_the_gate_even_if_creating_the_ticket_then_fails(tmp_path):
+    from smartdesk_ai.tickets import MockTicketClient
+
+    client = MockTicketClient()
+    ctx = mock_context(tmp_path, client=client)
+    _turns(ctx, "a", "My laptop screen is cracked, please raise a ticket", EMAIL)
+    client.unreachable = True
+    reply = ctx.service.handle("a", "yes")
+    assert "try again later" in reply.text
+    assert load_counts(tmp_path / "hitl.jsonl") == HitlCounts(approvals=1)  # the decision was made; the failure is separate

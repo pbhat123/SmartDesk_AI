@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from smartdesk_ai.tickets import MockTicketClient
-from smartdesk_ai.tickets.sqlite_map import TicketStore
+from smartdesk_ai.tickets.sqlite_map import TicketStore, request_fingerprint
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.registry import ToolRegistry
 from smartdesk_ai.tools.ticket_tools import register_ticket_tools
@@ -56,11 +56,13 @@ def test_map_persists_across_reopen(tmp_path):
 def test_request_log_still_holds_no_email(tmp_path):
     path = tmp_path / "app.db"
     store = TicketStore(path)
-    store.begin("req-1")
+    store.begin("req-1", request_fingerprint(JANE, "Monitor flickers"))
     store.complete("req-1", 4)
     store.link_email(JANE, 4)
     columns = [r[1] for r in sqlite3.connect(path).execute("PRAGMA table_info(create_requests)")]
-    assert columns == ["request_id", "status", "issue_number"]
+    assert columns == ["request_id", "status", "issue_number", "fingerprint"]  # a salted hash, never the text
+    rows = sqlite3.connect(path).execute("SELECT * FROM create_requests").fetchall()
+    assert JANE.split("@")[0] not in str(rows).lower() and "monitor" not in str(rows).lower()
 
 
 # --- the executor writes the map on create ---------------------------------------

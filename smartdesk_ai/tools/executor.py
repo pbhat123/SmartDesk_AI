@@ -16,7 +16,7 @@ from smartdesk_ai.ops.metrics import MetricsRecorder, ToolCallRecord
 from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.ops.trace_log import TraceLog
 from smartdesk_ai.tickets.schemas import EMAIL_PATTERN
-from smartdesk_ai.tickets.sqlite_map import TicketStore
+from smartdesk_ai.tickets.sqlite_map import TicketStore, request_fingerprint
 from smartdesk_ai.tools.definitions import get_definition
 from smartdesk_ai.tools.errors import TRANSIENT
 from smartdesk_ai.tools.registry import RegisteredTool, ToolRegistry, UnknownToolError
@@ -193,10 +193,15 @@ class ToolExecutor:
             )
         request_id = None
         if name in CONFIRMED_TOOLS:  # create_ticket: a fresh ID per call, never from the model (FR-G6)
+            fingerprint = request_fingerprint(args.email, args.title) if self._store is not None else None
+            if fingerprint is not None:
+                earlier = self._settle_unfinished(name, tool, args, fingerprint, attempt_ms)
+                if earlier is not None:  # the ticket already exists, or we cannot yet rule that out
+                    return earlier
             request_id = f"req-{uuid.uuid4().hex}"
             args = args.model_copy(update={"request_id": request_id})
             if self._store is not None:
-                self._store.begin(request_id)
+                self._store.begin(request_id, fingerprint)
         result = self._run_with_retry(name, tool, args, request_id, attempt_ms)
         if result.outcome is Outcome.SUCCESS and request_id and self._store is not None:
             number = _issue_number(result.data)
@@ -204,6 +209,47 @@ class ToolExecutor:
                 self._store.complete(request_id, number)
                 self._store.link_email(args.email, number)  # FR-B3, FR-C10
         return result
+
+    def _settle_unfinished(
+        self, name: str, tool: RegisteredTool, args: BaseModel, fingerprint: str, attempt_ms: list[tuple[float, str]],
+    ) -> ToolResult | None:
+        """Before a new create, look for earlier requests for this same ticket that were begun but never finished (a
+        crash, a lost response, an outage). If one reached GitHub, return that ticket instead of making a second one.
+        If a lookup cannot be completed, create nothing: the employee is told to try again later, and the next try asks
+        again, so a leftover row never blocks for good. A request that never reached GitHub is closed as abandoned.
+        Returns None when nothing is left to settle and the create may go ahead."""
+        if tool.recover is None:
+            return None
+        for stale_id in self._store.pending_for(fingerprint):
+            found, failed = None, False
+            for attempt in range(1, self._cfg.max_attempts + 1):
+                started = self._clock()
+                try:
+                    found = tool.recover(stale_id)
+                except TRANSIENT:
+                    attempt_ms.append(((self._clock() - started) * 1000, "transient_failure"))
+                    failed = True
+                    if attempt < self._cfg.max_attempts:
+                        self._sleep(self._cfg.backoff_seconds * 2 ** (attempt - 1))
+                    continue
+                except Exception as exc:  # permanent: the message is not kept (FR-G11)
+                    attempt_ms.append(((self._clock() - started) * 1000, "error"))
+                    return ToolResult(tool=name, outcome=Outcome.ERROR, attempts=attempt, error=type(exc).__name__)
+                attempt_ms.append(((self._clock() - started) * 1000, "success"))
+                failed = False
+                break
+            if failed:
+                return ToolResult(
+                    tool=name, outcome=Outcome.UNAVAILABLE, attempts=self._cfg.max_attempts,
+                    error="the service is temporarily unavailable",
+                    reply=UNAVAILABLE_REPLIES.get(name, UNAVAILABLE_DEFAULT))
+            if found is None:
+                self._store.abandon(stale_id)
+                continue
+            self._store.complete(stale_id, found.number)
+            self._store.link_email(args.email, found.number)  # FR-B3, FR-C10
+            return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=1, data=found)
+        return None
 
     def _run_with_retry(
         self, name: str, tool: RegisteredTool, args: BaseModel, request_id: str | None,

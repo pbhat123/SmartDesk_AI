@@ -49,6 +49,11 @@ def masked_user_id(email: str) -> str:
     return f"user-{digest[:12]}"
 
 
+def salted_digest(text: str) -> str:
+    """A salted SHA-256 of `text`, for keys that must not reveal an email or a title (the create-request log)."""
+    return hashlib.sha256(f"{_active_salt()}:{text}".encode()).hexdigest()
+
+
 @dataclass
 class RequestContext:
     session_id: str

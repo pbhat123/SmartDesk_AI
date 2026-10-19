@@ -8,3 +8,6 @@ __pycache__/
 .claude/settings.local.json
 # Run-local judge resume state
 evals/results/judge_checkpoint.json
+
+# kept traces of the live eval runs (large; inspect locally)
+evals/results/traces/

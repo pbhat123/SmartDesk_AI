@@ -233,3 +233,18 @@ def test_a_live_run_goes_through_the_guard_with_twice_the_estimate(settings, tmp
     monkeypatch.setattr(ce, "run_items", lambda *a, **k: ({}, None))
     ce.main(["--live", "--confirm-spend", "--out-dir", str(tmp_path), "--checkpoint", str(tmp_path / "cp.json")])
     assert seen["ceiling"] == pytest.approx(2 * ce.estimate_live(settings, ROWS).usd)
+
+
+def test_only_limits_the_live_rows_and_the_estimate(capsys, no_paid_calls):
+    assert ce.main(["--live", "--estimate", "--only", "cmp-003,cmp-008"]) == 0
+    assert "2 questions" in capsys.readouterr().out
+    assert ce.main(["--live", "--estimate", "--only", "cmp-999"]) == 2
+
+
+def test_the_rendered_live_report_shows_routing_apart_from_the_criteria(mock_stack):
+    runs = {r.id: ce.observe_row_live(r, mock_stack) for r in ROWS[:2]}
+    results = [ce.RowResult(id=i, run=r, singles=[], problems=ce.check_row(BY_ID[i], r, live=True)) for i, r in runs.items()]
+    report = ce.summarize(ROWS[:2], results)
+    report.routing = ce.routing_stats(ROWS[:2], runs)
+    text = ce.render(report, live=True)
+    assert "routing (reported apart)" in text and "sent to the right domain" in text

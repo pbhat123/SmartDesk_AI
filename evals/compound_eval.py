@@ -38,9 +38,10 @@ from types import SimpleNamespace
 from pydantic import BaseModel
 
 from evals.common import EVALS_DIR, load_jsonl
+from evals.diagnostics import PartDiag, part_diagnostics
 from evals.gap_eval import build_live_stack
 from evals.harness import RESULTS_DIR, ROOT
-from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, run_items, signature
+from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, keep_trace, run_items, signature
 from evals.schemas import CompoundRow
 from smartdesk_ai.agent.factory import build_stack
 from smartdesk_ai.agent.graph import run_turn
@@ -77,6 +78,7 @@ class RowRun(BaseModel):
     worker_inputs: list[str]  # the human message of every worker model call
     leaks: list[str]  # what a worker was given beyond its sub-question and chunks
     part_texts: list[str] = []  # the orchestrator's wording of each part, in order (empty: the row's own wording)
+    parts: list[PartDiag] = []  # live runs: what happened to each part (domain, retrieval, worker, judge, retry, citations)
 
 
 class SingleRun(BaseModel):
@@ -102,6 +104,7 @@ class EvalReport(BaseModel):
     rows: list[RowResult]
     passed: int  # rows with no problem
     criteria: dict[str, Criterion]
+    routing: dict[str, int] | None = None  # live runs: where the parts were sent, reported apart from the criteria
 
 
 # --- the scripted models ------------------------------------------------------------------------------------------
@@ -271,7 +274,7 @@ def run_from_trace(row: CompoundRow, state, events: Sequence[dict], draft_events
         unanswered=list(state.pending_offer.unanswered_parts) if state.pending_offer else [],
         offered=state.pending_offer is not None and "ticket" in state.reply.lower(), reply=state.reply,
         draft_description=draft_input, draft_category=drafted.category if drafted is not None else None,
-        worker_inputs=worker_inputs, leaks=_leaks(row, worker_inputs), part_texts=texts)
+        worker_inputs=worker_inputs, leaks=_leaks(row, worker_inputs), part_texts=texts, parts=part_diagnostics(state, events))
 
 
 def observe_row_live(row: CompoundRow, stack) -> RowRun:
@@ -317,21 +320,25 @@ def run_live(settings: Settings, rows: Sequence[CompoundRow], estimate: Estimate
     if checkpoint.resumed:
         print(f"resuming: {checkpoint.resumed} of {len(rows)} questions are already answered")
     by_id = {r.id: r for r in rows}
-    with LiveRun(live, ["python", "-m", "evals.compound_eval", *sys.argv[1:]], ceiling_usd=estimate.ceiling_usd) as run, \
-            tempfile.TemporaryDirectory(prefix="compound_live_") as work:
-        stack = build_live_stack(live, Path(work))
+    work = Path(tempfile.mkdtemp(prefix="compound_live_"))
+    with LiveRun(live, ["python", "-m", "evals.compound_eval", *sys.argv[1:]], ceiling_usd=estimate.ceiling_usd) as run:
+        stack = build_live_stack(live, work)
         done, stopped = run_items(run, checkpoint, [r.id for r in rows],
                                   lambda i: observe_row_live(by_id[i], stack).model_dump())
         results = []
         for row in rows:
             if row.id in done:
                 run_ = RowRun(**done[row.id])
-                results.append(RowResult(id=row.id, run=run_, singles=[], problems=check_row(row, run_)))
+                results.append(RowResult(id=row.id, run=run_, singles=[], problems=check_row(row, run_, live=True)))
         report = summarize([r for r in rows if r.id in done], results)
+        report.routing = routing_stats(rows, {r.id: r.run for r in results})
         cost = run.cost()
+    kept = keep_trace(work, "compound_live", out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / LIVE_RESULT_FILE).write_text(json.dumps({**report.model_dump(), "stopped": stopped, "usd": round(cost.usd, 6)}, indent=1) + "\n")
     print(render(report, live=True))
+    if kept:
+        print(f"trace kept: {kept}")
     print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls ({cost.input_tokens:,} input, {cost.output_tokens:,} output tokens)")
     if stopped:
         print(f"STOPPED after {len(results)} of {len(rows)} rows: {stopped}")
@@ -341,8 +348,10 @@ def run_live(settings: Settings, rows: Sequence[CompoundRow], estimate: Estimate
 # --- checking -----------------------------------------------------------------------------------------------------
 
 
-def check_row(row: CompoundRow, run: RowRun) -> list[str]:
-    """What is wrong with one row's run, as "<criterion>: <problem>". Pure: it reads only `row` and `run`."""
+def check_row(row: CompoundRow, run: RowRun, *, live: bool = False) -> list[str]:
+    """What is wrong with one row's run, as "<criterion>: <problem>". Pure: it reads only `row` and `run`. In a live run the
+    misroute criterion is judged by outcome: a part the row says may be misrouted must be answered from its expected entry,
+    whether the orchestrator routed it right or the whole-KB retry recovered it (where it went is reported by `routing_stats`)."""
     texts = run.part_texts if len(run.part_texts) == len(row.parts) else [p.sub_question for p in row.parts]
     text_of = {p.sub_question: t for p, t in zip(row.parts, texts)}
     answered = [p for p in row.parts if p.answerable]
@@ -375,17 +384,47 @@ def check_row(row: CompoundRow, run: RowRun) -> list[str]:
             out.append("gap_part: the ticket must cover only the unanswered part(s) (it is missing one or holds an answered part)")
     if any(p.expected_domain == "MISC" for p in gaps) and run.draft_category != "MISC":
         out.append(f"misc_gap: the ticket category is {run.draft_category}, expected MISC")
-    for part in row.parts:
+    for i, part in enumerate(row.parts):
         text = text_of[part.sub_question]
-        if part.likely_wrong_domain and text not in run.retried_parts:
-            out.append(f"misroute: no whole-KB retry for the misrouted part {part.sub_question!r}")
-        if part.likely_wrong_domain and text in run.unanswered:
-            out.append(f"misroute: the misrouted part {part.sub_question!r} was not recovered")
+        if live and part.likely_wrong_domain:
+            diag = run.parts[i] if len(run.parts) == len(row.parts) else None
+            if part.expected_entry_id and (diag is None or part.expected_entry_id not in diag.citations):
+                out.append(f"misroute: the part {part.sub_question!r} was not answered from its expected entry {part.expected_entry_id}")
+        else:
+            if part.likely_wrong_domain and text not in run.retried_parts:
+                out.append(f"misroute: no whole-KB retry for the misrouted part {part.sub_question!r}")
+            if part.likely_wrong_domain and text in run.unanswered:
+                out.append(f"misroute: the misrouted part {part.sub_question!r} was not recovered")
         if part.answerable and not part.likely_wrong_domain and text in run.retried_parts:
             out.append(f"misroute: the correctly routed part {part.sub_question!r} was retried")
     if run.leaks or not run.worker_inputs:
         out.append(f"isolation: a worker was given more than its sub-question and chunks: {run.leaks or 'no worker input'}")
     return out
+
+
+def routing_stats(rows: Sequence[CompoundRow], runs: dict[str, RowRun]) -> dict[str, int]:
+    """Where the live orchestrator sent each answerable part, apart from whether the part was answered: right domain, wrong
+    domain, and of the wrong ones how many the whole-KB retry recovered (answered from the expected entry). A row whose part
+    count changed cannot be matched part by part and is counted as not aligned."""
+    stats = dict(parts=0, routed_right=0, routed_wrong=0, recovered_by_retry=0, unrecovered=0, not_aligned=0)
+    for row in rows:
+        run = runs.get(row.id)
+        if run is None:
+            continue
+        answerable = [(i, p) for i, p in enumerate(row.parts) if p.answerable]
+        stats["parts"] += len(answerable)
+        if len(run.parts) != len(row.parts):
+            stats["not_aligned"] += len(answerable)
+            continue
+        for i, part in answerable:
+            diag = run.parts[i]
+            if diag.domain == part.expected_domain:
+                stats["routed_right"] += 1
+                continue
+            stats["routed_wrong"] += 1
+            recovered = diag.retried and bool(part.expected_entry_id) and part.expected_entry_id in diag.citations
+            stats["recovered_by_retry" if recovered else "unrecovered"] += 1
+    return stats
 
 
 def check_single(single: SingleRun) -> list[str]:
@@ -453,6 +492,11 @@ def render(report: EvalReport, *, live: bool = False) -> str:
     for name in CRITERIA:
         c = report.criteria[name]
         lines.append(f"  {name:10} {c.passed} of {c.checked}")
+    if report.routing:
+        r = report.routing
+        lines.append(f"  routing (reported apart): {r['routed_right']} of {r['parts']} answerable parts sent to the right domain, "
+                     f"{r['routed_wrong']} to the wrong one ({r['recovered_by_retry']} recovered by the whole-KB retry, "
+                     f"{r['unrecovered']} not), {r['not_aligned']} in rows whose part count changed")
     for r in report.rows:
         for problem in r.problems:
             lines.append(f"  {r.id}: {problem}")
@@ -466,9 +510,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--estimate", action="store_true", help="with --live: print the cost estimate and stop")
     parser.add_argument("--confirm-spend", action="store_true", help="allow the live run")
     parser.add_argument("--checkpoint", type=Path, default=CHECKPOINT, help="where a live run saves finished rows, to resume")
+    parser.add_argument("--only", default=None, help="live: only these rows, comma separated (a diagnostic re-run)")
     args = parser.parse_args(argv)
     if args.live or args.estimate:
         settings, rows = load_settings(), load_rows()
+        if args.only:
+            wanted = set(args.only.split(","))
+            rows = [r for r in rows if r.id in wanted]
+            if {r.id for r in rows} != wanted:
+                print(f"error: unknown row(s): {sorted(wanted - {r.id for r in rows})}", file=sys.stderr)
+                return 2
         estimate = estimate_live(settings, rows)
         print("\n".join(describe(estimate)))
         if args.estimate:

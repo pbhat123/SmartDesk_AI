@@ -22,8 +22,8 @@ from smartdesk_ai.ops.spend_ledger import current_run, end_run, start_run
 
 CEILING_MULTIPLIER = 2.0
 
-__all__ = ["CEILING_MULTIPLIER", "EXIT_STALLED", "Checkpoint", "Estimate", "LiveRun", "RunCost", "ceiling_for", "describe", "run_items",
-           "signature"]
+__all__ = ["CEILING_MULTIPLIER", "EXIT_STALLED", "Checkpoint", "Estimate", "LiveRun", "RunCost", "ceiling_for", "describe", "keep_trace",
+           "run_items", "signature"]
 
 
 def ceiling_for(estimate_usd: float) -> float:
@@ -165,3 +165,16 @@ def run_items(run: LiveRun, checkpoint: Checkpoint, ids: Sequence[str], work: Ca
         checkpoint.put(item_id, results[item_id])
         run.beat()
     return results, run.stop_reason()
+
+
+def keep_trace(work_dir: Path, name: str, results_dir: Path) -> Path | None:
+    """Add a live run's local trace (masked prompts, replies and agent spans, no PII) to `<results>/traces/<name>.jsonl`, so the
+    run can be inspected after its scratch folder is gone. A resumed run adds to the same file. None when there was no trace."""
+    source = work_dir / "trace.jsonl"
+    if not source.is_file():
+        return None
+    target = results_dir / "traces" / f"{name}.jsonl"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a") as handle:
+        handle.write(source.read_text())
+    return target

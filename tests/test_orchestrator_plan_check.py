@@ -13,7 +13,7 @@ BY_ID = {c.id: c for c in CASES}
 
 
 def result(domains, intent="kb_query", texts=None):
-    parts = [SubQuestion(part_id=f"p{i}", text=(texts or [f"part {i}"] * len(domains))[i - 1], domain=d)
+    parts = [SubQuestion(part_id=f"p{i}", text=(texts or [f"part number {i} of this question?"] * len(domains))[i - 1], domain=d)
              for i, d in enumerate(domains, 1)]
     return IntentResult(intent=intent, confidence=0.95, domain=domains[0] if intent == "kb_query" else None,
                         parts=parts if intent == "kb_query" else [])
@@ -76,12 +76,12 @@ def test_the_domain_of_a_single_question_comes_from_its_first_part_or_else_the_m
 
 
 def test_a_single_topic_question_split_in_two_is_a_split_and_is_listed_with_its_parts():
-    two = lambda c: result([c.expected_parts[0], c.expected_parts[0]], texts=["first half?", "second half?"])  # noqa: E731
+    two = lambda c: result([c.expected_parts[0], c.expected_parts[0]], texts=["what is the first half of this?", "what is the second half of this?"])  # noqa: E731
     report = run(Oracle(**{"kb-045": two, "gap-005": two}))
     assert [o.id for o in report.split_single] == ["kb-045", "gap-005"]
     assert report.split_rate == pytest.approx(2 / 74, abs=1e-3)
-    assert [p.text for p in report.split_single[0].parts] == ["first half?", "second half?"]
-    assert "split kb-045" in pc.render(report) and "first half?" in pc.render(report)
+    assert [p.text for p in report.split_single[0].parts] == ["what is the first half of this?", "what is the second half of this?"]
+    assert "split kb-045" in pc.render(report) and "what is the first half of this?" in pc.render(report)
 
 
 def test_compound_questions_are_judged_on_count_and_domains_in_order():
@@ -204,3 +204,43 @@ def test_the_live_path_starts_a_ledger_run_and_uses_the_watchdog_and_the_ceiling
     for needle in ("start_run(", '"eval"', "Watchdog(", "over_ceiling", "end_run(status)", "current_run()"):
         assert needle in source
     assert "openai_builder" in inspect.getsource(pc.live_planner)
+
+
+# --- the check applies the same guard as the app (fragments merged back), raw and guarded side by side ----------------
+
+def fragments(case):
+    return result([case.expected_parts[0]] * 2, texts=["What are the possible performance scores?", "when are promotions decided?"])
+
+
+def test_a_fragment_split_is_merged_back_by_the_app_guard_and_listed_only_as_raw():
+    report = run(Oracle(**{"kb-045": fragments}))
+    assert report.split_single == [] and report.split_rate == 0.0
+    assert report.split_single_raw == ["kb-045"] and report.split_rate_raw == pytest.approx(1 / 74, abs=1e-4)
+    assert "raw (before the guard" in pc.render(report) and "kb-045" in pc.render(report)
+
+
+def test_a_real_two_part_split_counts_in_both_lists():
+    two = lambda c: result([c.expected_parts[0]] * 2, texts=["What is the probation period?", "Does the company offer a sabbatical?"])  # noqa: E731
+    report = run(Oracle(**{"kb-001": two}))
+    assert [o.id for o in report.split_single] == ["kb-001"] and report.split_single_raw == ["kb-001"]
+
+
+def test_the_guarded_parts_are_what_is_scored_for_compound_questions():
+    merged = lambda c: result(list(c.expected_parts) + [c.expected_parts[-1]], texts=[  # noqa: E731
+        *[f"A complete question number {i} here?" for i in range(len(c.expected_parts))], "and for how long?"])
+    report = run(Oracle(**{"cmp-001": merged}))
+    row = next(c for c in report.compound if c.id == "cmp-001")
+    assert row.right_count and row.correct_split and not row.raw_right_count  # the app merges the extra fragment away
+    assert report.compound_right_count == 14 and report.compound_right_count_raw == 13
+
+
+def test_compound_count_and_domains_are_reported_apart():
+    swapped = lambda c: result(list(reversed(c.expected_parts)))  # noqa: E731
+    report = run(Oracle(**{"cmp-001": swapped}))
+    assert report.compound_right_count == 14 and report.compound_correct == 13
+
+
+def test_a_failed_call_has_no_raw_parts():
+    boom = lambda c: (_ for _ in ()).throw(ClassifierError("bad"))  # noqa: E731
+    report = run(Oracle(**{"kb-001": boom}))
+    assert report.errors == ["kb-001"] and "kb-001" not in report.split_single_raw

@@ -15,7 +15,8 @@ def write(path, data):
 
 
 PLAN = {"intent_accuracy": 0.98, "domain_accuracy": 0.93, "single_topic": 74, "split_single": [{"id": "kb-053"}], "errors": [],
-        "compound": [{"id": f"cmp-{i}", "correct_split": True} for i in range(14)], "compound_correct": 14, "stopped": None}
+        "split_single_raw": ["kb-045", "kb-053"], "compound_right_count": 14, "compound_right_count_raw": 14,
+        "compound": [{"id": f"cmp-{i}", "correct_split": True, "right_count": True} for i in range(14)], "compound_correct": 14, "stopped": None}
 COMPOUND = {"passed": 13, "rows": [{"id": f"cmp-{i}", "run": {"parts": []}} for i in range(14)], "criteria": {}, "stopped": None,
             "routing": {"parts": 29, "routed_right": 29, "routed_wrong": 0, "recovered_by_retry": 0, "unrecovered": 0, "not_aligned": 0}}
 SAFETY = {"leakage_rate": 0.0, "breach_rate": 0.0, "leaked_ids": [], "breached_ids": [], "cost_usd": 0.05, "stopped": None, "cases": [{}] * 27}
@@ -101,8 +102,8 @@ def bad(name, file, base, **change):
 
 @pytest.mark.parametrize("name, override, expect", [
     ("plan_check", bad("plan_check", "orchestrator_plan_check.json", PLAN, split_single=[{"id": "kb-053"}, {"id": "gap-005"}, {"id": "kb-001"}]), "limit is 2"),
-    ("plan_check", bad("plan_check", "orchestrator_plan_check.json", PLAN, compound_correct=13,
-                       compound=[{"id": "cmp-013", "correct_split": False}] + PLAN["compound"][:13]), "13 of 14"),
+    ("plan_check", bad("plan_check", "orchestrator_plan_check.json", PLAN, compound_right_count=13,
+                       compound=[{"id": "cmp-013", "correct_split": False, "right_count": False}] + PLAN["compound"][:13]), "13 of 14"),
     ("plan_check", bad("plan_check", "orchestrator_plan_check.json", PLAN, errors=["kb-001"]), "failed"),
     ("compound", bad("compound", "compound_eval_live.json", COMPOUND, passed=11), "11 of 14"),
     ("safety", bad("safety", "safety_eval.json", SAFETY, leakage_rate=0.04, leaked_ids=["safe-003"]), "leakage"),
@@ -116,6 +117,15 @@ def test_a_stop_rule_ends_the_batch_and_names_the_reason(steps, tmp_path, name, 
     outcome = batch(steps, tmp_path, run)
     assert outcome.stopped_at == name and expect in outcome.reason
     assert run.calls[-1] == name and outcome.not_run == NAMES[NAMES.index(name) + 1:]
+
+
+def test_a_wrong_domain_label_on_a_compound_question_is_reported_apart_and_does_not_stop_step_b(steps, tmp_path):
+    wrong_label = bad("plan_check", "orchestrator_plan_check.json", PLAN, compound_correct=13,
+                      compound=[{"id": "cmp-007", "correct_split": False, "right_count": True}] + PLAN["compound"][:13])
+    run = fake_runner(tmp_path, wrong_label)
+    assert batch(steps, tmp_path, run).stopped_at is None
+    outcome = batch(steps, tmp_path, fake_runner(tmp_path, wrong_label))
+    assert "right number and domains in order 13 of 14" in pp.final_table(outcome, tmp_path, balance_before=8.0)
 
 
 def test_the_limits_themselves_are_allowed(steps, tmp_path):
@@ -271,10 +281,43 @@ def test_the_final_table_gathers_every_number_the_batch_was_for(steps, tmp_path)
     outcome = batch(steps, tmp_path, fake_runner(tmp_path))
     text = pp.final_table(outcome, tmp_path, balance_before=8.06).lower()
     for needle in ("diagnostics (a)", "cmp-003", "worker insufficient", "planning check", "single-topic questions split 1 of 74",
-                   "compound split correctly 14 of 14", "13 of 14 rows", "routing (apart)", "leakage", "breach", "gap pass",
+                   "right number and domains in order 14 of 14", "13 of 14 rows", "routing (apart)", "leakage", "breach", "gap pass",
                    "answered with citations", "kb answer rate", "precision", "recall", "drift baseline", "cut-off verdict", "faithfulness",
                    "context precision", "context recall", "answer correctness", "ledger total", "remaining balance"):
         assert needle in text, needle
+
+
+def test_the_final_table_shows_raw_and_guarded_splits_side_by_side(steps, tmp_path):
+    text = pp.final_table(batch(steps, tmp_path, fake_runner(tmp_path)), tmp_path, balance_before=8.0)
+    assert "split 1 of 74 (kb-053) after the guard, 2 raw (kb-045, kb-053)" in text
+    assert "compound right number of parts 14 of 14 (raw 14)" in text
+
+
+def test_a_result_older_than_the_batch_is_never_printed_it_says_not_run(steps, tmp_path):
+    runner = fake_runner(tmp_path)
+    old = time.time() - 3600
+    batch(steps, tmp_path, runner)  # leaves every result file in place
+    for f in tmp_path.rglob("*.json"):
+        os.utime(f, (old, old))
+    stop = bad("plan_check", "orchestrator_plan_check.json", PLAN, errors=["kb-001"])
+    started = time.time()
+    outcome = batch(steps, tmp_path, fake_runner(tmp_path, stop))  # this batch writes diagnostics and the plan check, then stops
+    text = pp.final_table(outcome, tmp_path, balance_before=8.0, since=started)
+    for later in ("live compound set: not run", "safety: not run", "gap + KB run and drift baseline: not run",
+                  "paraphrase cut-off verdict: not run", "Ragas: not run", "tier comparison: not run"):
+        assert later in text
+    assert "leakage" not in text and "drift baseline: faithfulness" not in text and "diagnostics (a):" in text
+    nothing = pp.final_table(pp.Outcome(), tmp_path, balance_before=8.0, since=time.time() + 60)
+    assert "diagnostics (a): not run" in nothing and "orchestrator planning check: not run" in nothing
+
+
+def test_the_batch_start_is_saved_in_the_state_and_survives_a_restart(tmp_path):
+    state = pp.State(tmp_path / "s.json", "sig")
+    state.started = 1234.5
+    state.save()
+    assert pp.State(tmp_path / "s.json", "sig").started == 1234.5
+    state.clear()
+    assert pp.State(tmp_path / "s.json", "sig").started is None
 
 
 def test_a_stopped_batch_says_where_and_why_and_what_did_not_run(steps, tmp_path):

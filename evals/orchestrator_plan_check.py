@@ -32,6 +32,7 @@ from evals.harness import RESULTS_DIR, gap_rows, kb_rows, live_settings
 from evals.judge_run import EXIT_STALLED, Watchdog
 from evals.schemas import CompoundRow
 from smartdesk_ai.agent.intents import ClassifierError, make_classifier
+from smartdesk_ai.agent.orchestrator import plan_parts
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.state import Category, IntentResult
 from smartdesk_ai.config.settings import Settings, load_settings
@@ -65,7 +66,8 @@ class Outcome(BaseModel):
     question: str
     intent: str | None  # None: the call failed or its reply was invalid
     domain: Category | None  # the message-level domain
-    parts: list[PartOut]
+    parts: list[PartOut]  # what the system answers: the orchestrator's parts after the same `plan_parts` guard the app applies
+    raw_parts: list[PartOut] = []  # the orchestrator's own parts, before that guard (fragments not yet merged back)
 
     @property
     def predicted_domains(self) -> list[Category | None]:
@@ -78,6 +80,7 @@ class CompoundResult(BaseModel):
     got: list[Category | None]
     correct_split: bool  # the same number of parts with the same domains in order
     right_count: bool
+    raw_right_count: bool = False  # the orchestrator's own count, before the guard
     same_domains: bool  # the same domains, in any order
 
 
@@ -90,10 +93,14 @@ class PlanReport(BaseModel):
     wrong_domain: list[str]
     wrong_intent: list[str]
     single_topic: int
-    split_single: list[Outcome]  # single-topic questions the orchestrator split into 2+ parts
+    split_single: list[Outcome]  # single-topic questions that still have 2+ parts after the guard (what the app does)
     split_rate: float
+    split_single_raw: list[str] = []  # ids the orchestrator itself split, before the guard (a fragment merged back is in this list only)
+    split_rate_raw: float = 0.0
     compound: list[CompoundResult]
-    compound_correct: int
+    compound_correct: int  # right count and right domains in order
+    compound_right_count: int = 0  # right number of parts (the step b rule); domains are reported apart by `compound_correct`
+    compound_right_count_raw: int = 0
     errors: list[str]  # question ids whose call failed or returned an invalid reply
     stopped: str | None = None  # why the run ended early, if it did
 
@@ -114,7 +121,7 @@ def load_cases() -> list[Case]:
 
 
 def run_cases(cases: Sequence[Case], planner: Planner, *, after: Callable[[Outcome], None] | None = None,
-              stop: Callable[[], str | None] = lambda: None) -> tuple[list[Outcome], str | None]:
+              stop: Callable[[], str | None] = lambda: None, max_parts: int = 4) -> tuple[list[Outcome], str | None]:
     """Ask the orchestrator each question. `stop` is checked before each one and may name a reason to end the run."""
     outcomes: list[Outcome] = []
     for case in cases:
@@ -123,8 +130,11 @@ def run_cases(cases: Sequence[Case], planner: Planner, *, after: Callable[[Outco
             return outcomes, reason
         try:
             result = planner(case.question)
-            outcome = Outcome(id=case.id, kind=case.kind, question=case.question, intent=result.intent,
-                              domain=result.domain, parts=[PartOut(text=p.text, domain=p.domain) for p in result.parts])
+            raw = [PartOut(text=p.text, domain=p.domain) for p in result.parts]
+            kept = (plan_parts(case.question, None, result, max_parts=max_parts).parts
+                    if result.intent == "kb_query" and result.parts else [])
+            outcome = Outcome(id=case.id, kind=case.kind, question=case.question, intent=result.intent, domain=result.domain,
+                              parts=[PartOut(text=p.text, domain=p.domain) for p in kept] if result.parts else raw, raw_parts=raw)
         except ClassifierError:
             outcome = Outcome(id=case.id, kind=case.kind, question=case.question, intent=None, domain=None, parts=[])
         outcomes.append(outcome)
@@ -151,14 +161,17 @@ def score(cases: Sequence[Case], outcomes: Sequence[Outcome], stopped: str | Non
         expected, got = by_id[o.id].expected_parts, o.predicted_domains
         compound.append(CompoundResult(
             id=o.id, expected=expected, got=got, correct_split=got == expected,
-            right_count=len(got) == len(expected), same_domains=sorted(map(str, got)) == sorted(expected)))
+            right_count=len(got) == len(expected), same_domains=sorted(map(str, got)) == sorted(expected),
+            raw_right_count=len(o.raw_parts or [None]) == len(expected)))
     return PlanReport(
         n_cases=len(cases), n_answered=len(answered),
         intent_accuracy=_rate(len(answered) - len(wrong_intent), len(answered)),
         domain_accuracy=_rate(sum(domain_ok.values()), len(singles)), domain_accuracy_by_kind=by_kind,
         wrong_domain=[i for i, ok in domain_ok.items() if not ok], wrong_intent=wrong_intent,
         single_topic=len(singles), split_single=split, split_rate=_rate(len(split), len(singles)),
+        split_single_raw=[o.id for o in singles if len(o.raw_parts) >= 2], split_rate_raw=_rate(sum(len(o.raw_parts) >= 2 for o in singles), len(singles)),
         compound=compound, compound_correct=sum(c.correct_split for c in compound),
+        compound_right_count=sum(c.right_count for c in compound), compound_right_count_raw=sum(c.raw_right_count for c in compound),
         errors=[o.id for o in outcomes if o.intent is None], stopped=stopped)
 
 
@@ -176,8 +189,11 @@ def render(report: PlanReport) -> str:
     ]
     for o in report.split_single:
         lines.append(f"    split {o.id}: {o.question!r} -> " + " | ".join(f"{p.domain}: {p.text}" for p in o.parts))
-    lines.append(f"  compound questions split correctly (same number of parts, same domains in order): "
-                 f"{report.compound_correct} of {len(report.compound)}")
+    if report.split_single_raw != [o.id for o in report.split_single]:
+        lines.append(f"  raw (before the guard that merges fragments back): {len(report.split_single_raw)} of {report.single_topic} split "
+                     f"({', '.join(report.split_single_raw) or 'none'})")
+    lines.append(f"  compound questions with the right number of parts: {report.compound_right_count} of {len(report.compound)} "
+                 f"(raw {report.compound_right_count_raw}); right number and domains in order: {report.compound_correct} of {len(report.compound)}")
     for c in report.compound:
         lines.append(f"    {c.id}: expected {c.expected}, got {c.got}" + ("" if c.correct_split else "  <-- not as expected"))
     if report.errors:
@@ -264,7 +280,8 @@ def run_live(settings: Settings, cases: Sequence[Case], est: Estimate, out_dir: 
     status = "crashed"
     try:
         watchdog.start()
-        outcomes, stopped = run_cases(cases, live_planner(live), after=lambda o: watchdog.beat(), stop=over_ceiling)
+        outcomes, stopped = run_cases(cases, live_planner(live), after=lambda o: watchdog.beat(), stop=over_ceiling,
+                                       max_parts=live.orchestrator.max_parts)
         report = score(cases[:len(outcomes)] if stopped else cases, outcomes, stopped)
         print(render(report))
         run = current_run()
@@ -289,7 +306,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     settings = load_settings()
     cases = load_cases()
     if args.mock:
-        outcomes, stopped = run_cases(cases, mock_planner(settings))
+        outcomes, stopped = run_cases(cases, mock_planner(settings), max_parts=settings.orchestrator.max_parts)
         report = score(cases, outcomes, stopped)
         print(render(report))
         print("(MOCK run: the mock orchestrator splits by keyword; this only exercises the code.)")

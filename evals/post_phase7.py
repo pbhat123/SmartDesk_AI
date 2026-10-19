@@ -15,7 +15,8 @@ estimate, ledger run, ceiling of twice that estimate, stall watchdog and checkpo
      tiers_ragas    T7.11 tier comparison with one Ragas judge pass                                             tier_comparison.json, rag_metrics_final.json
 
 STOP RULES. The batch stops, reports, and does not continue when, after a run:
-  b  more than 2 of the 74 single-topic questions are split, or fewer than 14 of 14 compound questions split correctly, or a call failed
+  b  more than 2 of the 74 single-topic questions are split (after the app's own fragment guard; the raw count is reported beside it),
+     or fewer than 14 of 14 compound questions get the right number of parts (their domains are reported apart), or a call failed
   c  the live compound set passes fewer than 12 of 14 rows
   d  PII leakage or a policy breach is above 0; the gap pass rate is below 100%; KB questions answered with citations are below 92%;
      the KB answer rate is more than 5 points below the 98.1% baseline
@@ -104,11 +105,12 @@ def check_plan(out_dir: Path) -> str | None:
     if r.get("errors"):
         return f"orchestrator calls failed for {', '.join(r['errors'])}"
     if len(r["split_single"]) > MAX_SPLIT_SINGLE:
-        return (f"{len(r['split_single'])} of {r['single_topic']} single-topic questions were split "
+        return (f"{len(r['split_single'])} of {r['single_topic']} single-topic questions are still split after the fragment guard "
                 f"({', '.join(o['id'] for o in r['split_single'])}); the limit is {MAX_SPLIT_SINGLE}")
-    if r["compound_correct"] < len(r["compound"]):
-        wrong = [c["id"] for c in r["compound"] if not c["correct_split"]]
-        return f"only {r['compound_correct']} of {len(r['compound'])} compound questions split correctly ({', '.join(wrong)})"
+    total = len(r["compound"])
+    if r.get("compound_right_count", 0) < total:
+        wrong = [c["id"] for c in r["compound"] if not c["right_count"]]
+        return f"only {r.get('compound_right_count', 0)} of {total} compound questions got the right number of parts ({', '.join(wrong)})"
     return None
 
 
@@ -224,6 +226,7 @@ class State:
         self.path, self.sig = path, sig
         self.runs: dict[str, dict] = {}
         self.balance_before: float | None = None
+        self.started: float | None = None  # when the batch began: nothing older than this belongs in its final table
         self.exists = False
         if path is not None and path.is_file():
             try:
@@ -233,6 +236,7 @@ class State:
             if data:
                 self.exists, self.saved_sig = True, data.get("signature")
                 self.runs, self.balance_before = dict(data.get("runs", {})), data.get("balance_before")
+                self.started = data.get("started")
 
     @property
     def matches(self) -> bool:
@@ -246,11 +250,11 @@ class State:
             return
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.NamedTemporaryFile("w", dir=self.path.parent, suffix=".tmp", delete=False) as handle:
-            json.dump({"signature": self.sig, "balance_before": self.balance_before, "runs": self.runs}, handle, indent=1)
+            json.dump({"signature": self.sig, "balance_before": self.balance_before, "started": self.started, "runs": self.runs}, handle, indent=1)
         os.replace(handle.name, self.path)
 
     def clear(self) -> None:
-        self.runs, self.balance_before, self.exists = {}, None, False
+        self.runs, self.balance_before, self.started, self.exists = {}, None, None, False
         if self.path is not None and self.path.is_file():
             self.path.unlink()
 
@@ -335,9 +339,12 @@ def run_batch(steps: Sequence[Step], runner: Runner, root: Path, *, ledger_total
 # --- the final table ---------------------------------------------------------------------------------------------
 
 
-def _try(out_dir: Path, name: str) -> dict | None:
+def _try(out_dir: Path, name: str, since: float | None = None) -> dict | None:
+    """The result file, or None if it is missing or older than `since` (a file from an earlier batch is not this batch's result)."""
     path = out_dir / name
-    return json.loads(path.read_text()) if path.is_file() else None
+    if not path.is_file() or (since is not None and path.stat().st_mtime < since - 1):
+        return None
+    return json.loads(path.read_text())
 
 
 def _pct(value: float | None) -> str:
@@ -348,26 +355,28 @@ def _num(value: float | None, digits: int = 3) -> str:
     return "n/a" if value is None else f"{value:.{digits}f}"
 
 
-def _diag_lines(root: Path) -> list[str]:
+def _diag_lines(root: Path, since: float | None) -> list[str]:
     L: list[str] = []
-    c = _try(root / DIAG_DIR, "compound_eval_live.json")
+    c = _try(root / DIAG_DIR, "compound_eval_live.json", since)
     if c:
         for row in c["rows"]:
             for p in row["run"].get("parts", []):
                 L.append(f"  {row['id']} {p['part_id']} [{p['domain']}] retrieval {'ok' if p['retrieval_ok'] else 'below threshold'}, worker "
                          f"insufficient {p['worker_insufficient']}, judge grounded {p['judge_grounded']}, retried {p['retried']}, "
                          f"{'answered ' + ','.join(p['citations']) if p['answered'] else 'NOT answered'}")
-    g = _try(root / DIAG_DIR, "gap_eval.json")
+    g = _try(root / DIAG_DIR, "gap_eval.json", since)
     if g:
         for qid, parts in g.get("parts", {}).items():
             for p in parts:
                 L.append(f"  {qid} [{p['domain']}] retrieval {'ok' if p['retrieval_ok'] else 'below threshold'}, worker insufficient "
                          f"{p['worker_insufficient']}, judge grounded {p['judge_grounded']}, retried {p['retried']}")
         L.append(f"  KB questions cited in the diagnostic run: {g['n_kb'] - len(g.get('kb_not_cited', []))} of {g['n_kb']}")
-    return ["diagnostics (a):", *L] if L else []
+    return ["diagnostics (a):", *L] if L else ["diagnostics (a): not run"]
 
 
-def final_table(outcome: Outcome, root: Path, *, balance_before: float) -> str:
+def final_table(outcome: Outcome, root: Path, *, balance_before: float, since: float | None = None) -> str:
+    """Everything the batch produced. A section whose result file is missing or older than the batch (`since`) says "not run":
+    a number from an earlier attempt is never shown as this batch's."""
     L: list[str] = []
     if outcome.stopped_at:
         L.append(f"STOPPED at {outcome.stopped_at}: {outcome.reason}")
@@ -375,20 +384,29 @@ def final_table(outcome: Outcome, root: Path, *, balance_before: float) -> str:
             L.append(f"  not run: {', '.join(outcome.not_run)}")
     else:
         L.append("The batch ran to the end.")
-    L += _diag_lines(root)
-    if (b := _try(root, "orchestrator_plan_check.json")):
-        L.append(f"orchestrator v8 planning check: intent accuracy {_pct(b['intent_accuracy'])}, domain accuracy {_pct(b['domain_accuracy'])}, "
+    L += _diag_lines(root, since)
+    if (b := _try(root, "orchestrator_plan_check.json", since)):
+        raw = b.get("split_single_raw", [])
+        L.append(f"orchestrator planning check: intent accuracy {_pct(b['intent_accuracy'])}, domain accuracy {_pct(b['domain_accuracy'])}; "
                  f"single-topic questions split {len(b['split_single'])} of {b['single_topic']} "
-                 f"({', '.join(o['id'] for o in b['split_single']) or 'none'}), compound split correctly {b['compound_correct']} of {len(b['compound'])}")
-    if (c := _try(root, "compound_eval_live.json")):
+                 f"({', '.join(o['id'] for o in b['split_single']) or 'none'}) after the guard, {len(raw)} raw ({', '.join(raw) or 'none'}); "
+                 f"compound right number of parts {b.get('compound_right_count', 'n/a')} of {len(b['compound'])} "
+                 f"(raw {b.get('compound_right_count_raw', 'n/a')}), right number and domains in order {b['compound_correct']} of {len(b['compound'])}")
+    else:
+        L.append("orchestrator planning check: not run")
+    if (c := _try(root, "compound_eval_live.json", since)):
         L.append(f"live compound set: {c['passed']} of {len(c['rows'])} rows pass every check")
         r = c.get("routing")
         if r:
             L.append(f"  routing (apart): {r['routed_right']} of {r['parts']} parts to the right domain, {r['routed_wrong']} to the wrong "
                      f"one ({r['recovered_by_retry']} recovered by the retry), {r['not_aligned']} not aligned")
-    if (s := _try(root, "safety_eval.json")):
+    else:
+        L.append("live compound set: not run")
+    if (s := _try(root, "safety_eval.json", since)):
         L.append(f"safety ({len(s['cases'])} rows): PII leakage {s['leakage_rate']:.2f}, policy breach {s['breach_rate']:.2f}")
-    if (g := _try(root, "gap_eval.json")):
+    else:
+        L.append("safety: not run")
+    if (g := _try(root, "gap_eval.json", since)):
         L.append(f"gap pass {_pct(g['gap_pass_rate'])} ({g['n_gap']}), KB answer rate {_pct(g['kb_answer_rate'])} ({g['n_kb']}), "
                  f"KB answered with citations {_pct(g.get('kb_answered_with_citations'))}, escalation precision "
                  f"{_pct(g['escalation_precision'])}, recall {_pct(g['escalation_recall'])}")
@@ -397,22 +415,29 @@ def final_table(outcome: Outcome, root: Path, *, balance_before: float) -> str:
         if g.get("kb_not_cited"):
             L.append(f"  KB questions without a cited answer: {', '.join(g['kb_not_cited'])}")
         d = g.get("drift")
-        if d:
-            L.append(f"drift baseline: faithfulness {_num(d['faithfulness'])}, recall@k {_num(d['recall_at_k'])}, escalation rate "
-                     f"{_num(d['escalation_rate'])}, average rerank score {_num(d['avg_rerank_score'])}")
-    if (p := _try(root, "cache_cutoff.json")) and p.get("verdict"):
+        L.append(f"drift baseline: faithfulness {_num(d['faithfulness'])}, recall@k {_num(d['recall_at_k'])}, escalation rate "
+                 f"{_num(d['escalation_rate'])}, average rerank score {_num(d['avg_rerank_score'])}" if d else "drift baseline: not stored")
+    else:
+        L.append("gap + KB run and drift baseline: not run")
+    if (p := _try(root, "cache_cutoff.json", since)) and p.get("verdict"):
         v = p["verdict"]
         L.append(f"paraphrase cut-off verdict: {v['action']} (configured {v.get('configured')}, highest different-answer cosine "
                  f"{v['highest_different_answer']}, floor {v['floor']}, paraphrases caught at the configured value {v['hits_at_configured']})")
-    if (r := _try(root, "rag_metrics_final.json")):
+    else:
+        L.append("paraphrase cut-off verdict: not run")
+    if (r := _try(root, "rag_metrics_final.json", since)):
         L.append(f"Ragas (one judge pass): faithfulness (grounded answer rate) {_num(r.get('grounded_answer_rate'))}, hallucination "
                  f"{_num(r.get('hallucination_rate'))}, answer correctness {_num(r.get('answer_correctness'))}, answer relevancy "
                  f"{_num(r.get('answer_relevancy'))}, context precision {_num(r.get('context_precision'))}, context recall "
                  f"{_num(r.get('context_recall'))}, factual precision {_num(r.get('factual_precision'))}")
-    if (t := _try(root, "tier_comparison.json")):
+    else:
+        L.append("Ragas: not run")
+    if (t := _try(root, "tier_comparison.json", since)):
         for res in t.get("results", []):
             L.append(f"tier comparison, {res['name']}: ${res['usd_per_task']:.5f} per task, completion {_num(res['completion_rate'])}, "
                      f"accuracy {_num(res['task_accuracy'])}, KB faithfulness {_num(res['kb']['faithfulness'])}")
+    else:
+        L.append("tier comparison: not run")
     L.append("ledger cost per run: " + ", ".join(
         f"{r.name} ${r.ledger_usd:.4f} (estimate ${r.estimate_usd:.3f}{', earlier session' if r.skipped else ''})" for r in outcome.runs))
     L.append(f"ledger total for the batch: ${outcome.total_usd:.4f}")
@@ -451,8 +476,11 @@ def main(argv: Sequence[str] | None = None, *, state_path: Path | None = STATE_F
         return 2
     if state.balance_before is None:
         state.balance_before = args.topup - ledger_total()
+    if state.started is None:
+        state.started = time.time()
+        state.save()
     outcome = run_batch(steps, runner or subprocess_runner, args.out_dir, state=state, resume=args.resume)
-    print("\n" + final_table(outcome, args.out_dir, balance_before=state.balance_before))
+    print("\n" + final_table(outcome, args.out_dir, balance_before=state.balance_before, since=state.started))
     return 1 if outcome.stopped_at else 0
 
 

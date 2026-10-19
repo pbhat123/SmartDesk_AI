@@ -1,0 +1,150 @@
+{
+ "model": "gpt-5.4-mini",
+ "turns": [
+  {
+   "scenario": "api_down",
+   "turn": 1,
+   "total": 896,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 896,
+   "compacted": false
+  },
+  {
+   "scenario": "degraded_mode",
+   "turn": 1,
+   "total": 894,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 894,
+   "compacted": false
+  },
+  {
+   "scenario": "degraded_mode",
+   "turn": 2,
+   "total": 964,
+   "prompt": 875,
+   "history": 60,
+   "without_history": 904,
+   "compacted": false
+  },
+  {
+   "scenario": "flow_a",
+   "turn": 1,
+   "total": 894,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 894,
+   "compacted": false
+  },
+  {
+   "scenario": "flow_a",
+   "turn": 2,
+   "total": 957,
+   "prompt": 875,
+   "history": 60,
+   "without_history": 897,
+   "compacted": false
+  },
+  {
+   "scenario": "flow_a",
+   "turn": 3,
+   "total": 974,
+   "prompt": 875,
+   "history": 81,
+   "without_history": 893,
+   "compacted": false
+  },
+  {
+   "scenario": "flow_b",
+   "turn": 1,
+   "total": 892,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 892,
+   "compacted": false
+  },
+  {
+   "scenario": "flow_c",
+   "turn": 1,
+   "total": 894,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 894,
+   "compacted": false
+  },
+  {
+   "scenario": "kb_answer",
+   "turn": 1,
+   "total": 899,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 899,
+   "compacted": false
+  },
+  {
+   "scenario": "status_0",
+   "turn": 1,
+   "total": 894,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 894,
+   "compacted": false
+  },
+  {
+   "scenario": "status_1",
+   "turn": 1,
+   "total": 894,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 894,
+   "compacted": false
+  },
+  {
+   "scenario": "status_2plus",
+   "turn": 1,
+   "total": 893,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 893,
+   "compacted": false
+  },
+  {
+   "scenario": "ticket_create_edit",
+   "turn": 1,
+   "total": 895,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 895,
+   "compacted": false
+  },
+  {
+   "scenario": "ticket_create_no",
+   "turn": 1,
+   "total": 895,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 895,
+   "compacted": false
+  },
+  {
+   "scenario": "ticket_create_yes",
+   "turn": 1,
+   "total": 900,
+   "prompt": 875,
+   "history": 0,
+   "without_history": 900,
+   "compacted": false
+  }
+ ],
+ "total_min": 892,
+ "total_median": 895.0,
+ "total_max": 974,
+ "history_median": 0.0,
+ "history_max": 81,
+ "first_compaction": null,
+ "messages_tokens_per_turn": 43.5,
+ "trigger_tokens": 300000,
+ "projected_compaction_turn": 6894,
+ "usd_per_call_at_trigger": 0.2257
+}

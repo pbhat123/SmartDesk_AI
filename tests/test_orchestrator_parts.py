@@ -171,3 +171,26 @@ def test_a_compaction_summary_is_passed_on_as_it_is():
     messages = [SystemMessage("Summary of the earlier conversation: the employee asked about leave."),
                 HumanMessage("what about contractors?")]
     assert transcript_for(messages) == "Summary of the earlier conversation: the employee asked about leave."
+
+
+# --- clauses about one topic stay one part (orchestrator_v5; the mock follows the same rule) --------------------
+
+TWO_CLAUSES_ONE_TOPIC = [
+    "What are the possible performance scores, and when are promotions decided?",
+    "How many sick days do I get, and do I need a certificate?",
+    "Is there a spot for my motorbike at the Pune site, and does it cost anything?",
+]
+
+
+@pytest.mark.parametrize("question", TWO_CLAUSES_ONE_TOPIC)
+def test_a_two_clause_question_about_one_topic_stays_one_part(built_index_dir, settings, tmp_path, question):
+    stack = assemble(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM(), routed=True)
+    state = run_turn(stack.graph, new_thread_id(), question)
+    assert [(p.text, p.rewritten) for p in state.parts] == [(question, False)]
+    assert not any(s.startswith("fan_out") for s in state.steps)
+
+
+def test_two_questions_that_need_different_domains_are_still_split(built_index_dir, settings, tmp_path):
+    stack = assemble(built_index_dir, settings, tmp_path, llm=FakeAnswerLLM(), routed=True)
+    state = run_turn(stack.graph, new_thread_id(), "How do I set up MFA, and how many sick days do I get?")
+    assert [p.domain for p in state.parts] == ["IT", "HR"]

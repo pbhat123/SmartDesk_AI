@@ -51,6 +51,7 @@ _OUT_OF_SCOPE = re.compile(r"\b(weather|recipe|cricket|world cup|poem|joke|pytho
 _AMBIGUOUS = re.compile(r"^(it'?s not working|i need (some )?help|i have a question|can you sort that out)", re.I)
 _CLAUSE_BREAK = re.compile(
     r"[?,]+\s*(?:and\s+)?(?=(?:how|what|when|where|who|which|can|could|does|do|will|is|are|should)\b)", re.I)
+_MISC_WORDS = re.compile(r"\b(park|parking|cafeteria|canteen|menu|desk|lunch|gym)\b", re.I)
 _QUESTION_WORD = re.compile(r"^(how|what|when|where|who|which|can|could|does|do|will|is|are|should)\b", re.I)
 _ORDINAL = re.compile(r"\b(first|second|third|fourth|last|one|\d+)\b", re.I)
 _YES_WORDS = re.compile(r"^(yes|yeah|yep|sure|ok|okay|please do|go ahead)\b", re.I)
@@ -85,7 +86,8 @@ class MockRoutingModel:
         one topic ("what are the scores, and when are promotions decided?") stays one part here."""
         pieces = [p.strip(" ,?") for p in _CLAUSE_BREAK.split(text) if p.strip(" ,?")]
         domains = [infer_mock_category(p) for p in pieces]
-        if len(pieces) < 2 or len(set(domains)) < 2 or not all(_QUESTION_WORD.match(p) for p in pieces):
+        named = {_piece_domain(p) for p in pieces} - {None}  # the domains the keyword rules positively name
+        if len(pieces) < 2 or len(named) < 2 or not all(_QUESTION_WORD.match(p) for p in pieces):
             return [{"text": text, "domain": domain, "follow_up": False}]
         return [{"text": f"{p[0].upper()}{p[1:]}?", "domain": d, "follow_up": False} for p, d in zip(pieces, domains)]
 
@@ -128,6 +130,16 @@ def infer_mock_category(text: str) -> str:
     if _DRAFT_IT.search(text):
         return "IT"
     return "HR" if _DRAFT_HR.search(text) else "MISC"
+
+
+def _piece_domain(piece: str) -> str | None:
+    """The domain a clause is positively about, or None when no keyword names one: a clause such as "do I need a
+    certificate?" belongs with the clause it follows, so two clauses about one topic are not split."""
+    if _DRAFT_IT.search(piece):
+        return "IT"
+    if _DRAFT_HR.search(piece):
+        return "HR"
+    return "MISC" if _MISC_WORDS.search(piece) else None
 
 
 def infer_mock_priority(text: str) -> str | None:

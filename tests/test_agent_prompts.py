@@ -104,13 +104,16 @@ def test_the_synthesizer_loads_its_prompt_and_is_labelled(settings, tmp_path):
     assert synth.prompt == load_prompt("synthesizer", settings).text
 
 
-def test_orchestrator_v4_is_v3_plus_the_parts_section(settings):
-    """New versions are new files: every v3 line stays (except the reply-shape line), and the parts rules are added.
-    The prompt's "at most four" matches config `orchestrator.max_parts`."""
+def test_orchestrator_v5_is_v4_with_the_split_only_for_different_entries_rule(settings):
+    """New versions are new files: every v4 line stays except the one bullet v5 rewrites. The prompt's "at most four"
+    matches config `orchestrator.max_parts`; v4 is itself v3 plus the parts section."""
     v3 = (PROMPTS_DIR / "orchestrator_v3.md").read_text().splitlines()
-    v4 = load_prompt("orchestrator", settings)
-    assert v4.version == 4 and settings.orchestrator.max_parts == 4
-    kept = [line for line in v3 if not line.startswith('{"intent"')]
-    assert all(line in v4.text.splitlines() for line in kept)
-    assert '"parts": [{"text"' in v4.text and "At most four parts" in v4.text and "Conversation so far" in v4.text
-    assert "Never put an email address" in v4.text
+    v4 = (PROMPTS_DIR / "orchestrator_v4.md").read_text().splitlines()
+    v5 = load_prompt("orchestrator", settings)
+    assert v5.version == 5 and settings.orchestrator.max_parts == 4
+    assert all(line in v4 for line in v3 if not line.startswith('{"intent"'))
+    changed = [line for line in v4 if line not in v5.text.splitlines()]
+    assert len(changed) == 1 and changed[0].startswith('- "parts" lists each separate question')
+    assert "only when the questions need different knowledge base entries or belong to different domains" in v5.text
+    assert "Clauses about one topic stay one part" in v5.text and "When unsure, keep one part" in v5.text
+    assert "At most four parts" in v5.text and "Conversation so far" in v5.text and "Never put an email address" in v5.text

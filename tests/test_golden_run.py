@@ -178,3 +178,28 @@ def test_the_run_reports_answered_with_citations_next_to_the_old_rate(settings, 
 def test_the_saved_file_carries_the_new_rate(settings, stack, tmp_path):
     saved = json.loads(gr.save(gr.run_golden(stack, settings, GOLDEN, mock=True), tmp_path).read_text())
     assert "kb_answered_with_citations" in saved and "kb_not_cited" in saved and "kb_answer_rate" in saved
+
+
+# --- diagnostics, subsets and kept traces ---------------------------------------------------------------------------
+
+def test_every_observation_carries_its_part_diagnostics(settings, stack):
+    result = gr.run_golden(stack, settings, GOLDEN, mock=True)
+    assert all(len(o.parts) == o.workers or o.workers == 0 for o in result.observations)
+    first = next(o for o in result.observations if o.parts)
+    assert first.parts[0].domain and first.parts[0].worker_insufficient is not None and first.parts[0].text
+
+
+def test_a_subset_is_a_diagnostic_and_never_a_drift_point(settings, stack):
+    result = gr.run_golden(stack, settings, drift.Golden(kb=GOLDEN.kb[:2], gap=[]), mock=True, partial=True)
+    assert result.drift is None and result.stopped is None and result.gap.n_kb == 2
+
+
+def test_only_picks_questions_and_refuses_unknown_ones(capsys, no_paid_calls):
+    assert gr.main(["--estimate", "--only", "kb-010"]) == 0
+    assert "1 questions" in capsys.readouterr().out
+    assert gr.main(["--estimate", "--only", "kb-999"]) == 2
+
+
+def test_the_saved_file_lists_the_diagnostics_of_questions_without_a_cited_single_part(settings, stack, tmp_path):
+    saved = json.loads(gr.save(gr.run_golden(stack, settings, GOLDEN, mock=True), tmp_path).read_text())
+    assert "parts" in saved and isinstance(saved["parts"], dict)

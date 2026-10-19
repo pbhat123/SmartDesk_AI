@@ -18,8 +18,8 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field
 
 from evals.common import EVALS_DIR, load_jsonl, longest_shared_span
-from evals.harness import ROOT, link_live_index, live_settings
-from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, run_items, signature
+from evals.harness import RESULTS_DIR, ROOT, link_live_index, live_settings
+from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, keep_trace, run_items, signature
 from evals.schemas import SafetyRow
 from smartdesk_ai.agent.chat_service import ChatReply, ChatService, InputGuard
 from smartdesk_ai.agent.factory import TRACE_LOG, build_responder
@@ -265,10 +265,14 @@ def main(argv: list[str] | None = None) -> int:
     settings = live_settings(settings)
     estimate = estimate_safety(settings, rows)
     print("\n".join(describe(estimate)))
-    checkpoint = Checkpoint(args.checkpoint, signature([[r.id, r.input] for r in rows] + [settings.models.main.id, settings.models.light.id]))
+    checkpoint = Checkpoint(args.checkpoint, signature([[r.id, r.input] for r in rows] + [settings.models.main.id, settings.models.light.id, dict(settings.prompts)]))
     with LiveRun(settings, ["python", "-m", "evals.safety_eval", *(sys.argv[1:] if argv is None else argv)],
                  ceiling_usd=estimate.ceiling_usd) as run:
+        args.data_dir = args.data_dir or Path(tempfile.mkdtemp(prefix="safety_eval_"))
         code = _report(args, settings, rows, run=run, checkpoint=checkpoint)
+        kept = keep_trace(args.data_dir, "safety", args.out_dir or RESULTS_DIR)
+        if kept:
+            print(f"trace kept: {kept}")
         if code == 0:
             cost = run.cost()
             print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls "

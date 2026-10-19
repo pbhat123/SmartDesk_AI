@@ -3,8 +3,8 @@
   "n_gap": 21,
   "n_kb": 53,
   "gap_pass_rate": 1.0,
-  "kb_answer_rate": 0.9811320754716981,
-  "escalation_precision": 0.9545454545454546,
+  "kb_answer_rate": 0.9622641509433962,
+  "escalation_precision": 0.9130434782608695,
   "escalation_recall": 1.0,
   "by_split": {
     "dev": {
@@ -13,159 +13,12 @@
     },
     "test": {
       "gap_pass_rate": 1.0,
-      "kb_answer_rate": 1.0
+      "kb_answer_rate": 0.9615384615384616
     }
   },
   "grey_zone_pass_rate": 1.0,
   "failures": [],
   "cases": [
-    {
-      "id": "gap-001",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-002",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-003",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-004",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-005",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-006",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-007",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-008",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-009",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-010",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-011",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-012",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-013",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-014",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-015",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-016",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-017",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-018",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-019",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": true,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-020",
-      "label": "gap",
-      "split": "dev",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
-    {
-      "id": "gap-021",
-      "label": "gap",
-      "split": "test",
-      "grey_zone": false,
-      "outcome": "escalated"
-    },
     {
       "id": "kb-001",
       "label": "kb",
@@ -234,14 +87,14 @@
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "escalated"
     },
     {
       "id": "kb-011",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "deflected"
     },
     {
       "id": "kb-012",
@@ -535,8 +388,197 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "other"
+    },
+    {
+      "id": "gap-001",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-002",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-003",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-004",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-005",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-006",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-007",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-008",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-009",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-010",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-011",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-012",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-013",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-014",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-015",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-016",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-017",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-018",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-019",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": true,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-020",
+      "label": "gap",
+      "split": "dev",
+      "grey_zone": false,
+      "outcome": "escalated"
+    },
+    {
+      "id": "gap-021",
+      "label": "gap",
+      "split": "test",
+      "grey_zone": false,
+      "outcome": "escalated"
     }
   ],
-  "run_id": "20261018T192050Z-c60196"
+  "drift": {
+    "ts": "2026-10-19T22:20:43+00:00",
+    "mode": "live",
+    "faithfulness": 0.9636363636363636,
+    "recall_at_k": 0.9622641509433962,
+    "escalation_rate": 0.3108108108108108,
+    "avg_rerank_score": 0.2657964445795886,
+    "k": 5,
+    "n_kb": 53,
+    "n_gap": 21,
+    "retrieval_strategy": "hybrid_rerank",
+    "reranker_status": "ok",
+    "prompt_versions": {
+      "orchestrator": 5,
+      "answer": 4,
+      "worker_it": 1,
+      "worker_hr": 1,
+      "synthesizer": 1,
+      "grounding_judge": 3,
+      "ticket_summary": 1,
+      "tool_select": 1,
+      "injection_classifier": 1,
+      "compaction": 1,
+      "confirm_parse": 2,
+      "chitchat": 1
+    },
+    "models": {
+      "main": "gpt-5.4-mini",
+      "light": "gpt-4o-mini",
+      "embedding": "text-embedding-3-small",
+      "reranker": "BAAI/bge-reranker-base"
+    },
+    "usd": 0.339043
+  },
+  "stopped": null,
+  "single_part_clean": 70,
+  "single_part_total": 74,
+  "not_clean": [
+    "kb-011",
+    "kb-053",
+    "gap-003",
+    "gap-005"
+  ]
 }

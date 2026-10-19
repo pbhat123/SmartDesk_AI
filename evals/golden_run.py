@@ -17,9 +17,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel
 
+from evals.diagnostics import PartDiag, part_diagnostics
 from evals.gap_eval import Case, GapReport, answered_with_citations, build_live_stack, classify, summarize
 from evals.harness import RESULTS_DIR, ROOT
-from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, run_items, signature
+from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, keep_trace, run_items, signature
 from smartdesk_ai.agent.factory import AgentStack, build_stack
 from smartdesk_ai.agent.graph import run_turn
 from smartdesk_ai.agent.state import new_thread_id
@@ -49,6 +50,7 @@ class Observation(BaseModel):
     verdicts: int
     workers: int = 0  # worker spans of the question (one part should mean one worker)
     synth_calls: int = 0  # synthesizer calls (a single-part question should make none)
+    parts: list[PartDiag] = []  # what happened to each part: domain, retrieval, worker and judge verdicts, retry, citations
 
 
 class GoldenResult(BaseModel):
@@ -59,6 +61,7 @@ class GoldenResult(BaseModel):
     drift: drift.DriftPoint | None  # None when the run stopped before the last question
     stopped: str | None = None
     usd: float = 0.0
+    observations: list[Observation] = []
 
 
 def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
@@ -79,11 +82,12 @@ def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
         hit=row.expected_entry_id in {c.entry_id for c in chunks[:k]} if label == "kb" else None,
         grounded=sum(verdicts), verdicts=len(verdicts),
         workers=len({e.get("part_id") for e in new_events if e.get("kind") == "agent_span" and e.get("part_id")}),
-        synth_calls=sum(e.get("kind") == "llm_call" and e.get("task") == "SYNTHESIZER" for e in new_events))
+        synth_calls=sum(e.get("kind") == "llm_call" and e.get("task") == "SYNTHESIZER" for e in new_events),
+        parts=part_diagnostics(state, new_events))
 
 
 def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, mock: bool, run: LiveRun | None = None,
-               checkpoint: Checkpoint | None = None) -> GoldenResult:
+               checkpoint: Checkpoint | None = None, partial: bool = False) -> GoldenResult:
     k = settings.retrieval.top_n
     items = [(r, "kb") for r in golden.kb] + [(r, "gap") for r in golden.gap]
     by_id = {r.id: (r, label) for r, label in items}
@@ -98,7 +102,7 @@ def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, m
                      for o in seen])
     usd = run.cost().usd if run is not None else stack.services.cost.total
     point = None
-    if stopped is None and len(seen) == len(ids):
+    if stopped is None and len(seen) == len(ids) and not partial:  # a subset is a diagnostic, never a drift point
         judged = sum(o.verdicts for o in seen)
         point = drift.make_point(
             settings, mock=mock, faithfulness=sum(o.grounded for o in seen) / judged if judged else None,
@@ -106,7 +110,7 @@ def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, m
             escalated=sum(o.outcome == "escalated" for o in seen), n_questions=len(seen), n_kb=len(golden.kb),
             n_gap=len(golden.gap), reranker_status=stack.registry.get(Component.RERANKER).status.value, usd=usd)
     clean = [o for o in seen if o.workers == 1 and o.synth_calls == 0]
-    return GoldenResult(gap=gap, drift=point, stopped=stopped, usd=usd, single_part_clean=len(clean), single_part_total=len(seen),
+    return GoldenResult(gap=gap, drift=point, stopped=stopped, usd=usd, observations=seen, single_part_clean=len(clean), single_part_total=len(seen),
                         not_clean=[o.id for o in seen if o not in clean])
 
 
@@ -143,6 +147,7 @@ def save(result: GoldenResult, out_dir: Path) -> Path:
     payload = {"mock": result.drift.mode == "mock" if result.drift else False, **result.gap.model_dump(),
                "cases": [c.model_dump() for c in result.gap.cases],
                "drift": result.drift.model_dump() if result.drift else None, "stopped": result.stopped,
+               "parts": {o.id: [p.model_dump() for p in o.parts] for o in result.observations if not o.cited or len(o.parts) != 1},
                "single_part_clean": result.single_part_clean, "single_part_total": result.single_part_total, "not_clean": result.not_clean}
     path = out_dir / RESULT_FILE
     path.write_text(json.dumps(payload, indent=2))
@@ -156,14 +161,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--confirm-spend", action="store_true", help="allow the live run, which calls paid models")
     parser.add_argument("--out-dir", type=Path, default=RESULTS_DIR, help="where to save gap_eval.json")
     parser.add_argument("--checkpoint", type=Path, default=CHECKPOINT, help="where a live run saves finished questions, to resume")
+    parser.add_argument("--only", default=None, help="only these questions, comma separated (a diagnostic re-run; no drift point)")
     parser.add_argument("--drift-log", type=Path, default=DRIFT_LOG, help="the drift history a finished live run appends to")
     args = parser.parse_args(argv)
     settings = load_settings()
     golden = drift.Golden.load()
+    if args.only:
+        wanted = set(args.only.split(","))
+        golden = drift.Golden(kb=[r for r in golden.kb if r.id in wanted], gap=[r for r in golden.gap if r.id in wanted])
+        found = {r.id for r in [*golden.kb, *golden.gap]}
+        if found != wanted:
+            print(f"error: unknown question(s): {sorted(wanted - found)}", file=sys.stderr)
+            return 2
     if args.mock:
         with tempfile.TemporaryDirectory(prefix="golden_run_") as work:
             stack = build_stack(settings, environ={}, dotenv_path=None, data_dir=Path(work), use_cache=False)
-            result = run_golden(stack, settings, golden, mock=True)
+            result = run_golden(stack, settings, golden, mock=True, partial=bool(args.only))
         print(render(result, mock=True))
         print("(MOCK run: it only exercises the code.)")
         return 0
@@ -177,18 +190,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
     sig = signature([[r.id, r.question] for r in [*golden.kb, *golden.gap]] + [live.models.main.id, live.models.light.id,
                                                                            dict(live.prompts)])
-    checkpoint = Checkpoint(args.checkpoint, sig)
+    checkpoint = Checkpoint(args.checkpoint, sig)  # the questions are in the signature, so a subset never reuses the full run's
     if checkpoint.resumed:
         print(f"resuming: {checkpoint.resumed} of {golden.size} questions are already answered")
     with LiveRun(live, ["python", "-m", "evals.golden_run", *(sys.argv[1:] if argv is None else argv)],
-                 ceiling_usd=estimate.ceiling_usd) as run, tempfile.TemporaryDirectory(prefix="golden_run_") as work:
-        stack = build_live_stack(live, Path(work))
-        result = run_golden(stack, live, golden, mock=False, run=run, checkpoint=checkpoint)
+                 ceiling_usd=estimate.ceiling_usd) as run:
+        work = Path(tempfile.mkdtemp(prefix="golden_run_"))
+        stack = build_live_stack(live, work)
+        result = run_golden(stack, live, golden, mock=False, run=run, checkpoint=checkpoint, partial=bool(args.only))
         print(render(result, mock=False))
         cost = run.cost()
         print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls ({cost.input_tokens:,} input, "
               f"{cost.output_tokens:,} output tokens)")
-    print(f"saved: {save(result, args.out_dir)}")
+    kept = keep_trace(work, "golden_run" if not args.only else "golden_diagnostic", args.out_dir)
+    print(f"saved: {save(result, args.out_dir)}" + (f"\ntrace kept: {kept}" if kept else ""))
     if result.drift is not None:
         drift.DriftHistory(args.drift_log).append(result.drift)
         print(f"drift baseline stored in {args.drift_log}")

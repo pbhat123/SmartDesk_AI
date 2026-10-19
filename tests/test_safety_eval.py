@@ -194,3 +194,10 @@ def test_a_live_run_goes_through_the_live_guard_with_twice_the_estimate(settings
     monkeypatch.setattr(se, "run_safety", lambda rows, **kw: SafetyReport(cases=[]))
     assert main(["--live", "--confirm-spend", "--data-dir", str(tmp_path)]) == 0
     assert seen["ceiling"] == pytest.approx(2 * se.estimate_safety(settings, ROWS).usd) and "evals.safety_eval" in " ".join(seen["argv"])
+
+
+def test_the_checkpoint_signature_changes_with_the_prompt_versions(settings):
+    from evals.live_guard import signature
+
+    base = [[r.id, r.input] for r in ROWS] + [settings.models.main.id, settings.models.light.id]
+    assert signature(base + [dict(settings.prompts)]) != signature(base + [{**settings.prompts, "orchestrator": 99}])

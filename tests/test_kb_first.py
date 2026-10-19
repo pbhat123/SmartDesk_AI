@@ -42,10 +42,13 @@ def test_an_answered_question_makes_no_offer(built_index_dir, settings, tmp_path
 
 
 def test_the_only_way_into_the_offer_node_is_through_a_kb_search(built_index_dir, settings, tmp_path):
+    """The offer follows `compose`, which follows the retry gate, which only the workers and the retry feed (T4.9, T7.4)."""
     graph, _ = build_test_graph(built_index_dir, settings, tmp_path)
-    drawn = graph.get_graph()
-    into_offer = {e.source for e in drawn.edges if e.target == "offer"}
-    assert into_offer <= {"it_worker", "hr_worker", "misc_search", "kb_retry"}  # the workers and the retry (T4.9, T7.2)
+    edges = graph.get_graph().edges
+    into = lambda target: {e.source for e in edges if e.target == target}  # noqa: E731
+    assert into("offer") == {"compose"} and into("compose") == {"retry_gate"}
+    assert into("retry_gate") == {"it_worker", "hr_worker", "misc_search", "kb_retry"}
+    assert into("kb_retry") == {"retry_gate"}
 
 
 def test_the_trace_is_per_turn(built_index_dir, settings, tmp_path):

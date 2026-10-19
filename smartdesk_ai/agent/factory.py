@@ -22,6 +22,7 @@ from smartdesk_ai.agent.grounding import make_grounding_judge
 from smartdesk_ai.agent.prompt_loader import load_prompt
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
+from smartdesk_ai.agent.synthesizer import make_synthesizer
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
 from smartdesk_ai.agent.workers import MISC_SEARCH, make_worker_answerers
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
@@ -37,6 +38,7 @@ from smartdesk_ai.llm.mock import (
     MockGroundingModel,
     MockInjectionModel,
     MockRoutingModel,
+    MockSynthesizerModel,
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.guardrails.pii import PiiRedactor
@@ -163,7 +165,7 @@ def build_stack(
         start_run(settings, source="app")  # no-op if an eval already started this process's run
         embeddings = get_embeddings(settings, env)
         index_dir = Path(data_dir) / "index"  # what `python -m smartdesk_ai.rag.ingest` builds
-        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = judge_b = compact_b = openai_builder
+        answer_b = route_b = draft_b = confirm_b = chat_b = inject_b = judge_b = compact_b = synth_b = openai_builder
     else:
         embeddings = HashingEmbeddings()
         index_dir = Path(data_dir) / "index_mock"
@@ -180,6 +182,7 @@ def build_stack(
         inject_b = _builder_for(MockInjectionModel())
         judge_b = _builder_for(MockGroundingModel())
         compact_b = _builder_for(MockCompactionModel())
+        synth_b = _builder_for(MockSynthesizerModel())
     # The local trace log works with no tracing keys; its masker needs no Presidio (FR-G8, FR-G11).
     trace = TraceLog(Path(data_dir) / TRACE_LOG, make_masker(PiiRedactor(None, settings.guardrails.pii_min_score)),
                      prompt_versions=settings.prompts)
@@ -238,7 +241,8 @@ def build_stack(
                             embed=costed_embeddings.embed_query, cutoff=settings.thresholds.semantic_cache_cutoff,
                             log=cache_log)
     graph = build_kb_graph(
-        KBDeps(executor=executor, answer=workers[MISC_SEARCH], cache=cache, workers=workers),
+        KBDeps(executor=executor, answer=workers[MISC_SEARCH], cache=cache, workers=workers,
+               synthesizer=make_synthesizer(settings, builder=synth_b)),
         make_checkpointer(Path(data_dir) / CHECKPOINT_DB, STATE_MODELS),
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,

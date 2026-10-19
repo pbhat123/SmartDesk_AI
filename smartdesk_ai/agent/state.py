@@ -108,6 +108,8 @@ class PartResult(BaseModel):
     cache: Literal["exact", "semantic", "miss"] | None = None  # how the answer cache served this part; None: not consulted
     cache_similarity: float | None = None  # semantic hits: the cosine to the cached question
     cache_saved_ms: float | None = None  # hits: what the cached answer's search and answer took, less the lookup
+    outage: str | None = None  # the polite message when the search or every model tier was down for this part (FR-F1, F2)
+    outage_step: str | None = None  # its trace step: search_failed, llm_unavailable or worker_failed
 
 
 def merge_by_key(old: dict | None, new: dict | None) -> dict:
@@ -116,6 +118,17 @@ def merge_by_key(old: dict | None, new: dict | None) -> dict:
     if new is None:
         return {}
     return {**(old or {}), **new}
+
+
+def append_by_key(old: dict | None, new: dict | None) -> dict:
+    """Reducer for per-part traces: a node's steps for a part are added after the ones already there (the whole-KB
+    retry follows the first search). A `None` write clears the field at the start of a turn."""
+    if new is None:
+        return {}
+    merged = {key: list(steps) for key, steps in (old or {}).items()}
+    for key, steps in new.items():
+        merged[key] = merged.get(key, []) + list(steps)
+    return merged
 
 
 class AgentState(BaseModel):
@@ -140,7 +153,7 @@ class AgentState(BaseModel):
     parts: list[SubQuestion] = []  # the orchestrator's sub-questions for this turn (FR-I3)
     parts_dropped: int = 0  # parts past `orchestrator.max_parts`, which are not answered
     part_results: Annotated[dict[str, PartResult], merge_by_key] = {}  # by part_id, written in parallel (FR-I4)
-    part_steps: Annotated[dict[str, list[str]], merge_by_key] = {}  # each part's trace, folded into `steps` at the join
+    part_steps: Annotated[dict[str, list[str]], append_by_key] = {}  # each part's trace, folded into `steps` at the join
     steps: list[str] = []  # this turn's trace, e.g. ["search_kb", "answer", "offer"] (FR-H11)
     reply: str = ""
 

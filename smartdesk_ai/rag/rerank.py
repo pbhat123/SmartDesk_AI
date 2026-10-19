@@ -1,5 +1,6 @@
 """Cross-encoder reranking and collapse of pieces to entries (FR-A6, FR-A15)."""
 import math
+import threading
 from collections.abc import Callable, Sequence
 from typing import Protocol
 
@@ -35,6 +36,7 @@ class CrossEncoderReranker:
 
     def __init__(self, predict: PairScorer) -> None:
         self._predict = predict
+        self._lock = threading.Lock()  # parts run on several threads; one cross-encoder forward pass at a time
 
     @classmethod
     def from_cross_encoder(cls, model) -> "CrossEncoderReranker":
@@ -54,7 +56,8 @@ class CrossEncoderReranker:
     def rerank(self, query: str, candidates: list[ScoredChunk]) -> list[ScoredChunk]:
         if not candidates:
             return []
-        logits = self._predict([(query, c.chunk.embed_text) for c in candidates])
+        with self._lock:
+            logits = self._predict([(query, c.chunk.embed_text) for c in candidates])
         scored = [ScoredChunk(chunk=c.chunk, score=sigmoid(float(x)), stage="rerank") for c, x in zip(candidates, logits)]
         scored.sort(key=lambda s: (-s.score, s.chunk.chunk_id))
         return scored

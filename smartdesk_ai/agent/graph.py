@@ -7,6 +7,7 @@ is reachable only from the KB nodes,
 so retrieval is always attempted before a ticket is offered (FR-A14). The ticket path starts at
 `t_collect`. `steps` is the per-turn trace.
 """
+import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -14,7 +15,8 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command
+from pydantic import BaseModel
+from langgraph.types import Command, Send
 
 from smartdesk_ai.agent.agents import ORCHESTRATOR
 from smartdesk_ai.agent.answer import (
@@ -67,6 +69,7 @@ from smartdesk_ai.agent.ticket_agent import (
     t_dup_reask,
     t_reask,
 )
+from smartdesk_ai.agent.synthesizer import Synthesizer, join_answers
 from smartdesk_ai.agent.workers import AGENT_FOR_NODE, FILTER_FOR_NODE, MISC_SEARCH, NODE_FOR_DOMAIN, WORKER_AGENTS, Answerer
 from smartdesk_ai.ops.cache import AnswerCache
 from smartdesk_ai.ops.compaction import Compactor
@@ -74,6 +77,11 @@ from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
 from smartdesk_ai.tools.search_kb import KBChunk, SearchKBResult
 
+
+logger = logging.getLogger(__name__)
+
+WORKER_FAILED_REPLY = "Sorry, I can't look that up right now. Please try again later."
+DROPPED_NOTE = "I've answered the first {done} questions. Please ask the other {dropped} in a separate message."
 
 
 class KBFirstViolation(RuntimeError):
@@ -94,6 +102,7 @@ class KBDeps:
     answer: Callable[[str, Sequence[KBChunk]], AnswerResult]  # the orchestrator's answering step: MISC parts and the retry
     cache: AnswerCache | None = None  # KB answers only; the ticket and status paths never see it
     workers: Mapping[str, Answerer] | None = None  # the answering step of each worker node; absent: `answer` for all
+    synthesizer: Synthesizer | None = None  # merges several answered parts; absent: the answers are joined (FR-I4)
 
     def answerer_for(self, node: str) -> Answerer:
         return (self.workers or {}).get(node, self.answer)
@@ -235,9 +244,9 @@ def make_route_node(route: Router, max_parts: int) -> Callable[[AgentState], dic
     return route_node
 
 
-def after_route(state: AgentState) -> str:
+def after_route(state: AgentState) -> list[Send] | str:
     if state.route_kind == "kb":
-        return after_plan(state)
+        return fan_out(state)
     return {"ticket": "t_collect", "status": "s_lookup"}.get(state.route_kind or "", "chitchat")
 
 
@@ -318,75 +327,151 @@ def make_single_part_node() -> Callable[[AgentState], dict[str, Any]]:
     return single_part
 
 
-def after_plan(state: AgentState) -> str:
-    """The worker for the (first) part's domain (FR-I2)."""
-    return NODE_FOR_DOMAIN[state.parts[0].domain]
+class WorkerInput(BaseModel):
+    """What a worker is sent: its sub-question and nothing else (FR-I3). Plain data, so the checkpoint can hold it."""
+
+    part: SubQuestion
 
 
-def make_worker_node(deps: KBDeps, node: str) -> Callable[[AgentState], dict[str, Any]]:
-    """An IT, HR or MISC worker: answers its part from the KB, or the cached answer for it (FR-I2, FR-G2)."""
+def fan_out(state: AgentState) -> list[Send]:
+    """One worker per part, all started in the same step and run in parallel (FR-I4, FR-I2)."""
+    return [Send(NODE_FOR_DOMAIN[p.domain], WorkerInput(part=p).model_dump()) for p in state.parts]
 
-    def worker(state: AgentState) -> dict[str, Any]:
-        part = state.parts[0]
-        text = _question(state)
-        outcome = _search_and_answer(deps, part, node)
-        if isinstance(outcome, Unavailable):
-            return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
-                    "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
-        update = {"steps": _kb_steps(state.steps, outcome), "part_result": outcome, "reply": outcome.answer,
-                  "part_results": {part.part_id: outcome}}
-        if not part.rewritten:  # a rewritten part already set the topic when the orchestrator planned it
-            update["last_topic"] = topic_after(text, state.last_topic)
-        return update
+
+def _part_of(outcome: PartResult | Unavailable, part: SubQuestion, agent: str) -> PartResult:
+    if isinstance(outcome, Unavailable):
+        return PartResult(part_id=part.part_id, sub_question=part.text, agent=agent, answer="", answerable=False,
+                          outage=outcome.message, outage_step=outcome.step)
+    return outcome
+
+
+def _steps_of(result: PartResult) -> list[str]:
+    if result.outage is not None:
+        return ["search_kb", result.outage_step or "unavailable"]
+    return _kb_steps([], result)
+
+
+def make_worker_node(deps: KBDeps, node: str) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """An IT, HR or MISC worker: answers its part from the KB, or the cached answer for it (FR-I2, FR-G2). It writes only
+    its own part's keys, so parts can run in parallel. It never raises: a failure is an outage for its part, because an
+    exception out of a parallel step would leave the turn half-run (the next message would be read as a gate reply)."""
+
+    def worker(payload: dict[str, Any]) -> dict[str, Any]:
+        part = WorkerInput.model_validate(payload).part  # a Send argument reaches the node as the plain dict it was sent as
+        try:
+            outcome = _search_and_answer(deps, part, node)
+        except Exception as error:  # the type only: the message could echo the employee's text (FR-G11)
+            logger.warning("worker %s failed (%s)", node, type(error).__name__)
+            outcome = Unavailable(WORKER_FAILED_REPLY, "worker_failed")
+        result = _part_of(outcome, part, AGENT_FOR_NODE[node])
+        return {"part_results": {part.part_id: result}, "part_steps": {part.part_id: _steps_of(result)}}
 
     return worker
 
 
-def needs_offer(state: AgentState) -> bool:
-    part = state.part_result
-    return part is not None and (not part.answerable or part.llm_insufficient)
+def make_kb_retry_node(deps: KBDeps) -> Callable[[dict[str, Any]], dict[str, Any]]:
+    """The one whole-KB retry of a part (FR-A19, FR-I6): the same sub-question with no domain filter, run by the
+    orchestrator. Parts retry in parallel, each on its own."""
 
-
-def make_kb_retry_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
-    """The one whole-KB retry (FR-A19, FR-I6): the same sub-question with no domain filter, run by the orchestrator."""
-
-    def kb_retry(state: AgentState) -> dict[str, Any]:
-        part = state.parts[0]
-        outcome = _search_and_answer(deps, part, MISC_SEARCH)
-        if isinstance(outcome, Unavailable):
-            return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
-                    "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
-        retried = outcome.model_copy(update={"retried": True})
-        return {"steps": _kb_steps(state.steps, retried), "part_result": retried, "reply": retried.answer,
-                "part_results": {part.part_id: retried}}
+    def kb_retry(payload: dict[str, Any]) -> dict[str, Any]:
+        part = WorkerInput.model_validate(payload).part
+        try:
+            outcome = _search_and_answer(deps, part, MISC_SEARCH)
+        except Exception as error:
+            logger.warning("whole-KB retry failed (%s)", type(error).__name__)
+            outcome = Unavailable(WORKER_FAILED_REPLY, "worker_failed")
+        result = _part_of(outcome, part, AGENT_FOR_NODE[MISC_SEARCH])
+        if result.outage is None:
+            result = result.model_copy(update={"retried": True})
+        return {"part_results": {part.part_id: result}, "part_steps": {part.part_id: _steps_of(result)}}
 
     return kb_retry
 
 
-def after_kb_search(state: AgentState) -> str:
-    part = state.part_result
-    if part is None:
-        return END
-    if not needs_offer(state):
-        return "reply"
-    # Retry once, and only when the first search was filtered; a whole-KB search would repeat itself.
-    return "kb_retry" if part.searched_domain is not None and not part.retried else "offer"
+def part_unanswered(result: PartResult) -> bool:
+    """Any escalation signal fired for this part (FR-A15)."""
+    return not result.answerable or result.llm_insufficient
 
 
-def after_kb_retry(state: AgentState) -> str:
-    if state.part_result is None:
+def _needs_retry(result: PartResult | None) -> bool:
+    # Retry once, and only when the first search was filtered; a whole-KB search would repeat itself (FR-I6).
+    return (result is not None and result.outage is None and part_unanswered(result)
+            and result.searched_domain is not None and not result.retried)
+
+
+def retry_gate(state: AgentState) -> dict[str, Any]:
+    """The join of the fan-out: it runs once every part has settled (and again after the retries)."""
+    return {}
+
+
+def after_retry_gate(state: AgentState) -> list[Send] | str:
+    again = [p for p in state.parts if _needs_retry(state.part_results.get(p.part_id))]
+    return [Send("kb_retry", WorkerInput(part=p).model_dump()) for p in again] or "compose"
+
+
+def _results(state: AgentState) -> list[PartResult]:
+    return [state.part_results[p.part_id] for p in state.parts]
+
+
+def make_compose_node() -> Callable[[AgentState], dict[str, Any]]:
+    """After the join: fold the parts' traces into the turn's, and set what the turn ends with. One part gives its result
+    as before; several leave `part_result` empty (each part is in `part_results`)."""
+
+    def compose(state: AgentState) -> dict[str, Any]:
+        results = _results(state)
+        steps = list(state.steps)
+        if len(results) > 1:
+            steps.append(f"fan_out:{len(results)}")
+        for part in state.parts:
+            steps += state.part_steps.get(part.part_id, [])
+        out: dict[str, Any] = {"steps": steps}
+        down = next((r for r in results if r.outage is not None), None)
+        if down is not None:  # a search or every model tier was down: tell them, never offer a ticket
+            return {**out, "part_result": None, "reply": down.outage, "messages": [AIMessage(down.outage)]}
+        if len(results) == 1:
+            only, part = results[0], state.parts[0]
+            out.update({"part_result": only, "reply": only.answer})
+            if not part.rewritten:  # a rewritten part already set the topic when the orchestrator planned it
+                out["last_topic"] = topic_after(_question(state), state.last_topic)
+        return out
+
+    return compose
+
+
+def after_compose(state: AgentState) -> str:
+    results = _results(state)
+    if any(r.outage is not None for r in results):
         return END
-    return "offer" if needs_offer(state) else "reply"
+    if any(part_unanswered(r) for r in results):
+        return "offer"
+    return "synthesize" if len(results) > 1 else "reply"
+
+
+def make_synthesize_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
+    def synthesize(state: AgentState) -> dict[str, Any]:
+        results = _results(state)
+        outcome = deps.synthesizer.merge(_question(state), results) if deps.synthesizer else join_answers(results)
+        steps = state.steps + ["synthesize"] + ([] if outcome.merged else ["synthesize_fallback"])
+        return {"steps": steps, "reply": outcome.text}
+
+    return synthesize
+
+
+def _with_dropped_note(reply: str, state: AgentState) -> str:
+    if not state.parts_dropped:
+        return reply
+    return f"{reply}\n\n{DROPPED_NOTE.format(done=len(state.parts), dropped=state.parts_dropped)}"
 
 
 def offer_node(state: AgentState) -> dict[str, Any]:
     if "search_kb" not in state.steps:
         raise KBFirstViolation("a ticket may only be offered after search_kb ran (FR-A14)")
-    question = _question(state)
-    reply = escalation_offer(email_known=bool(state.email))
+    unanswered = [r.sub_question for r in _results(state) if part_unanswered(r)]
+    question = _question(state) if len(state.parts) == 1 else "\n".join(unanswered)
+    reply = _with_dropped_note(escalation_offer(email_known=bool(state.email)), state)
     return {
         "steps": state.steps + ["offer"],
-        "pending_offer": PendingOffer(unanswered_text=question),
+        "pending_offer": PendingOffer(unanswered_text=question, unanswered_parts=unanswered),
         # The merged offer asks for the email when it is unknown (FR-A16); both states read the same replies.
         "awaiting": "offer_reply" if state.email else "email",
         "ticket_context_start": _last_human_index(state),  # the ticket covers the unanswered question on
@@ -396,7 +481,8 @@ def offer_node(state: AgentState) -> dict[str, Any]:
 
 
 def reply_node(state: AgentState) -> dict[str, Any]:
-    return {"steps": state.steps + ["reply"], "messages": [AIMessage(state.reply)]}
+    reply = _with_dropped_note(state.reply, state)
+    return {"steps": state.steps + ["reply"], "reply": reply, "messages": [AIMessage(reply)]}
 
 
 def after_t_collect(state: AgentState) -> str:
@@ -434,10 +520,17 @@ def build_kb_graph(
     builder.add_node("offer_reply", offer_reply_node)
     for worker in WORKER_AGENTS:
         builder.add_node(worker, make_worker_node(deps, worker))
-        builder.add_conditional_edges(worker, after_kb_search, ["kb_retry", "offer", "reply", END])
+        builder.add_edge(worker, "retry_gate")
     builder.add_node("single_part", make_single_part_node())
-    builder.add_conditional_edges("single_part", after_plan, list(WORKER_AGENTS))
+    builder.add_conditional_edges("single_part", fan_out, list(WORKER_AGENTS))
+    builder.add_node("retry_gate", retry_gate)
     builder.add_node("kb_retry", make_kb_retry_node(deps))
+    builder.add_node("compose", make_compose_node())
+    builder.add_node("synthesize", make_synthesize_node(deps))
+    builder.add_conditional_edges("retry_gate", after_retry_gate, ["kb_retry", "compose"])
+    builder.add_edge("kb_retry", "retry_gate")
+    builder.add_conditional_edges("compose", after_compose, ["reply", "offer", "synthesize", END])
+    builder.add_edge("synthesize", "reply")
     builder.add_node("offer", offer_node)
     builder.add_node("reply", reply_node)
     builder.add_node("t_collect", make_t_collect_node(drafting=tickets is not None))
@@ -466,7 +559,6 @@ def build_kb_graph(
         builder.add_conditional_edges("s_email_reply", after_s_email_reply, ["s_lookup", "route", END])
         builder.add_edge("chitchat", END)
         builder.add_edge("s_lookup", END)
-    builder.add_conditional_edges("kb_retry", after_kb_retry, ["offer", "reply", END])
     builder.add_edge("offer", END)
     builder.add_edge("reply", END)
     if tickets is None:

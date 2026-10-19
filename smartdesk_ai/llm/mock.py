@@ -236,6 +236,15 @@ class MockGroundingModel:
         return SimpleNamespace(content=json.dumps({"grounded": not missing, "unsupported": missing[:5]}))
 
 
+class MockSynthesizerModel:
+    """Stand-in for the SYNTHESIZER task: the answers it is given, one after the other, as the merged reply."""
+
+    def invoke(self, messages):
+        human = str(messages[-1].content)
+        answers = re.findall(r"^Answer \d+: (.*?)(?=\n\nQuestion \d+:|\Z)", human, re.M | re.S)
+        return SimpleNamespace(content=json.dumps({"answer": " ".join(a.strip() for a in answers)}))
+
+
 class MockCompactionModel:
     """Stand-in for the COMPACTION task: names how many employee turns were summarized and what the first
     one was about, from the transcript in the prompt."""

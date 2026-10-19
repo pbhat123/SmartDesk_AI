@@ -1,11 +1,12 @@
 """Builds the agent graph over the real KB, a spy search tool and a mock tickets client (mock LLMs)."""
 from types import SimpleNamespace
 
-from smartdesk_ai.agent.answer import make_answerer
+from smartdesk_ai.agent.workers import MISC_SEARCH, make_worker_answerers
 from smartdesk_ai.agent.confirm import rule_parser
 from smartdesk_ai.agent.graph import KBDeps, build_kb_graph
 from smartdesk_ai.agent.router import make_router
 from smartdesk_ai.agent.state import STATE_MODELS
+from smartdesk_ai.agent.synthesizer import make_synthesizer
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
 from smartdesk_ai.llm.mock import MockRoutingModel
 from smartdesk_ai.memory.checkpointer import make_checkpointer
@@ -35,7 +36,7 @@ class SearchSpy:
 
 def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", routed=False,
              drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None, compactor=None, hitl=None, cache=None,
-             route_model=None):
+             route_model=None, synth_model=None, workers=None):
     """Everything the tests need: the compiled graph plus the spy, the tickets client and the store."""
     index = open_index(built_index_dir, HashingEmbeddings())
     spy = SearchSpy(make_search_kb(index, settings, reranker=None, health=HealthRegistry()))
@@ -47,7 +48,8 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
     executor = ToolExecutor(registry, settings, request_store=store, sleep=lambda _: None)
     if seeded:  # the demo tickets of scripts/seed_tickets.py, through the same client and map
         seed(client, store)
-    answer = make_answerer(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM(), judge=judge)
+    workers = workers or make_worker_answerers(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM(), judge=judge)
+    answer = workers[MISC_SEARCH]
     saver = make_checkpointer(tmp_path / name, STATE_MODELS)
     route = make_router(settings, builder=lambda model_id, cfg: route_model or MockRoutingModel()) if routed else None
     tickets = None
@@ -59,7 +61,8 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
             duplicate_threshold=settings.thresholds.duplicate_title,
             hitl=hitl,
         )
-    graph = build_kb_graph(KBDeps(executor=executor, answer=answer, cache=cache), saver, route=route, tickets=tickets,
+    synthesizer = make_synthesizer(settings, builder=lambda model_id, cfg: synth_model) if synth_model is not None else None
+    graph = build_kb_graph(KBDeps(executor=executor, answer=answer, cache=cache, workers=workers, synthesizer=synthesizer), saver, route=route, tickets=tickets,
                              status_max_listed=settings.status.max_listed,
                              max_parts=settings.orchestrator.max_parts, chitchat=chitchat, compactor=compactor)
     return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, executor=executor, saver=saver)

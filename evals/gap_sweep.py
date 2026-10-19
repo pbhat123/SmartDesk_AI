@@ -67,7 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.mock:
             from tests.llm_fakes import FakeAnswerLLM  # the scripted insufficient model, as in the mock gap test
 
-            return build_stack(tuned, environ={}, dotenv_path=None, data_dir=folder, mock_answer_model=FakeAnswerLLM("insufficient"))
+            return build_stack(tuned, environ={}, dotenv_path=None, data_dir=folder, use_cache=False, mock_answer_model=FakeAnswerLLM("insufficient"))
         return build_live_stack(tuned, folder)
 
     if not args.mock:

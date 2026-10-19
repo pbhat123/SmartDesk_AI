@@ -115,7 +115,7 @@ def build_live_stack(settings: Settings, work_dir: Path, *, tracing: bool = Fals
     from smartdesk_ai.tickets import MockTicketClient
 
     link_live_index(work_dir)
-    return build_stack(live_settings(settings), environ=None, dotenv_path=DEFAULT_DOTENV, data_dir=work_dir,
+    return build_stack(live_settings(settings), environ=None, dotenv_path=DEFAULT_DOTENV, data_dir=work_dir, use_cache=False,
                        client=MockTicketClient(), tracing=tracing)
 
 
@@ -123,7 +123,7 @@ def run(res: Resources, out_dir: Path | None, work_dir: Path, *, settings: Setti
         stack: AgentStack | None = None, trace: bool = False) -> GapReport:
     if stack is None:
         settings = settings or res.settings
-        stack = (build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir) if res.mock
+        stack = (build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir, use_cache=False) if res.mock
                  else build_live_stack(settings, work_dir, tracing=trace))
     report = summarize(run_cases(stack))
     if trace:

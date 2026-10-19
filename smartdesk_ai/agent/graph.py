@@ -6,6 +6,7 @@ Every turn starts at `entry`. A reply to a pending offer or email request goes t
 so retrieval is always attempted before a ticket is offered (FR-A14). The ticket path starts at
 `t_collect`. `steps` is the per-turn trace.
 """
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -62,6 +63,7 @@ from smartdesk_ai.agent.ticket_agent import (
     t_dup_reask,
     t_reask,
 )
+from smartdesk_ai.ops.cache import AnswerCache
 from smartdesk_ai.ops.compaction import Compactor
 from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.tools.executor import Outcome, ToolExecutor
@@ -86,6 +88,7 @@ class Unavailable:
 class KBDeps:
     executor: ToolExecutor
     answer: Callable[[str, Sequence[KBChunk]], AnswerResult]
+    cache: AnswerCache | None = None  # KB answers only; the ticket and status paths never see it
 
 
 def _question(state: AgentState) -> str:
@@ -226,7 +229,12 @@ def make_chitchat_node(chat: Chitchat) -> Callable[[AgentState], dict[str, Any]]
 
 
 def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> PartResult | Unavailable:
-    """One search plus one answer. Returns the result, or `Unavailable` after an outage."""
+    """One search plus one answer, or the cached answer for the same sub-question (a hit skips retrieval, the worker and
+    the judge). Returns the result, or `Unavailable` after an outage."""
+    probe = deps.cache.lookup(question, domain) if deps.cache is not None else None
+    if probe is not None and probe.part is not None:
+        return probe.part.model_copy(update={"cache": probe.kind, "cache_saved_ms": probe.saved_ms})
+    started = time.perf_counter()
     args: dict[str, Any] = {"query": question}
     if domain is not None:
         args["domain"] = domain
@@ -243,7 +251,7 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
         answer = AnswerResult(text=INSUFFICIENT_REPLY, answer="", insufficient=True)  # signal 3
     if should_escalate(found, answer):  # never show an answer that a signal rejected
         answer = AnswerResult(text=INSUFFICIENT_REPLY, answer="", insufficient=answer.insufficient)
-    return PartResult(
+    part = PartResult(
         answer=answer.text,
         citations=answer.citations,
         chunks=_chunk_refs(found),
@@ -253,6 +261,15 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
         top_cosine=found.top_cosine,
         threshold=found.threshold,
     )
+    if probe is None or probe.kind == "bypass":
+        return part
+    deps.cache.store(probe, part, (time.perf_counter() - started) * 1000)
+    return part.model_copy(update={"cache": "miss"})
+
+
+def _kb_steps(steps: list[str], part: PartResult) -> list[str]:
+    """The trace of a KB turn: the search and answer steps, or one cache-hit step when the cache served it."""
+    return steps + ([f"cache_hit:{part.cache}"] if part.cache in ("exact", "semantic") else ["search_kb", "answer"])
 
 
 def make_kb_search_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
@@ -262,7 +279,7 @@ def make_kb_search_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
         if isinstance(outcome, Unavailable):
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
-        return {"steps": state.steps + ["search_kb", "answer"], "part_result": outcome, "reply": outcome.answer,
+        return {"steps": _kb_steps(state.steps, outcome), "part_result": outcome, "reply": outcome.answer,
                 "last_topic": topic_after(text, state.last_topic)}
 
     return kb_search
@@ -282,7 +299,7 @@ def make_kb_retry_node(deps: KBDeps) -> Callable[[AgentState], dict[str, Any]]:
             return {"steps": state.steps + ["search_kb", outcome.step], "part_result": None,
                     "reply": outcome.message, "messages": [AIMessage(outcome.message)]}
         part = outcome.model_copy(update={"retried": True})
-        return {"steps": state.steps + ["search_kb", "answer"], "part_result": part, "reply": part.answer}
+        return {"steps": _kb_steps(state.steps, part), "part_result": part, "reply": part.answer}
 
     return kb_retry
 
@@ -453,6 +470,10 @@ def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
             debug["retrieval"] = {  # what the UI's debug panel shows beside the chunks
                 "top_cosine": part.top_cosine, "threshold": part.threshold,
                 "escalated": state.pending_offer is not None and not part.citations}
+            if part.cache is not None:  # the cache was consulted for this turn's question
+                debug["cache"] = {"status": "miss" if part.cache == "miss" else "hit",
+                                  "kind": None if part.cache == "miss" else part.cache,
+                                  "similarity": part.cache_similarity, "saved_ms": part.cache_saved_ms}
         return Turn(text=state.reply, debug=debug)
 
     return kb_responder

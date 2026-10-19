@@ -128,7 +128,7 @@ def _run_case(
     # A live run reads the real keys from the environment and .env; a mock run reads none.
     env = {"environ": None, "dotenv_path": DEFAULT_DOTENV} if settings.modes.llm == "live" else {
         "environ": {}, "dotenv_path": None}
-    responder = build_responder(settings, data_dir=data_dir, registry=registry, client=client, tracing=False, **env)
+    responder = build_responder(settings, data_dir=data_dir, registry=registry, client=client, tracing=False, use_cache=False, **env)
     spy = _SpyResponder(responder)
     guard = input_guard or build_input_guard(settings, registry=registry, engine=engine, **env)
     out_guard = build_output_guard(settings, DEFAULT_KB_DIR, registry=registry, engine=engine, **env)

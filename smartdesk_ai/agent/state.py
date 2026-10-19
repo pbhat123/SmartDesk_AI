@@ -88,6 +88,9 @@ class PartResult(BaseModel):
     searched_domain: Domain | None = None  # filter used by the last search; None is the whole KB
     top_cosine: float | None = None  # the escalation signal of the last search, and the threshold it was held to
     threshold: float | None = None
+    cache: Literal["exact", "semantic", "miss"] | None = None  # how the answer cache served this part; None: not consulted
+    cache_similarity: float | None = None  # semantic hits: the cosine to the cached question
+    cache_saved_ms: float | None = None  # hits: what the cached answer's search and answer took, less the lookup
 
 
 class AgentState(BaseModel):

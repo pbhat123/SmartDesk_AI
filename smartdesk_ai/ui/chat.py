@@ -40,6 +40,17 @@ def escalation_line(retrieval: dict[str, Any]) -> str:
     return " · ".join(parts)
 
 
+def cache_line(cache: dict[str, Any]) -> str:
+    """Whether the answer cache served this turn's KB question, and what a hit saved."""
+    if cache.get("status") != "hit":
+        return "Cache: miss"
+    kind = cache.get("kind") or "exact"
+    if cache.get("similarity") is not None:
+        kind += f", similarity {cache['similarity']:.3f}"
+    saved = cache.get("saved_ms")
+    return f"Cache: hit ({kind})" + (f" · saved about {saved:.0f} ms" if saved is not None else "")
+
+
 def _new_conversation() -> None:
     thread_id = uuid.uuid4().hex
     st.session_state["thread_id"] = thread_id
@@ -65,6 +76,8 @@ def _render_panel(message: dict[str, Any], ctx: UiContext) -> None:
             st.caption(escalation_line(message["retrieval"]))
         if ctx.settings.modes.llm == "mock":
             st.caption(MOCK_CAPTION)
+        if message.get("cache"):
+            st.caption(cache_line(message["cache"]))
         if message.get("steps"):
             st.caption("Steps: " + " → ".join(message["steps"]))
 
@@ -102,7 +115,8 @@ def render_chat(ctx: UiContext) -> None:
                     reply = ctx.service.handle(st.session_state["thread_id"], prompt)
                 st.markdown(reply.text)
                 entry = {"role": "assistant", "content": reply.text, "chunks": reply.debug.get("chunks"),
-                         "steps": reply.debug.get("steps"), "retrieval": reply.debug.get("retrieval")}
+                         "steps": reply.debug.get("steps"), "retrieval": reply.debug.get("retrieval"),
+                         "cache": reply.debug.get("cache")}
                 messages.append(entry)
                 if show_debug:
                     _render_panel(entry, ctx)

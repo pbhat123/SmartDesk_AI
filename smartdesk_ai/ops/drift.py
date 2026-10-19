@@ -239,7 +239,7 @@ def make_runner(
         estimate = estimate_drift(run_settings, chosen.size)
         with tempfile.TemporaryDirectory(prefix="drift_") as work:
             if mock:
-                stack = build_stack(run_settings, environ={}, dotenv_path=None, data_dir=Path(work))
+                stack = build_stack(run_settings, environ={}, dotenv_path=None, data_dir=Path(work), use_cache=False)
                 return run_drift(stack, run_settings, golden=chosen, mock=True)
             started_here = current_run() is None
             start_run(run_settings, list(command), "drift")

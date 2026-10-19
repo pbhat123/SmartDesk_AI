@@ -217,6 +217,11 @@ class Drift(_Strict):
     ceiling_multiplier: Annotated[float, Field(ge=1)]  # a run stops once spend passes estimate x this
 
 
+class CacheSettings(_Strict):
+    enabled: bool  # false: every KB question is searched and answered (evals and drift runs also bypass it)
+    max_entries: Annotated[int, Field(gt=0)]  # the oldest entries go first once the cache is full
+
+
 class Settings(_Strict):
     models: Models
     tiers: dict[str, Tier]
@@ -236,6 +241,7 @@ class Settings(_Strict):
     prompts: dict[str, Annotated[int, Field(ge=1)]]
     reasoning_effort: dict[str, Effort]  # per-task override on the Main tier
     drift: Drift
+    cache: CacheSettings
 
     @field_validator("reasoning_effort")
     @classmethod

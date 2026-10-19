@@ -5,10 +5,12 @@ no network. llm live: the real models, embeddings and index (needs OPENAI_API_KE
 tickets mock: an in-memory client, no GitHub calls. Anything that makes live mode unusable raises
 `LiveModeUnavailable`, and the caller falls back to mock with a notice (FR-F7).
 """
+import hashlib
+import json
 import logging
 import os
 from dataclasses import dataclass
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +40,8 @@ from smartdesk_ai.llm.mock import (
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.guardrails.pii import PiiRedactor
+from smartdesk_ai.ops.cache import AnswerCache, MemoryBackend
+from smartdesk_ai.ops.cache_log import CacheLog
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
 from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.compaction import Compactor, make_summarizer
@@ -53,6 +57,7 @@ from smartdesk_ai.rag.embeddings import Embeddings, HashingEmbeddings, get_embed
 from smartdesk_ai.rag.index import IndexNotBuilt, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ROOT, ingest
 from smartdesk_ai.rag.rerank import load_reranker
+from smartdesk_ai.rag.staleness import read_state
 from smartdesk_ai.tickets import TicketClient, TicketConfigError, create_ticket_client
 from smartdesk_ai.tickets.seed import seed
 from smartdesk_ai.tickets.sqlite_map import TicketStore
@@ -70,6 +75,7 @@ OPS_DB = "ops.db"  # daily spend and rate-limit counters
 SKIPPED_IN_MOCK = "skipped in mock mode"
 HITL_LOG = "hitl.jsonl"  # approvals, rejections and edits at the ticket gate (FR-H4); the Monitoring tab reads it
 TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab reads them
+CACHE_LOG = "cache.jsonl"  # one line per KB cache lookup; the Monitoring tab reads it
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
 
@@ -81,6 +87,18 @@ class AgentStack:
     executor: ToolExecutor
     services: Services
     registry: HealthRegistry
+
+
+def kb_version(settings: Settings, index_dir: Path) -> Callable[[], str]:
+    """What a cached answer depends on besides the question: the ingested KB (file hashes and embedder, from the index
+    state) and the settings that shape an answer. A re-ingest, even in another process, makes older entries unreachable."""
+    shaping = json.dumps([settings.prompts.get("answer"), settings.prompts.get("grounding_judge"),
+                          settings.models.main.id, settings.retrieval.strategy])
+
+    def version() -> str:
+        return hashlib.sha256((json.dumps(read_state(index_dir), sort_keys=True) + shaping).encode()).hexdigest()[:16]
+
+    return version
 
 
 class LiveModeUnavailable(RuntimeError):
@@ -120,9 +138,11 @@ def build_stack(
     tracing_factories: TracingFactories | None = None,
     mock_answer_model: Any | None = None,
     tracing: bool = True,
+    use_cache: bool = True,
 ) -> "AgentStack":
     """Everything the app is made of: the compiled graph with its ticket client, ticket map, executor and ops
-    services. `build_responder` wraps it for the CLI and the UI; the evals use the parts directly."""
+    services. `build_responder` wraps it for the CLI and the UI; the evals use the parts directly. Evals and the drift
+    check pass `use_cache=False`, so a repeated question is measured, not remembered."""
     registry = registry if registry is not None else get_registry()
     env = load_env(environ=environ, dotenv_path=dotenv_path)
     data_dir = resolve_data_dir(data_dir, environ)
@@ -206,8 +226,12 @@ def build_stack(
     )
     prompt_tokens = len(load_prompt("compaction", settings).text) // 3  # a generous size estimate
     answerer = make_answerer(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))
+    cache = None
+    if use_cache and settings.cache.enabled:
+        cache = AnswerCache(MemoryBackend(settings.cache.max_entries), kb_version=kb_version(settings, index_dir),
+                            log=CacheLog(Path(data_dir) / CACHE_LOG))
     graph = build_kb_graph(
-        KBDeps(executor=executor, answer=answerer),
+        KBDeps(executor=executor, answer=answerer, cache=cache),
         make_checkpointer(Path(data_dir) / CHECKPOINT_DB, STATE_MODELS),
         route=make_router(settings, builder=route_b),
         tickets=ticket_deps,

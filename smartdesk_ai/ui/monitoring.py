@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.pii import mask_emails_in
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
+from smartdesk_ai.ops.cache_log import CacheStats, load_cache_records, summarize_cache
 from smartdesk_ai.ops.cost import CostEntry
 from smartdesk_ai.ops.drift import (
     DRIFT_LOG,
@@ -44,6 +45,7 @@ from smartdesk_ai.ui.context import UiContext
 TOOL_METRICS_FILE = "tool_metrics.jsonl"
 TRACE_FILE = "trace.jsonl"
 COST_FILE = "cost.jsonl"
+CACHE_FILE = "cache.jsonl"
 HITL_FILE = "hitl.jsonl"
 OPS_DB_FILE = "ops.db"
 AGENT_METRICS_FILE = "agent_metrics.json"
@@ -156,6 +158,7 @@ class MonitoringData(BaseModel):
     sources_today: list[SourceRow]
     budget: BudgetRow
     stale: StaleReport
+    cache: CacheStats
     hitl: HitlCounts
     hitl_label: str = "All time"
     drift: list[DriftPoint]
@@ -318,6 +321,7 @@ def load_monitoring(
         sources_today=sources,
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
+        cache=summarize_cache(load_cache_records(data_dir / CACHE_FILE)),
         hitl=load_counts(data_dir / HITL_FILE, trace_path=data_dir / TRACE_FILE, **hitl_filter),
         hitl_label={"session": "This session", "today": "Today (UTC)", "all": "All time"}[hitl_window],
         drift=DriftHistory(data_dir / DRIFT_LOG).points(),
@@ -408,6 +412,27 @@ def _render_stale(data: MonitoringData) -> None:
             st.info(f"Not yet ingested: {', '.join(stale.new_files)}.")
     else:
         st.caption("No stale chunks: every indexed file matches the hash stored at ingest.")
+
+
+def _render_cache(data: MonitoringData) -> None:
+    st.subheader("Answer cache")
+    stats = data.cache
+    if not stats.lookups:
+        st.caption("No cache lookups yet. A repeated KB question is answered from the cache and skips retrieval, the "
+                   "worker and the judge.")
+        return
+    cells = [("Hit rate", _pct(stats.hit_rate)), ("Exact hits", str(stats.exact_hits)),
+             ("Semantic hits", str(stats.semantic_hits)), ("Misses", str(stats.misses))]
+    for column, (label, value) in zip(st.columns(4), cells):
+        column.metric(label, value)
+    saved = [("Time saved", f"{stats.saved_ms_total / 1000:.2f} s"),
+             ("Saved per hit", "n/a" if stats.saved_ms_per_hit is None else f"{stats.saved_ms_per_hit:.0f} ms")]
+    for column, (label, value) in zip(st.columns(2), saved):
+        column.metric(label, value)
+    st.caption(f"All time, {stats.lookups} KB lookups; the cache was cleared {stats.clears} time(s) after a KB change. "
+               "Time saved is what the cached answers' search and answer took when they were first made, less the "
+               "lookup. Ticket and status turns never use the cache. The backend (Redis or in memory) is listed under "
+               "Components and degraded modes.")
 
 
 def _render_hitl(data: MonitoringData) -> None:
@@ -549,5 +574,6 @@ def render_monitoring(ctx: UiContext) -> None:
         _render_stale(data)
     with hitl_box:
         _render_hitl(data)
+    _render_cache(data)
     _render_agent_metrics(data)
     _render_drift(ctx, data)

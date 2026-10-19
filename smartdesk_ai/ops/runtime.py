@@ -147,6 +147,6 @@ def goal_from_steps(steps: Sequence[str]) -> str:
         return "ticket_status"
     if "chitchat" in steps:
         return "smalltalk"
-    if "search_kb" in steps:
+    if "search_kb" in steps or any(step.startswith("cache_hit") for step in steps):
         return "kb_answer"
     return "other"

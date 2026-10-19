@@ -132,6 +132,12 @@ prompts:
   confirm_parse: 2
   chitchat: 1
 
+# Answer cache (SPEC section 4, FR-H7): KB answers only, keyed on the masked rewritten sub-question. The semantic
+# cut-off is thresholds.semantic_cache_cutoff. Redis (REDIS_URL) is optional; without it the cache is in memory (FR-F6).
+cache:
+  enabled: true
+  max_entries: 1000
+
 # Drift check (FR-H15): re-runs the golden set (KB set plus gap set) and stores the metrics. The estimate shown before a
 # live run is the per-question token use measured in the live gap run of 2026-10-18 (spend ledger run fed9cc6c090c:
 # 74 questions, 348,948 main input, 18,895 main output and 1,250 embedding tokens), rounded up. The run stops, and stores

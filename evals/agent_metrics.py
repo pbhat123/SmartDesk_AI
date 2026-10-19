@@ -130,7 +130,7 @@ def run_scenarios(
         registry = HealthRegistry()
         for component in scenario.setup.degraded:
             registry.mark_degraded(_DEGRADE[component], "scripted degraded mode")
-        stack = build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir / scenario.id,
+        stack = build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir / scenario.id, use_cache=False,
                             registry=registry, client=client)
         client.unreachable = scenario.setup.github == "down"  # after the demo tickets were seeded
         session = new_thread_id()

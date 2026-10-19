@@ -208,6 +208,17 @@ def step_kb_question(b: Browser) -> None:
     check(b.page.get_by_text("Retrieval debug").count() >= 1, "the retrieval-debug panel is missing")
 
 
+def step_repeated_kb_question(b: Browser, work: Path) -> None:
+    """The same KB question again is served by the answer cache: same answer, and the panel says exact hit."""
+    reply = b.send(KB_QUESTION)
+    check("Sources:" in reply and "IT-PWD-01" in reply, f"expected the same answer with sources, got {reply[:200]!r}")
+    b.page.locator('[data-testid="stExpander"]').last.locator("summary").click()
+    b.page.get_by_text("Cache: hit (exact)").first.wait_for(timeout=b.timeout)
+    log = work / "data" / "cache.jsonl"
+    events = [json.loads(line)["event"] for line in log.read_text().splitlines()] if log.exists() else []
+    check(events == ["miss", "hit_exact"], f"expected the cache log to show a miss then an exact hit, got {events}")
+
+
 def step_ticket_flow(b: Browser) -> int:
     offer = b.send(GAP_QUESTION)
     check("ticket" in offer.lower(), f"expected a ticket offer for a question the KB cannot answer, got {offer[:200]!r}")
@@ -238,11 +249,14 @@ def step_monitoring(b: Browser, work: Path) -> None:
     b.page.get_by_text("Tool stats").first.wait_for(timeout=b.timeout)
     b.page.get_by_text("Human checks at the ticket approval gate").first.wait_for(timeout=b.timeout)
     b.page.locator('[data-testid="stMetricLabel"]', has_text="Approvals").first.wait_for(timeout=b.timeout)  # the headings draw before the data
+    b.page.locator('[data-testid="stMetricLabel"]', has_text="Exact hits").first.wait_for(timeout=b.timeout)
     b.no_exception("on the Monitoring page")
     metrics = {}
     for tile in b.page.locator('[data-testid="stMetric"]').all():
         label = tile.locator('[data-testid="stMetricLabel"]').inner_text().strip()
         metrics[label] = tile.locator('[data-testid="stMetricValue"]').inner_text().strip()
+    check(metrics.get("Exact hits") == "1" and metrics.get("Hit rate", "").endswith("%"),
+          f"expected the cache tiles with one exact hit, got {metrics}")
     got = (metrics.get("Edits"), metrics.get("Approvals"), metrics.get("Rejections"))
     check(got == ("1", "1", "0"), f"expected HITL counters edits/approvals/rejections = 1/1/0, got {got} (metrics: {metrics})")
     # Streamlit draws tables on a canvas, so their cells are not in the DOM; read the file the table is built from.
@@ -302,10 +316,13 @@ def run(args: argparse.Namespace) -> int:
                         pass
 
             attempt("1 KB question: answer with sources and debug panel", lambda: step_kb_question(b))
-            attempt("2 gap question -> draft -> edit -> yes -> Ticket #N (mock)", lambda: step_ticket_flow(b))
-            attempt("3 status check shows the ticket", lambda: step_status(b, number))
-            attempt("4 second session: every overlapping status lookup answered", sidekick.verify)
-            attempt("5 Monitoring page: no exception, HITL 1 edit / 1 approval", lambda: step_monitoring(b, work))
+            attempt("2 repeated KB question: cache hit (exact) in the debug panel and the log",
+                    lambda: step_repeated_kb_question(b, work))
+            attempt("3 gap question -> draft -> edit -> yes -> Ticket #N (mock)", lambda: step_ticket_flow(b))
+            attempt("4 status check shows the ticket", lambda: step_status(b, number))
+            attempt("5 second session: every overlapping status lookup answered", sidekick.verify)
+            attempt("6 Monitoring page: no exception, HITL 1 edit / 1 approval, cache hit rate",
+                    lambda: step_monitoring(b, work))
             browser.close()
     except StepFailed as error:
         failed = True
@@ -314,7 +331,7 @@ def run(args: argparse.Namespace) -> int:
         server.stop()
     log = server.log_text()
     bad = [line for line in log.splitlines() if "Traceback" in line or "ProgrammingError" in line]
-    results.append(("6 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
+    results.append(("7 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
     failed = failed or bool(bad)
     print("\nsmoke_ui results")
     for name, outcome in results:

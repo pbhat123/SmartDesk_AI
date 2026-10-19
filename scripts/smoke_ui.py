@@ -44,6 +44,7 @@ GAP_QUESTION = "How do I register my tractor for the office parking lot?"  # not
 EMAIL = "priya.k@smartdesk.example"
 DEMO_EMAIL = "one.ticket@smartdesk.example"  # a preloaded mock employee with exactly one ticket (tickets/seed.py)
 NEW_TITLE = "Tractor parking permit"
+COMPOUND_QUESTION = "How do I reset my password, and how many casual leave days do I get?"  # one IT part, one HR part
 
 CHAT_INPUT = '[data-testid="stChatInputTextArea"]'
 MESSAGE = '[data-testid="stChatMessage"]'
@@ -267,6 +268,21 @@ def step_monitoring(b: Browser, work: Path) -> None:
     check(len(created) == 1, f"expected one successful create_ticket in the tool metrics, found {len(created)}")
 
 
+def step_compound_question(b: Browser) -> None:
+    """One message with an IT part and an HR part: one merged answer citing both domains, and a debug panel with one
+    table per part and the fan-out and synthesize steps (FR-I4, FR-A12)."""
+    b.page.get_by_role("link", name="Chat").first.click()
+    b.page.locator(CHAT_INPUT).wait_for(timeout=b.timeout)
+    b.page.get_by_role("button", name="New conversation").click()
+    b.page.get_by_text("Ask an IT or HR question").wait_for(timeout=b.timeout)  # the rerun is done: an empty conversation
+    reply = b.send(COMPOUND_QUESTION)
+    check("Sources:" in reply and "IT-" in reply and "HR-" in reply,
+          f"expected one answer with sources from an IT and an HR entry, got {reply[:300]!r}")
+    b.page.locator('[data-testid="stExpander"]').last.locator("summary").click()
+    for text in ("Part 1 (it_worker)", "Part 2 (hr_worker)", "fan_out:2", "synthesize"):
+        b.page.get_by_text(text).first.wait_for(timeout=b.timeout)
+
+
 def run(args: argparse.Namespace) -> int:
     from playwright.sync_api import Error as PlaywrightError
     from playwright.sync_api import sync_playwright
@@ -324,6 +340,8 @@ def run(args: argparse.Namespace) -> int:
             attempt("5 second session: every overlapping status lookup answered", sidekick.verify)
             attempt("6 Monitoring page: no exception, HITL 1 edit / 1 approval, cache hit rate",
                     lambda: step_monitoring(b, work))
+            attempt("7 compound question: one merged answer, one panel table per part",
+                    lambda: step_compound_question(b))
             browser.close()
     except StepFailed as error:
         failed = True
@@ -332,7 +350,7 @@ def run(args: argparse.Namespace) -> int:
         server.stop()
     log = server.log_text()
     bad = [line for line in log.splitlines() if "Traceback" in line or "ProgrammingError" in line]
-    results.append(("7 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
+    results.append(("8 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
     failed = failed or bool(bad)
     print("\nsmoke_ui results")
     for name, outcome in results:

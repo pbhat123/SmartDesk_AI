@@ -63,11 +63,32 @@ MOCK_CAPTION = ("Mock mode uses fake embeddings (hashing) and no reranker, so mo
                 "the scores and the order only show that the plumbing works.")
 
 
+def _render_part(part: dict[str, Any]) -> None:
+    """One part of a compound question: its sub-question, the worker, its chunks and its escalation line."""
+    st.markdown(f"**Part {part['part_id'].lstrip('p')} ({part['agent']}):** {part['sub_question']}")
+    if part["chunks"]:
+        st.dataframe(chunk_table(part["chunks"]), hide_index=True, width="stretch")
+    else:
+        st.caption("No chunks were retrieved.")
+    st.caption(escalation_line(part["retrieval"]) + (" · retried against the whole KB" if part["retried"] else ""))
+    if part.get("cache"):
+        st.caption(cache_line(part["cache"]))
+
+
 def _render_panel(message: dict[str, Any], ctx: UiContext) -> None:
+    parts = message.get("parts")
     chunks = message.get("chunks")
-    if chunks is None:  # the turn did no retrieval (small talk, a ticket step)
+    if chunks is None and not parts:  # the turn did no retrieval (small talk, a ticket step)
         return
     with st.expander(PANEL_LABEL, expanded=False):
+        for part in parts or []:
+            _render_part(part)
+        if parts:
+            if ctx.settings.modes.llm == "mock":
+                st.caption(MOCK_CAPTION)
+            if message.get("steps"):
+                st.caption("Steps: " + " → ".join(message["steps"]))
+            return
         if chunks:
             st.dataframe(chunk_table(chunks), hide_index=True, width="stretch")
         else:
@@ -116,7 +137,7 @@ def render_chat(ctx: UiContext) -> None:
                 st.markdown(reply.text)
                 entry = {"role": "assistant", "content": reply.text, "chunks": reply.debug.get("chunks"),
                          "steps": reply.debug.get("steps"), "retrieval": reply.debug.get("retrieval"),
-                         "cache": reply.debug.get("cache")}
+                         "cache": reply.debug.get("cache"), "parts": reply.debug.get("parts")}
                 messages.append(entry)
                 if show_debug:
                     _render_panel(entry, ctx)

@@ -607,6 +607,21 @@ def run_turn(
     return AgentState(**graph.get_state(config).values)
 
 
+def _part_debug(part: SubQuestion, result: PartResult, *, escalated: bool) -> dict[str, Any]:
+    """What the debug panel shows for one part of a compound question (FR-A12)."""
+    shown: dict[str, Any] = {
+        "part_id": part.part_id, "sub_question": part.text, "domain": part.domain, "agent": result.agent,
+        "retried": result.retried, "chunks": [c.model_dump() for c in result.chunks],
+        "retrieval": {"top_cosine": result.top_cosine, "threshold": result.threshold,
+                      "escalated": escalated and part_unanswered(result)},
+    }
+    if result.cache is not None:
+        shown["cache"] = {"status": "miss" if result.cache == "miss" else "hit",
+                          "kind": None if result.cache == "miss" else result.cache,
+                          "similarity": result.cache_similarity, "saved_ms": result.cache_saved_ms}
+    return shown
+
+
 def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
     """A ChatService responder over the graph. The session ID is the thread ID. The debug
     details are the turn's trace and, when the KB ran, its chunks with scores and the generated
@@ -621,6 +636,9 @@ def make_kb_responder(graph: Any) -> Callable[[str, str], Turn]:
             scope[0].set_email(state.email)
         part = state.part_result
         debug: dict[str, Any] = {"steps": state.steps}
+        if len(state.parts) > 1 and state.part_results:  # a compound question: each part has its own retrieval
+            debug["parts"] = [_part_debug(p, state.part_results[p.part_id], escalated=state.pending_offer is not None)
+                              for p in state.parts if p.part_id in state.part_results]
         if part is not None:
             debug["chunks"] = [c.model_dump() for c in part.chunks]
             debug["answer"] = part.answer

@@ -19,7 +19,10 @@ For every row it records what happened (`RowRun`) and checks it (`check_row`), a
 
     python -m evals.compound_eval [--out-dir evals/results]
 
-Mock only: a live run is deferred to the final runs.
+With `--live` the real models run (mock tickets): the orchestrator splits the message itself, so its wording is the row's
+`part_texts`, parallelism and call counts are read from the trace, and the ticket draft is judged by what the drafter was
+given. `--estimate` prints the cost; `--confirm-spend` runs it under the live guard (ceiling 2x the estimate, watchdog,
+resumable).
 """
 import argparse
 import json
@@ -27,6 +30,7 @@ import re
 import sys
 import tempfile
 import threading
+from datetime import datetime, timedelta
 from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,7 +38,9 @@ from types import SimpleNamespace
 from pydantic import BaseModel
 
 from evals.common import EVALS_DIR, load_jsonl
-from evals.harness import RESULTS_DIR
+from evals.gap_eval import build_live_stack
+from evals.harness import RESULTS_DIR, ROOT
+from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, run_items, signature
 from evals.schemas import CompoundRow
 from smartdesk_ai.agent.factory import build_stack
 from smartdesk_ai.agent.graph import run_turn
@@ -42,9 +48,12 @@ from smartdesk_ai.agent.state import new_thread_id
 from smartdesk_ai.config.settings import Settings, load_settings
 from smartdesk_ai.llm.mock import MockSynthesizerModel
 from smartdesk_ai.ops.health import HealthRegistry
+from smartdesk_ai.ops.runtime import RequestContext, request_scope
 from smartdesk_ai.tickets import MockTicketClient
 
 RESULT_FILE = "compound_eval.json"
+LIVE_RESULT_FILE = "compound_eval_live.json"
+CHECKPOINT = ROOT / "data" / "eval_checkpoints" / "compound.json"
 EMAIL = "eval.user@smartdesk.example"
 CRITERIA = ("single", "compound", "gap_part", "misroute", "misc_gap", "isolation")
 BARRIER_SECONDS = 5  # the workers of a fan-out must be in flight together within this long
@@ -67,6 +76,7 @@ class RowRun(BaseModel):
     draft_category: str | None
     worker_inputs: list[str]  # the human message of every worker model call
     leaks: list[str]  # what a worker was given beyond its sub-question and chunks
+    part_texts: list[str] = []  # the orchestrator's wording of each part, in order (empty: the row's own wording)
 
 
 class SingleRun(BaseModel):
@@ -224,11 +234,117 @@ def observe_row(row: CompoundRow, stack, worker: RowWorker, synth: CountingSynth
     return RowRun(**run), singles
 
 
+# --- running live: what happened is read from the trace ---------------------------------------------------------
+
+
+def _human(prompt: str) -> str:
+    return prompt.rsplit("[human] ", 1)[-1]
+
+
+def _span_window(event: dict) -> tuple[datetime, datetime]:
+    end = datetime.fromisoformat(event["ts"])
+    return end - timedelta(milliseconds=event.get("latency_ms", 0.0)), end
+
+
+def _overlap(windows: Sequence[tuple[datetime, datetime]]) -> bool:
+    """Every window shares a moment with every other: the workers were in flight together."""
+    return len(windows) < 2 or max(w[0] for w in windows) < min(w[1] for w in windows)
+
+
+def run_from_trace(row: CompoundRow, state, events: Sequence[dict], draft_events: Sequence[dict] = (), drafted=None) -> RowRun:
+    """A `RowRun` for a live turn: parts and answers from the final state, the worker fan-out and the synthesizer from the
+    request's trace events. The ticket draft is judged by what the drafter was given (its statements), because its own wording
+    is a paraphrase."""
+    results = [state.part_results[p.part_id] for p in state.parts]
+    first_pass: dict[str, dict] = {}
+    for event in sorted((e for e in events if e.get("kind") == "agent_span" and e.get("part_id")), key=lambda e: e["ts"]):
+        first_pass.setdefault(event["part_id"], event)  # a retry is the part's second span
+    worker_inputs = [_human(e["prompt"]) for e in events if e.get("kind") == "llm_call" and e.get("task") == "WORKER_ANSWER"]
+    draft_input = next((_human(e["prompt"]) for e in draft_events if e.get("kind") == "llm_call" and e.get("task") == "TICKET_DRAFT"), "")
+    texts = [r.sub_question for r in results]
+    return RowRun(
+        n_parts=len(state.parts), first_pass_calls=len(first_pass),
+        workers_overlapped=_overlap([_span_window(e) for e in first_pass.values()]),
+        synth_calls=sum(e.get("kind") == "llm_call" and e.get("task") == "SYNTHESIZER" for e in events),
+        cited_domains=[r.citations[0].split("-")[0] for r in results if r.citations],
+        retried_parts=[r.sub_question for r in results if r.retried],
+        unanswered=list(state.pending_offer.unanswered_parts) if state.pending_offer else [],
+        offered=state.pending_offer is not None and "ticket" in state.reply.lower(), reply=state.reply,
+        draft_description=draft_input, draft_category=drafted.category if drafted is not None else None,
+        worker_inputs=worker_inputs, leaks=_leaks(row, worker_inputs), part_texts=texts)
+
+
+def observe_row_live(row: CompoundRow, stack) -> RowRun:
+    """One compound question through the whole app, as a live run sees it (the single-part controls are left to the
+    gap and KB run, which asks 74 single-topic questions)."""
+    trace = stack.services.trace
+    tid = new_thread_id()
+
+    def turn(text: str, suffix: str):
+        rid = f"{row.id}-{tid[:8]}{suffix}"  # unique per run, so a stack asked twice never mixes its events
+        with request_scope(RequestContext(session_id=tid, request_id=rid, task="eval"), stack.services):
+            state = run_turn(stack.graph, tid, text)
+        return state, [e for e in trace.events if e.get("request_id") == rid]
+
+    state, events = turn(row.question, "")
+    draft_events, drafted = [], None
+    if state.pending_offer is not None:
+        after, draft_events = turn(EMAIL, "-draft")
+        drafted = after.ticket
+    return run_from_trace(row, state, events, draft_events, drafted)
+
+
+def estimate_live(settings: Settings, rows: Sequence[CompoundRow]) -> Estimate:
+    """Per row: the orchestrator call, one worker call and one judge call per part, one synthesizer call when two or more parts
+    can be answered, and for a row with a gap the ticket draft. Priced like a golden question (`drift.tokens_per_question`)
+    for each worker part, plus the orchestrator at its measured size."""
+    models, tokens = settings.models, settings.drift.tokens_per_question
+    worker = (tokens.main_input * models.main.price.input + tokens.main_output * models.main.price.output) / 1_000_000
+    orchestrator = (1500 * models.main.price.input + 200 * models.main.price.output) / 1_000_000
+    synth = (1200 * models.main.price.input + 250 * models.main.price.output) / 1_000_000
+    draft = (800 * models.light.price.input + 150 * models.light.price.output) / 1_000_000
+    parts = sum(len(r.parts) for r in rows)
+    synths = sum(sum(p.answerable for p in r.parts) >= 2 for r in rows)
+    drafts = sum(any(not p.answerable for p in r.parts) for r in rows)
+    usd = len(rows) * orchestrator + parts * worker + synths * synth + drafts * draft
+    return Estimate("the live compound eval", round(usd, 4), f"{len(rows)} questions, {parts} parts, {synths} synthesized, {drafts} drafts")
+
+
+def run_live(settings: Settings, rows: Sequence[CompoundRow], estimate: Estimate, out_dir: Path, checkpoint_path: Path) -> int:
+    live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
+    sig = signature([[r.id, r.question] for r in rows] + [live.models.main.id, live.models.light.id, dict(live.prompts)])
+    checkpoint = Checkpoint(checkpoint_path, sig)
+    if checkpoint.resumed:
+        print(f"resuming: {checkpoint.resumed} of {len(rows)} questions are already answered")
+    by_id = {r.id: r for r in rows}
+    with LiveRun(live, ["python", "-m", "evals.compound_eval", *sys.argv[1:]], ceiling_usd=estimate.ceiling_usd) as run, \
+            tempfile.TemporaryDirectory(prefix="compound_live_") as work:
+        stack = build_live_stack(live, Path(work))
+        done, stopped = run_items(run, checkpoint, [r.id for r in rows],
+                                  lambda i: observe_row_live(by_id[i], stack).model_dump())
+        results = []
+        for row in rows:
+            if row.id in done:
+                run_ = RowRun(**done[row.id])
+                results.append(RowResult(id=row.id, run=run_, singles=[], problems=check_row(row, run_)))
+        report = summarize([r for r in rows if r.id in done], results)
+        cost = run.cost()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / LIVE_RESULT_FILE).write_text(json.dumps({**report.model_dump(), "stopped": stopped, "usd": round(cost.usd, 6)}, indent=1) + "\n")
+    print(render(report, live=True))
+    print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls ({cost.input_tokens:,} input, {cost.output_tokens:,} output tokens)")
+    if stopped:
+        print(f"STOPPED after {len(results)} of {len(rows)} rows: {stopped}")
+    return 1 if stopped or report.passed < len(rows) else 0
+
+
 # --- checking -----------------------------------------------------------------------------------------------------
 
 
 def check_row(row: CompoundRow, run: RowRun) -> list[str]:
     """What is wrong with one row's run, as "<criterion>: <problem>". Pure: it reads only `row` and `run`."""
+    texts = run.part_texts if len(run.part_texts) == len(row.parts) else [p.sub_question for p in row.parts]
+    text_of = {p.sub_question: t for p, t in zip(row.parts, texts)}
     answered = [p for p in row.parts if p.answerable]
     gaps = [p for p in row.parts if not p.answerable]
     out: list[str] = []
@@ -246,25 +362,26 @@ def check_row(row: CompoundRow, run: RowRun) -> list[str]:
     if gaps:
         if len(answered) < 2 and run.synth_calls != 0:
             out.append(f"gap_part: the synthesizer ran {run.synth_calls} times with fewer than two answered parts")
-        if run.unanswered != [p.sub_question for p in gaps]:
-            out.append(f"gap_part: the unanswered part(s) are {run.unanswered}, expected {[p.sub_question for p in gaps]}")
-        if not all(p.sub_question in run.reply for p in gaps):
+        if run.unanswered != [text_of[p.sub_question] for p in gaps]:
+            out.append(f"gap_part: the unanswered part(s) are {run.unanswered}, expected {[text_of[p.sub_question] for p in gaps]}")
+        if not all(text_of[p.sub_question] in run.reply for p in gaps):
             out.append("gap_part: the reply does not name every unanswered part")
         if answered and "Sources:" not in run.reply:
             out.append("gap_part: the answered part(s) were not answered with sources")
         if not run.offered:
             out.append("gap_part: no ticket offer for the unanswered part(s)")
-        if not all(p.sub_question in run.draft_description for p in gaps) or any(
-                p.sub_question in run.draft_description for p in answered):
+        if not all(text_of[p.sub_question] in run.draft_description for p in gaps) or any(
+                text_of[p.sub_question] in run.draft_description for p in answered):
             out.append("gap_part: the ticket must cover only the unanswered part(s) (it is missing one or holds an answered part)")
     if any(p.expected_domain == "MISC" for p in gaps) and run.draft_category != "MISC":
         out.append(f"misc_gap: the ticket category is {run.draft_category}, expected MISC")
     for part in row.parts:
-        if part.likely_wrong_domain and part.sub_question not in run.retried_parts:
+        text = text_of[part.sub_question]
+        if part.likely_wrong_domain and text not in run.retried_parts:
             out.append(f"misroute: no whole-KB retry for the misrouted part {part.sub_question!r}")
-        if part.likely_wrong_domain and part.sub_question in run.unanswered:
+        if part.likely_wrong_domain and text in run.unanswered:
             out.append(f"misroute: the misrouted part {part.sub_question!r} was not recovered")
-        if part.answerable and not part.likely_wrong_domain and part.sub_question in run.retried_parts:
+        if part.answerable and not part.likely_wrong_domain and text in run.retried_parts:
             out.append(f"misroute: the correctly routed part {part.sub_question!r} was retried")
     if run.leaks or not run.worker_inputs:
         out.append(f"isolation: a worker was given more than its sub-question and chunks: {run.leaks or 'no worker input'}")
@@ -329,9 +446,10 @@ def run_eval(settings: Settings, work: Path) -> EvalReport:
     return summarize(rows, results)
 
 
-def render(report: EvalReport) -> str:
-    lines = [f"Compound-set eval (MOCK: scripted orchestrator and workers; this checks the orchestration, not any model): "
-             f"{report.passed} of {len(report.rows)} rows pass every check"]
+def render(report: EvalReport, *, live: bool = False) -> str:
+    head = ("Compound-set eval (live: real models; the single-part control is the gap and KB run)" if live else
+            "Compound-set eval (MOCK: scripted orchestrator and workers; this checks the orchestration, not any model)")
+    lines = [f"{head}: {report.passed} of {len(report.rows)} rows pass every check"]
     for name in CRITERIA:
         c = report.criteria[name]
         lines.append(f"  {name:10} {c.passed} of {c.checked}")
@@ -344,11 +462,21 @@ def render(report: EvalReport) -> str:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.compound_eval", description=__doc__.split("\n\n")[0])
     parser.add_argument("--out-dir", type=Path, default=RESULTS_DIR, help="where to save compound_eval.json")
-    parser.add_argument("--live", action="store_true", help="not available yet")
+    parser.add_argument("--live", action="store_true", help="the real models (costs money; needs --confirm-spend)")
+    parser.add_argument("--estimate", action="store_true", help="with --live: print the cost estimate and stop")
+    parser.add_argument("--confirm-spend", action="store_true", help="allow the live run")
+    parser.add_argument("--checkpoint", type=Path, default=CHECKPOINT, help="where a live run saves finished rows, to resume")
     args = parser.parse_args(argv)
-    if args.live:
-        print("A live compound run is deferred to the final runs (T7.10 live); this eval is mock only.", file=sys.stderr)
-        return 2
+    if args.live or args.estimate:
+        settings, rows = load_settings(), load_rows()
+        estimate = estimate_live(settings, rows)
+        print("\n".join(describe(estimate)))
+        if args.estimate:
+            return 0
+        if not args.confirm_spend:
+            print("Nothing was run. Add --confirm-spend once you have approved the cost; without --live the eval is free (mock).")
+            return 2
+        return run_live(settings, rows, estimate, args.out_dir, args.checkpoint)
     with tempfile.TemporaryDirectory(prefix="compound_eval_") as work:
         report = run_eval(load_settings(), Path(work))
     args.out_dir.mkdir(parents=True, exist_ok=True)

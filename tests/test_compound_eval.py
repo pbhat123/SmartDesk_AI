@@ -132,6 +132,104 @@ def test_the_command_runs_in_mock_mode_and_saves_the_report(tmp_path, capsys):
     assert "14 of 14" in out and "MOCK" in out
 
 
-def test_a_live_run_is_refused_for_now(capsys):
+# --- the live path, exercised on the scripted mock stack ----------------------------------------------------------
+
+@pytest.fixture(scope="module")
+def mock_stack(tmp_path_factory):
+    from smartdesk_ai.agent.factory import build_stack
+    from smartdesk_ai.ops.health import HealthRegistry
+    from smartdesk_ai.tickets import MockTicketClient
+
+    settings = ce.load_settings()
+    lenient = settings.model_copy(update={"thresholds": settings.thresholds.model_copy(update={"escalation_mock": -1.0})})
+    worker = ce.RowWorker(ROWS)
+    worker.reset(parallel=2)  # the barrier is only needed for the mock's own parallel check; the trace is what is read here
+    worker._barrier = None
+    return build_stack(lenient, environ={}, dotenv_path=None, data_dir=tmp_path_factory.mktemp("live_obs"), use_cache=False,
+                       registry=HealthRegistry(), client=MockTicketClient(), tracing=False, mock_answer_model=worker,
+                       mock_routing_model=ce.ScriptedOrchestrator(ROWS), mock_synth_model=ce.MockSynthesizerModel())
+
+
+@pytest.mark.parametrize("row", ROWS, ids=[r.id for r in ROWS])
+def test_the_trace_based_observation_passes_every_check_on_the_scripted_stack(mock_stack, row):
+    run = ce.observe_row_live(row, mock_stack)
+    assert ce.check_row(row, run) == [], run
+
+
+def test_the_trace_shows_the_fan_out_and_one_synthesizer_call(mock_stack):
+    run = ce.observe_row_live(BY_ID["cmp-001"], mock_stack)
+    assert run.first_pass_calls == 2 and run.synth_calls == 1 and run.n_parts == 2 and len(run.worker_inputs) == 2
+
+
+def test_the_draft_is_judged_by_what_the_drafter_was_given(mock_stack):
+    run = ce.observe_row_live(BY_ID["cmp-009"], mock_stack)
+    assert run.draft_description.startswith("Employee statements:") and "park my car" in run.draft_description
+    assert "request new software" not in run.draft_description.lower() and run.draft_category == "MISC"
+
+
+def test_a_part_text_the_model_worded_differently_is_matched_by_position(report):
+    run = good_run(report, "cmp-009").model_copy(update={
+        "part_texts": ["How can I get new software?", "Is there parking at the Bengaluru office?"],
+        "unanswered": ["Is there parking at the Bengaluru office?"], "reply": "x Is there parking at the Bengaluru office? Sources:",
+        "draft_description": "Employee statements:\n- Is there parking at the Bengaluru office?"})
+    assert ce.check_row(BY_ID["cmp-009"], run) == []
+
+
+def test_overlap_needs_every_window_to_share_a_moment():
+    from datetime import datetime, timedelta
+
+    t = datetime(2026, 1, 1)
+    near = [(t, t + timedelta(seconds=2)), (t + timedelta(seconds=1), t + timedelta(seconds=3))]
+    apart = [(t, t + timedelta(seconds=1)), (t + timedelta(seconds=2), t + timedelta(seconds=3))]
+    assert ce._overlap(near) and not ce._overlap(apart) and ce._overlap(near[:1])
+
+
+# --- the live command is guarded ------------------------------------------------------------------------------------
+
+@pytest.fixture
+def no_paid_calls(monkeypatch):
+    def refuse(*a, **k):
+        raise AssertionError("a paid model was called")
+
+    monkeypatch.setattr(ce, "build_live_stack", refuse)
+
+
+def test_estimate_prints_and_stops(capsys, no_paid_calls):
+    assert ce.main(["--live", "--estimate"]) == 0
+    out = capsys.readouterr().out
+    assert "Estimate for the live compound eval" in out and "ceiling" in out
+
+
+def test_the_estimate_is_small_and_counts_parts(settings):
+    e = ce.estimate_live(settings, ROWS)
+    assert 0.05 < e.usd < 0.4 and "14 questions" in e.detail and ce.estimate_live(settings, ROWS[:2]).usd < e.usd
+
+
+def test_a_live_run_without_confirm_spend_runs_nothing(capsys, no_paid_calls):
     assert ce.main(["--live"]) == 2
-    assert "deferred" in capsys.readouterr().err.lower()
+    assert "Nothing was run" in capsys.readouterr().out
+
+
+def test_a_live_run_goes_through_the_guard_with_twice_the_estimate(settings, tmp_path, monkeypatch):
+    seen = {}
+
+    class FakeRun:
+        def __init__(self, settings, argv, *, ceiling_usd, **kw):
+            seen["ceiling"] = ceiling_usd
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return None
+
+        def cost(self):
+            from evals.live_guard import RunCost
+
+            return RunCost(0.0, 0, 0, 0)
+
+    monkeypatch.setattr(ce, "LiveRun", FakeRun)
+    monkeypatch.setattr(ce, "build_live_stack", lambda *a, **k: None)
+    monkeypatch.setattr(ce, "run_items", lambda *a, **k: ({}, None))
+    ce.main(["--live", "--confirm-spend", "--out-dir", str(tmp_path), "--checkpoint", str(tmp_path / "cp.json")])
+    assert seen["ceiling"] == pytest.approx(2 * ce.estimate_live(settings, ROWS).usd)

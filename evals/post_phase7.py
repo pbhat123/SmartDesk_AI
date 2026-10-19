@@ -446,6 +446,15 @@ def final_table(outcome: Outcome, root: Path, *, balance_before: float, since: f
     return "\n".join(L)
 
 
+def batch_start(state: State) -> float:
+    """When the batch began. A state saved before the start was recorded dates it from its earliest finished run (less five
+    minutes for that run's own time), so the results of the runs it already holds still count as this batch's."""
+    finished = [r["finished"] for r in state.runs.values() if r.get("finished")]
+    if not finished:
+        return time.time()
+    return min(datetime.fromisoformat(f).timestamp() for f in finished) - 300
+
+
 def main(argv: Sequence[str] | None = None, *, state_path: Path | None = STATE_FILE, runner: Runner | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m evals.post_phase7", description=__doc__.split("\n\n")[0])
     parser.add_argument("--estimate", action="store_true", help="print the table of estimates and stop")
@@ -477,7 +486,7 @@ def main(argv: Sequence[str] | None = None, *, state_path: Path | None = STATE_F
     if state.balance_before is None:
         state.balance_before = args.topup - ledger_total()
     if state.started is None:
-        state.started = time.time()
+        state.started = batch_start(state)
         state.save()
     outcome = run_batch(steps, runner or subprocess_runner, args.out_dir, state=state, resume=args.resume)
     print("\n" + final_table(outcome, args.out_dir, balance_before=state.balance_before, since=state.started))

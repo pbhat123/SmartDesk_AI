@@ -329,3 +329,12 @@ def test_a_stopped_batch_says_where_and_why_and_what_did_not_run(steps, tmp_path
 def test_the_plan_and_the_stop_rules_are_in_plan_md():
     plan = (pp.ROOT / "PLAN.md").read_text()
     assert "post_phase7" in plan and "--resume" in plan and "92%" in plan and "orchestrator_v6" in plan
+
+
+def test_a_state_saved_before_the_start_was_recorded_is_dated_from_its_first_finished_run(tmp_path):
+    state = pp.State(tmp_path / "s.json", "sig")
+    state.runs = {"a": {"finished": "2026-10-19T20:00:00+00:00"}, "b": {"finished": "2026-10-19T20:10:00+00:00"}}
+    from datetime import datetime
+
+    assert pp.batch_start(state) == datetime.fromisoformat("2026-10-19T20:00:00+00:00").timestamp() - 300
+    assert abs(pp.batch_start(pp.State(None, "sig")) - time.time()) < 5

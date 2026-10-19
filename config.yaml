@@ -129,7 +129,7 @@ chunking:
 # Active version per prompt (FR-H14): file agent/prompts/<name>_v<N>.md.
 # Provisional, files arrive with their tasks (T0.4 loader, T4.x and T5.x prompts).
 prompts:
-  orchestrator: 5
+  orchestrator: 6
   answer: 4
   worker_it: 1             # the IT worker's answer prompt: answer v4 verbatim (FR-I1)
   worker_hr: 1

@@ -727,6 +727,11 @@ Decisions to review (SPEC is silent):
 - Evals, the drift check and the safety eval build the stack with `use_cache=False`, so a repeated question is measured, not remembered. `config.yaml` gained `cache.enabled` and `cache.max_entries`.
 `scripts/smoke_ui.py` now asks the KB question twice and checks the second is an exact hit in the panel, in `cache.jsonl` and on the Monitoring tiles.
 
+### 15.6 T6.10 (semantic cache, SPEC section 4 cache AC, FR-H7, FR-H16; mock only)
+`AnswerCache` gained a semantic stage. On an exact miss the question is embedded once (through `CostedEmbeddings`, so the request cost tracker counts it, and through `LedgeredEmbeddings` in live mode, so the spend ledger does too) and compared with the stored questions' vectors of the same domain and KB version; the nearest one at or above `thresholds.semantic_cache_cutoff` (0.95) is a `hit_semantic`. Each lookup that reaches this stage costs exactly one embedding, hit or miss; an exact hit costs none; `store` reuses the lookup's vector. A failing embedder or scan is a plain miss, and the answer is then kept for exact matches only. A semantic hit is not stored again under its own key, so near-duplicates do not grow the cache.
+Decisions to review: (1) **the 0.95 cut-off is not tuned.** SPEC asks for a high cut-off; tuning it on real embeddings means paid calls, so the tests pin the behaviour with controlled vectors (above, just above, just below, far). The value is a guess until a live paraphrase set is run. (2) The scan reads every stored entry (at most `cache.max_entries`, 1000); that is fine for this size, and Redis would need a vector index beyond it. (3) A semantic hit needs the same domain filter as the stored answer.
+The debug panel shows "Cache: hit (semantic, similarity 0.97)"; the log records `hit_semantic` with the similarity.
+
 ## 16. UI review fixes (2026-10-18, after your browser test)
 
 ### 16.1 Fix 1: two pages with `st.navigation`

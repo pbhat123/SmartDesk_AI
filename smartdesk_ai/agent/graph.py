@@ -233,7 +233,8 @@ def _search_and_answer(deps: KBDeps, question: str, domain: Domain | None) -> Pa
     the judge). Returns the result, or `Unavailable` after an outage."""
     probe = deps.cache.lookup(question, domain) if deps.cache is not None else None
     if probe is not None and probe.part is not None:
-        return probe.part.model_copy(update={"cache": probe.kind, "cache_saved_ms": probe.saved_ms})
+        return probe.part.model_copy(update={"cache": probe.kind, "cache_similarity": probe.similarity,
+                                                "cache_saved_ms": probe.saved_ms})
     started = time.perf_counter()
     args: dict[str, Any] = {"query": question}
     if domain is not None:

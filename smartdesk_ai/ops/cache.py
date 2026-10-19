@@ -9,8 +9,14 @@ A hit skips retrieval, the worker and the judge. Only a shown, grounded answer i
 judge-rejected draft, an unanswerable question or an outage, and the ticket and status paths never reach this module.
 Entries carry the KB version; one made for another version (another process re-ingested) is never served. The cache must
 never break a chat turn: any backend error is a miss (FR-F7).
+
+Semantic stage: when the exact key misses, the question is embedded (one embedding call, counted by the caller's costed
+embedder, FR-H7) and compared with the stored questions' vectors of the same domain and KB version. The nearest one at or
+above the config cut-off (`thresholds.semantic_cache_cutoff`, high on purpose) is a semantic hit. The vector of that
+lookup is kept and stored with the answer, so storing costs no second embedding.
 """
 import logging
+import math
 import threading
 import time
 from collections import OrderedDict
@@ -74,6 +80,8 @@ class MemoryBackend:
 
 class CachedAnswer(BaseModel):
     kb_version: str
+    domain: Domain | None = None
+    vector: list[float] | None = None  # the question's embedding; None: found by exact match only
     compute_ms: float  # what the search and answer took when this entry was made
     part: PartResult
 
@@ -85,10 +93,18 @@ class CacheLookup:
     kb_version: str = ""
     part: PartResult | None = None
     saved_ms: float | None = None
+    similarity: float | None = None  # semantic hits: the cosine to the cached question
+    vector: list[float] | None = None  # the question's embedding, kept so `store` makes no second call
+    domain: Domain | None = None
 
 
 def normalize(question: str) -> str:
     return " ".join(question.split()).casefold()
+
+
+def cosine(a: list[float], b: list[float]) -> float:
+    norm = math.sqrt(sum(x * x for x in a)) * math.sqrt(sum(y * y for y in b))
+    return sum(x * y for x, y in zip(a, b)) / norm if norm and len(a) == len(b) else 0.0
 
 
 def is_cacheable_question(question: str) -> bool:
@@ -106,11 +122,14 @@ class AnswerCache:
         backend: CacheBackend,
         *,
         kb_version: Callable[[], str],
+        embed: Callable[[str], list[float]] | None = None,
+        cutoff: float = 1.0,
         log: CacheLog | None = None,
         clock: Callable[[], float] = time.perf_counter,
     ) -> None:
         self.backend = backend
         self._kb_version = kb_version
+        self._embed, self._cutoff = embed, cutoff
         self._log = log
         self._clock = clock
 
@@ -130,13 +149,47 @@ class AnswerCache:
             entry = self._read(key, version)
         except Exception:  # a broken cache is a miss, never a failed turn (FR-F7)
             logger.warning("answer cache lookup failed; treated as a miss", exc_info=True)
-            return CacheLookup("miss", key=key)
-        if entry is None:
-            self._record("miss")
-            return CacheLookup("miss", key=key, kb_version=version)
-        saved = max(entry.compute_ms - (self._clock() - started) * 1000, 0.0)
-        self._record("hit_exact", saved_ms=saved)
-        return CacheLookup("exact", key=key, kb_version=version, part=entry.part, saved_ms=saved)
+            return CacheLookup("miss", key=key, domain=domain)
+        if entry is not None:
+            saved = max(entry.compute_ms - (self._clock() - started) * 1000, 0.0)
+            self._record("hit_exact", saved_ms=saved)
+            return CacheLookup("exact", key=key, kb_version=version, part=entry.part, saved_ms=saved)
+        vector, nearest, similarity = self._nearest(question, domain, version)
+        if nearest is not None and similarity >= self._cutoff:
+            saved = max(nearest.compute_ms - (self._clock() - started) * 1000, 0.0)
+            self._record("hit_semantic", saved_ms=saved, similarity=similarity)
+            return CacheLookup("semantic", key=key, kb_version=version, part=nearest.part, saved_ms=saved,
+                               similarity=similarity)
+        self._record("miss")
+        return CacheLookup("miss", key=key, kb_version=version, vector=vector, domain=domain)
+
+    def _nearest(
+        self, question: str, domain: Domain | None, version: str
+    ) -> tuple[list[float] | None, CachedAnswer | None, float]:
+        """The question's vector (one embedding call) and the stored answer nearest to it. Any failure leaves the
+        lookup a plain miss: the answer is then kept for exact matches only."""
+        if self._embed is None:
+            return None, None, 0.0
+        try:
+            vector = [round(x, 6) for x in self._embed(question)]
+        except Exception:
+            logger.warning("answer cache embedding failed; semantic match skipped", exc_info=True)
+            return None, None, 0.0
+        best, best_similarity = None, -1.0
+        try:
+            for _, raw in self.backend.entries():
+                try:
+                    entry = CachedAnswer.model_validate_json(raw)
+                except ValueError:
+                    continue  # an entry another version of the app wrote
+                if entry.kb_version != version or entry.domain != domain or entry.vector is None:
+                    continue
+                similarity = cosine(vector, entry.vector)
+                if similarity > best_similarity:
+                    best, best_similarity = entry, similarity
+        except Exception:
+            logger.warning("answer cache scan failed; semantic match skipped", exc_info=True)
+        return vector, best, best_similarity
 
     def _read(self, key: str, version: str) -> CachedAnswer | None:
         raw = self.backend.get(key)
@@ -151,7 +204,8 @@ class AnswerCache:
             return
         plain = part.model_copy(update={"retried": False, "cache": None, "cache_similarity": None,
                                         "cache_saved_ms": None})
-        entry = CachedAnswer(kb_version=lookup.kb_version, compute_ms=compute_ms, part=plain)
+        entry = CachedAnswer(kb_version=lookup.kb_version, domain=lookup.domain, vector=lookup.vector,
+                             compute_ms=compute_ms, part=plain)
         try:
             self.backend.put(lookup.key, entry.model_dump_json())
         except Exception:

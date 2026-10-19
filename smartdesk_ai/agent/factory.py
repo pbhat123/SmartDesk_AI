@@ -186,8 +186,9 @@ def build_stack(
     cost = CostTracker(settings, priced=live, path=Path(data_dir) / COST_LOG, on_spend=budget.add)
     limiter = RateLimiter(settings.rate_limits, Path(data_dir) / OPS_DB)
     services = Services(cost=cost, budget=budget, limiter=limiter, trace=trace)
+    costed_embeddings = CostedEmbeddings(embeddings, cost, settings)  # query embeddings are counted (FR-H7)
     try:
-        index = open_index(index_dir, CostedEmbeddings(embeddings, cost, settings))
+        index = open_index(index_dir, costed_embeddings)
     except IndexNotBuilt:
         raise LiveModeUnavailable(
             f"the KB index is missing in {index_dir}. Build it with: python -m smartdesk_ai.rag.ingest"
@@ -229,6 +230,7 @@ def build_stack(
     cache = None
     if use_cache and settings.cache.enabled:
         cache = AnswerCache(MemoryBackend(settings.cache.max_entries), kb_version=kb_version(settings, index_dir),
+                            embed=costed_embeddings.embed_query, cutoff=settings.thresholds.semantic_cache_cutoff,
                             log=CacheLog(Path(data_dir) / CACHE_LOG))
     graph = build_kb_graph(
         KBDeps(executor=executor, answer=answerer, cache=cache),

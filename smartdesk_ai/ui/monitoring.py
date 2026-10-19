@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.pii import mask_emails_in
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
-from smartdesk_ai.ops.cache_log import CacheStats, load_cache_records, summarize_cache
+from smartdesk_ai.ops.cache_log import CACHE_LOG_FILE as CACHE_FILE, CacheStats, load_cache_records, summarize_cache
 from smartdesk_ai.ops.cost import CostEntry
 from smartdesk_ai.ops.drift import (
     DRIFT_LOG,
@@ -45,7 +45,6 @@ from smartdesk_ai.ui.context import UiContext
 TOOL_METRICS_FILE = "tool_metrics.jsonl"
 TRACE_FILE = "trace.jsonl"
 COST_FILE = "cost.jsonl"
-CACHE_FILE = "cache.jsonl"
 HITL_FILE = "hitl.jsonl"
 OPS_DB_FILE = "ops.db"
 AGENT_METRICS_FILE = "agent_metrics.json"

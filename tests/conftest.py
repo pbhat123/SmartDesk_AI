@@ -71,3 +71,33 @@ def data_dir_is_untouched():
     after = _snapshot(DATA_DIR)
     changed = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
     assert not changed, f"the test suite changed data/: {changed}"
+
+
+@pytest.fixture(params=["memory", "redis", "real-redis"])
+def new_backend(request):
+    """A factory for an empty answer-cache backend: the in-memory one, then the Redis one over a fake client, so the
+    cache tests run both ways with no server (and, when SMARTDESK_TEST_REDIS_URL is set, over a real Redis too)."""
+    from smartdesk_ai.ops.cache import MemoryBackend, RedisBackend
+    from tests.fake_redis import FakeRedis
+
+    counter = iter(range(10**6))
+    made = []
+    real_url = os.environ.get("SMARTDESK_TEST_REDIS_URL")
+    if request.param == "real-redis" and not real_url:
+        pytest.skip("set SMARTDESK_TEST_REDIS_URL to run the cache tests against a real Redis")
+
+    def make(max_entries: int = 50):
+        if request.param == "memory":
+            return MemoryBackend(max_entries)
+        if request.param == "redis":
+            return RedisBackend(FakeRedis(), namespace=f"test{next(counter)}", max_entries=max_entries)
+        import redis
+
+        backend = RedisBackend(redis.Redis.from_url(real_url, decode_responses=True),
+                               namespace=f"smartdesk-test:{os.getpid()}:{next(counter)}", max_entries=max_entries)
+        made.append(backend)
+        return backend
+
+    yield make
+    for backend in made:
+        backend.clear()

@@ -4,7 +4,7 @@ import pytest
 
 from smartdesk_ai.agent.graph import run_turn
 from smartdesk_ai.agent.state import ChunkRef, PartResult, new_thread_id
-from smartdesk_ai.ops.cache import AnswerCache, MemoryBackend
+from smartdesk_ai.ops.cache import AnswerCache
 from tests.agent_helpers import assemble
 from tests.llm_fakes import FakeAnswerLLM
 from tests.ui_helpers import mock_context
@@ -21,8 +21,8 @@ def answered(**changes) -> PartResult:
 
 
 @pytest.fixture
-def cache():
-    return AnswerCache(MemoryBackend(max_entries=50), kb_version=lambda: "v1")
+def cache(new_backend):
+    return AnswerCache(new_backend(50), kb_version=lambda: "v1")
 
 
 # --- the cache on its own -------------------------------------------------------------------------
@@ -76,9 +76,9 @@ def test_a_question_with_redacted_or_personal_text_bypasses_the_cache(cache, tex
     assert len(cache) == 0 and cache.lookup(text, None).kind == "bypass"
 
 
-def test_a_changed_kb_version_makes_old_entries_unreachable():
+def test_a_changed_kb_version_makes_old_entries_unreachable(new_backend):
     version = ["v1"]
-    cache = AnswerCache(MemoryBackend(max_entries=50), kb_version=lambda: version[0])
+    cache = AnswerCache(new_backend(50), kb_version=lambda: version[0])
     cache.store(cache.lookup(QUESTION, None), answered(), compute_ms=10.0)
     version[0] = "v2"  # another process re-ingested
     assert cache.lookup(QUESTION, None).kind == "miss"
@@ -90,8 +90,8 @@ def test_clear_empties_the_cache(cache):
     assert len(cache) == 0 and cache.lookup(QUESTION, None).kind == "miss"
 
 
-def test_the_oldest_entries_go_first_when_full():
-    cache = AnswerCache(MemoryBackend(max_entries=2), kb_version=lambda: "v1")
+def test_the_oldest_entries_go_first_when_full(new_backend):
+    cache = AnswerCache(new_backend(2), kb_version=lambda: "v1")
     for text in ("first question?", "second question?", "third question?"):
         cache.store(cache.lookup(text, None), answered(), compute_ms=10.0)
     assert len(cache) == 2

@@ -8,7 +8,7 @@ import pytest
 
 from smartdesk_ai.agent.state import ChunkRef, PartResult
 from smartdesk_ai.ops import spend_ledger as sl
-from smartdesk_ai.ops.cache import AnswerCache, MemoryBackend
+from smartdesk_ai.ops.cache import AnswerCache
 from smartdesk_ai.ops.cache_log import CacheLog
 from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.runtime import RequestContext, Services, request_scope
@@ -48,18 +48,23 @@ def answered() -> PartResult:
                       chunks=[ChunkRef(entry_id="IT-1", title="Password", score=0.8)], answerable=True)
 
 
-def make(embedder=None, version="v1", cutoff=CUTOFF, **kwargs):
-    embedder = embedder or FakeEmbedder(TABLE)
-    cache = AnswerCache(MemoryBackend(50), kb_version=lambda: version, embed=embedder.embed_query, cutoff=cutoff, **kwargs)
-    cache.store(cache.lookup(BASE, "IT"), answered(), compute_ms=200.0)
-    embedder.calls.clear()  # the set-up lookup's embedding is not under test
-    return cache, embedder
+@pytest.fixture
+def make(new_backend):
+    def build(embedder=None, version="v1", cutoff=CUTOFF, **kwargs):
+        embedder = embedder or FakeEmbedder(TABLE)
+        cache = AnswerCache(new_backend(50), kb_version=lambda: version, embed=embedder.embed_query, cutoff=cutoff,
+                            **kwargs)
+        cache.store(cache.lookup(BASE, "IT"), answered(), compute_ms=200.0)
+        embedder.calls.clear()  # the set-up lookup's embedding is not under test
+        return cache, embedder
+
+    return build
 
 
 # --- the cut-off -----------------------------------------------------------------------------------
 
 
-def test_a_paraphrase_above_the_cut_off_is_a_semantic_hit():
+def test_a_paraphrase_above_the_cut_off_is_a_semantic_hit(make):
     cache, _ = make()
     hit = cache.lookup("Close paraphrase", "IT")
     assert hit.kind == "semantic" and hit.part.answer == answered().answer
@@ -68,22 +73,22 @@ def test_a_paraphrase_above_the_cut_off_is_a_semantic_hit():
 
 @pytest.mark.parametrize("text, kind", [("Just above", "semantic"), ("Just below", "miss"), ("Far away", "miss"),
                                          ("Opposite", "miss")])
-def test_the_cut_off_decides_between_a_hit_and_a_miss(text, kind):
+def test_the_cut_off_decides_between_a_hit_and_a_miss(make, text, kind):
     cache, _ = make()
     assert cache.lookup(text, "IT").kind == kind
 
 
-def test_the_cut_off_is_a_parameter_not_a_constant():
+def test_the_cut_off_is_a_parameter_not_a_constant(make):
     cache, _ = make(cutoff=0.75)
     assert cache.lookup("Far away", "IT").kind == "semantic"
     cache, _ = make(cutoff=0.99)
     assert cache.lookup("Close paraphrase", "IT").kind == "miss"
 
 
-def test_a_semantic_hit_needs_the_same_domain_and_kb_version():
+def test_a_semantic_hit_needs_the_same_domain_and_kb_version(new_backend):
     version = ["v1"]
     embedder = FakeEmbedder(TABLE)
-    cache = AnswerCache(MemoryBackend(50), kb_version=lambda: version[0], embed=embedder.embed_query, cutoff=CUTOFF)
+    cache = AnswerCache(new_backend(50), kb_version=lambda: version[0], embed=embedder.embed_query, cutoff=CUTOFF)
     cache.store(cache.lookup(BASE, "IT"), answered(), compute_ms=10.0)
     assert cache.lookup("Close paraphrase", "HR").kind == "miss"
     assert cache.lookup("Close paraphrase", None).kind == "miss"
@@ -91,11 +96,11 @@ def test_a_semantic_hit_needs_the_same_domain_and_kb_version():
     assert cache.lookup("Close paraphrase", "IT").kind == "miss"
 
 
-def test_the_best_match_wins():
+def test_the_best_match_wins(new_backend):
     # BASE at 0 degrees, "Other stored" at 26 (cosine 0.90 to BASE, so it is stored), "Probe" at 16: cosine 0.961 to
     # BASE and 0.985 to "Other stored", both above the cut-off.
     embedder = FakeEmbedder(TABLE | {"Other stored": at(26), "Probe": at(16)})
-    cache = AnswerCache(MemoryBackend(50), kb_version=lambda: "v1", embed=embedder.embed_query, cutoff=CUTOFF)
+    cache = AnswerCache(new_backend(50), kb_version=lambda: "v1", embed=embedder.embed_query, cutoff=CUTOFF)
     cache.store(cache.lookup(BASE, None), answered(), compute_ms=10.0)
     other = answered().model_copy(update={"answer": "Second answer.\n\nSources: IT-2 (X)"})
     probe = cache.lookup("Other stored", None)
@@ -108,20 +113,20 @@ def test_the_best_match_wins():
 # --- one embedding per semantic lookup ---------------------------------------------------------------
 
 
-def test_each_semantic_lookup_makes_exactly_one_embedding_call_hit_or_miss():
+def test_each_semantic_lookup_makes_exactly_one_embedding_call_hit_or_miss(make):
     cache, embedder = make()
     cache.lookup("Close paraphrase", "IT")
     cache.lookup("Far away", "IT")
     assert embedder.calls == ["Close paraphrase", "Far away"]
 
 
-def test_an_exact_hit_makes_no_embedding_call():
+def test_an_exact_hit_makes_no_embedding_call(make):
     cache, embedder = make()
     assert cache.lookup(BASE, "IT").kind == "exact"
     assert embedder.calls == []
 
 
-def test_storing_reuses_the_lookups_vector_and_makes_no_second_embedding_call():
+def test_storing_reuses_the_lookups_vector_and_makes_no_second_embedding_call(make):
     cache, embedder = make()
     probe = cache.lookup("Far away", "IT")
     cache.store(probe, answered(), compute_ms=10.0)
@@ -130,24 +135,24 @@ def test_storing_reuses_the_lookups_vector_and_makes_no_second_embedding_call():
     assert embedder.calls == ["Far away"]
 
 
-def test_a_bypassed_question_makes_no_embedding_call():
+def test_a_bypassed_question_makes_no_embedding_call(make):
     cache, embedder = make()
     assert cache.lookup("Reset the password for [PHONE]", "IT").kind == "bypass" and embedder.calls == []
 
 
-def test_a_failing_embedder_is_a_plain_miss_and_the_answer_is_still_stored_for_exact_matches():
+def test_a_failing_embedder_is_a_plain_miss_and_the_answer_is_still_stored_for_exact_matches(new_backend):
     class Broken:
         def embed_query(self, text):
             raise TimeoutError("down")
 
-    cache = AnswerCache(MemoryBackend(50), kb_version=lambda: "v1", embed=Broken().embed_query, cutoff=CUTOFF)
+    cache = AnswerCache(new_backend(50), kb_version=lambda: "v1", embed=Broken().embed_query, cutoff=CUTOFF)
     probe = cache.lookup(BASE, "IT")
     assert probe.kind == "miss"
     cache.store(probe, answered(), compute_ms=10.0)
     assert cache.lookup(BASE, "IT").kind == "exact"
 
 
-def test_the_log_records_the_semantic_hit_with_its_similarity(tmp_path):
+def test_the_log_records_the_semantic_hit_with_its_similarity(make, tmp_path):
     log = CacheLog(tmp_path / "cache.jsonl")
     cache, _ = make(log=log)
     cache.lookup("Close paraphrase", "IT")
@@ -158,13 +163,13 @@ def test_the_log_records_the_semantic_hit_with_its_similarity(tmp_path):
 # --- the embedding cost is counted -------------------------------------------------------------------
 
 
-def test_the_embedding_is_counted_by_the_cost_tracker_and_the_spend_ledger(settings, tmp_path):
+def test_the_embedding_is_counted_by_the_cost_tracker_and_the_spend_ledger(settings, tmp_path, new_backend):
     ledger = tmp_path / "ledger.jsonl"
     sl.start_run(settings, "test", "script", ledger)
     inner = SimpleNamespace(embed_query=lambda t: TABLE[t], name="fake")
     tracker = CostTracker(settings, priced=True)
     embedder = CostedEmbeddings(sl.LedgeredEmbeddings(inner, settings.models.embedding.id), tracker, settings)
-    cache = AnswerCache(MemoryBackend(50), kb_version=lambda: "v1", embed=embedder.embed_query, cutoff=CUTOFF)
+    cache = AnswerCache(new_backend(50), kb_version=lambda: "v1", embed=embedder.embed_query, cutoff=CUTOFF)
     ctx = RequestContext(session_id="s", request_id="r")
     with request_scope(ctx, Services(cost=tracker)):
         cache.store(cache.lookup(BASE, "IT"), answered(), compute_ms=10.0)

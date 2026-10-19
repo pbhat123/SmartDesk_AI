@@ -10,6 +10,10 @@ judge-rejected draft, an unanswerable question or an outage, and the ticket and 
 Entries carry the KB version; one made for another version (another process re-ingested) is never served. The cache must
 never break a chat turn: any backend error is a miss (FR-F7).
 
+Backends (FR-F6, FR-F7): `MemoryBackend` is the default and the substitute; `RedisBackend` is used when REDIS_URL is set
+and reachable. `FallbackBackend` runs the cache in memory while Redis fails and asks Redis again after a wait, so a
+Redis outage costs hits, never a turn. The KB change (FR-H6) clears the whole cache through `clear_answers`.
+
 Semantic stage: when the exact key misses, the question is embedded (one embedding call, counted by the caller's costed
 embedder, FR-H7) and compared with the stored questions' vectors of the same domain and KB version. The nearest one at or
 above the config cut-off (`thresholds.semantic_cache_cutoff`, high on purpose) is a semantic hit. The vector of that
@@ -22,13 +26,16 @@ import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import BaseModel
 
 from smartdesk_ai.agent.state import Domain, PartResult
+from smartdesk_ai.config.env import EnvSettings
+from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.pii import EMAIL, PLACEHOLDERS
 from smartdesk_ai.ops.cache_log import CacheLog
+from smartdesk_ai.ops.health import Component, HealthRegistry
 from smartdesk_ai.ops.runtime import salted_digest
 
 logger = logging.getLogger(__name__)
@@ -76,6 +83,148 @@ class MemoryBackend:
     def __len__(self) -> int:
         with self._lock:
             return len(self._data)
+
+
+class RedisBackend:
+    """Entries in one Redis hash, with a sorted set of write times to find the oldest. The client must decode
+    responses to str (`redis_from_url` does)."""
+
+    def __init__(self, client: Any, *, namespace: str, max_entries: int) -> None:
+        self._client, self._max = client, max_entries
+        self._hash, self._order = f"{namespace}:entries", f"{namespace}:order"
+        self._lock = threading.Lock()
+        self._last = 0.0
+
+    @staticmethod
+    def _text(value: Any) -> str | None:
+        return value.decode() if isinstance(value, bytes) else value
+
+    def _next_score(self) -> float:
+        with self._lock:  # strictly increasing, so "oldest" is never a tie
+            self._last = max(time.time(), self._last + 1e-6)
+            return self._last
+
+    def get(self, key: str) -> str | None:
+        return self._text(self._client.hget(self._hash, key))
+
+    def put(self, key: str, value: str) -> None:
+        self._client.hset(self._hash, key, value)
+        self._client.zadd(self._order, {key: self._next_score()})
+        excess = self._client.hlen(self._hash) - self._max
+        if excess > 0:
+            dropped = [self._text(member) for member, _ in self._client.zpopmin(self._order, excess)]
+            if dropped:
+                self._client.hdel(self._hash, *dropped)
+
+    def entries(self) -> list[tuple[str, str]]:
+        return [(self._text(k), self._text(v)) for k, v in self._client.hgetall(self._hash).items()]
+
+    def clear(self) -> None:
+        self._client.delete(self._hash, self._order)
+
+    def __len__(self) -> int:
+        return int(self._client.hlen(self._hash))
+
+
+class FallbackBackend:
+    """Use `primary` (Redis); while it fails, use `fallback` (memory) and ask the primary again only after
+    `retry_after` seconds. `on_down(error)` runs for each failed attempt, `on_up()` when the primary answers again,
+    after which the memory entries made during the outage are dropped (they could be stale by the next one)."""
+
+    def __init__(
+        self,
+        primary: CacheBackend,
+        fallback: CacheBackend,
+        *,
+        retry_after: float,
+        on_down: Callable[[Exception], None],
+        on_up: Callable[[], None],
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
+        self._primary, self._fallback = primary, fallback
+        self._retry_after, self._on_down, self._on_up, self._clock = retry_after, on_down, on_up, clock
+        self._lock = threading.Lock()
+        self._retry_at = 0.0
+        self._down = False
+
+    def _call(self, name: str, *args: Any) -> Any:
+        now = self._clock()
+        with self._lock:
+            may_try = now >= self._retry_at
+        if may_try:
+            try:
+                result = getattr(self._primary, name)(*args)
+            except Exception as error:
+                with self._lock:
+                    self._retry_at, self._down = now + self._retry_after, True
+                self._on_down(error)
+            else:
+                with self._lock:
+                    recovered, self._down = self._down, False
+                if recovered:
+                    self._fallback.clear()
+                    self._on_up()
+                return result
+        return getattr(self._fallback, name)(*args)
+
+    def get(self, key: str) -> str | None:
+        return self._call("get", key)
+
+    def put(self, key: str, value: str) -> None:
+        self._call("put", key, value)
+
+    def entries(self) -> list[tuple[str, str]]:
+        return self._call("entries")
+
+    def clear(self) -> None:
+        self._fallback.clear()
+        self._call("clear")
+
+    def __len__(self) -> int:
+        return self._call("__len__")
+
+
+def redis_from_url(url: str, timeout: float) -> Any:
+    import redis
+
+    return redis.Redis.from_url(url, decode_responses=True, socket_connect_timeout=timeout, socket_timeout=timeout)
+
+
+def open_backend(
+    settings: Settings,
+    env: EnvSettings,
+    registry: HealthRegistry,
+    *,
+    mode: str,
+    client_factory: Callable[[str, float], Any] | None = None,
+) -> CacheBackend:
+    """Redis when REDIS_URL is set and answers a ping, otherwise memory (FR-F6, FR-F7). A failure is a degraded mode
+    on the health registry (the exception type only: a message could echo the URL) and never an error. `mode` keeps
+    the mock and live caches apart in a shared Redis."""
+    cfg = settings.cache
+    memory = MemoryBackend(cfg.max_entries)
+    if not env.redis_url:
+        return memory  # the registry already lists the missing URL as a degraded mode
+    started = time.perf_counter()
+    try:
+        client = (client_factory or redis_from_url)(env.redis_url, cfg.redis_timeout_seconds)
+        client.ping()
+    except Exception as error:
+        registry.mark_degraded(Component.REDIS, type(error).__name__, time.perf_counter() - started)
+        return memory
+    registry.mark_ok(Component.REDIS, time.perf_counter() - started)
+    return FallbackBackend(
+        RedisBackend(client, namespace=f"smartdesk:answers:{mode}", max_entries=cfg.max_entries), memory,
+        retry_after=cfg.redis_retry_seconds,
+        on_down=lambda error: registry.mark_degraded(Component.REDIS, type(error).__name__),
+        on_up=lambda: registry.mark_ok(Component.REDIS))
+
+
+def clear_answers(backend: CacheBackend, log: CacheLog | None = None) -> None:
+    """The KB changed (FR-H6): drop every cached answer."""
+    backend.clear()
+    if log is not None:
+        log.record("clear")
 
 
 class CachedAnswer(BaseModel):
@@ -213,8 +362,7 @@ class AnswerCache:
 
     def clear(self) -> None:
         """The KB changed (FR-H6): drop every answer."""
-        self.backend.clear()
-        self._record("clear")
+        clear_answers(self.backend, self._log)
 
     def _record(self, event, **fields) -> None:
         if self._log is not None:

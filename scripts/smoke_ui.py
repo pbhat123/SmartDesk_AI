@@ -216,6 +216,7 @@ def step_repeated_kb_question(b: Browser, work: Path) -> None:
     b.page.get_by_text("Cache: hit (exact)").first.wait_for(timeout=b.timeout)
     log = work / "data" / "cache.jsonl"
     events = [json.loads(line)["event"] for line in log.read_text().splitlines()] if log.exists() else []
+    events = [e for e in events if e != "clear"]  # the start-up ingest of a fresh data folder clears the cache once
     check(events == ["miss", "hit_exact"], f"expected the cache log to show a miss then an exact hit, got {events}")
 
 

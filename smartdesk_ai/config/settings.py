@@ -220,6 +220,8 @@ class Drift(_Strict):
 class CacheSettings(_Strict):
     enabled: bool  # false: every KB question is searched and answered (evals and drift runs also bypass it)
     max_entries: Annotated[int, Field(gt=0)]  # the oldest entries go first once the cache is full
+    redis_timeout_seconds: Annotated[float, Field(gt=0)]  # connect and read timeout of the optional Redis (FR-F6)
+    redis_retry_seconds: Annotated[float, Field(gt=0)]  # after a Redis failure the cache runs in memory this long
 
 
 class Settings(_Strict):

@@ -40,8 +40,8 @@ from smartdesk_ai.llm.mock import (
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
 from smartdesk_ai.guardrails.pii import PiiRedactor
-from smartdesk_ai.ops.cache import AnswerCache, MemoryBackend
-from smartdesk_ai.ops.cache_log import CacheLog
+from smartdesk_ai.ops.cache import AnswerCache, clear_answers, open_backend
+from smartdesk_ai.ops.cache_log import CACHE_LOG_FILE, CacheLog
 from smartdesk_ai.ops.budget import BudgetController, SpendStore
 from smartdesk_ai.ops.cost import CostedEmbeddings, CostTracker
 from smartdesk_ai.ops.compaction import Compactor, make_summarizer
@@ -75,7 +75,6 @@ OPS_DB = "ops.db"  # daily spend and rate-limit counters
 SKIPPED_IN_MOCK = "skipped in mock mode"
 HITL_LOG = "hitl.jsonl"  # approvals, rejections and edits at the ticket gate (FR-H4); the Monitoring tab reads it
 TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab reads them
-CACHE_LOG = "cache.jsonl"  # one line per KB cache lookup; the Monitoring tab reads it
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
 
 
@@ -149,6 +148,10 @@ def build_stack(
     quiet_sdk_loggers()
     configure_mask_salt(env.mask_salt.get_secret_value() if env.mask_salt else None)
     live = settings.modes.llm == "live"
+    cache_backend = None
+    if use_cache and settings.cache.enabled:
+        cache_backend = open_backend(settings, env, registry, mode=settings.modes.llm)
+    cache_log = CacheLog(Path(data_dir) / CACHE_LOG_FILE)
     reranker = None
     embeddings: Embeddings
     search_settings = settings
@@ -164,7 +167,9 @@ def build_stack(
     else:
         embeddings = HashingEmbeddings()
         index_dir = Path(data_dir) / "index_mock"
-        ingest(kb_dir, index_dir, embeddings, settings.chunking)  # idempotent, offline
+        # idempotent, offline; a changed KB clears the answer cache (FR-H6)
+        ingest(kb_dir, index_dir, embeddings, settings.chunking,
+               on_kb_changed=None if cache_backend is None else lambda report: clear_answers(cache_backend, cache_log))
         # Hashing vectors score lower than the real embeddings, so retrieval uses its own mock threshold.
         search_settings = settings.model_copy(update={"thresholds": settings.thresholds.model_copy(
             update={"escalation": settings.thresholds.escalation_mock})})
@@ -228,10 +233,10 @@ def build_stack(
     prompt_tokens = len(load_prompt("compaction", settings).text) // 3  # a generous size estimate
     answerer = make_answerer(settings, builder=answer_b, judge=make_grounding_judge(settings, builder=judge_b))
     cache = None
-    if use_cache and settings.cache.enabled:
-        cache = AnswerCache(MemoryBackend(settings.cache.max_entries), kb_version=kb_version(settings, index_dir),
+    if cache_backend is not None:
+        cache = AnswerCache(cache_backend, kb_version=kb_version(settings, index_dir),
                             embed=costed_embeddings.embed_query, cutoff=settings.thresholds.semantic_cache_cutoff,
-                            log=CacheLog(Path(data_dir) / CACHE_LOG))
+                            log=cache_log)
     graph = build_kb_graph(
         KBDeps(executor=executor, answer=answerer, cache=cache),
         make_checkpointer(Path(data_dir) / CHECKPOINT_DB, STATE_MODELS),

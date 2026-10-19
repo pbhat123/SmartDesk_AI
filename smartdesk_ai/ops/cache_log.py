@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ValidationError
 
+CACHE_LOG_FILE = "cache.jsonl"  # in the data folder; the Monitoring tab reads it
+
 CacheEvent = Literal["hit_exact", "hit_semantic", "miss", "clear"]
 
 

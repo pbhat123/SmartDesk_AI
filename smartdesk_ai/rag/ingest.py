@@ -166,7 +166,26 @@ def ingest(
     return report
 
 
-def main(argv: list[str] | None = None) -> int:
+def _redis_cache_clearer(args: argparse.Namespace, settings, environ) -> Callable[[IngestReport], None] | None:
+    """When REDIS_URL is set, a handler that clears the shared answer cache after a KB change (FR-H6). A running app's
+    in-memory cache cannot be reached from here; it ignores old answers by itself (they carry the KB version)."""
+    from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
+    from smartdesk_ai.ops.cache import MemoryBackend, clear_answers, open_backend
+    from smartdesk_ai.ops.cache_log import CACHE_LOG_FILE, CacheLog
+    from smartdesk_ai.ops.health import HealthRegistry
+
+    env = load_env(environ=environ, dotenv_path=DEFAULT_DOTENV if environ is None else None)
+    if not env.redis_url:
+        return None
+    backend = open_backend(settings, env, HealthRegistry(), mode="mock" if args.mock else settings.modes.llm)
+    if isinstance(backend, MemoryBackend):
+        print("Redis is set but not reachable: the shared answer cache was not cleared.", file=sys.stderr)
+        return None
+    log = CacheLog(Path(args.index_dir).parent / CACHE_LOG_FILE)
+    return lambda report: clear_answers(backend, log)
+
+
+def main(argv: list[str] | None = None, *, environ: dict[str, str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build or refresh the KB indexes (idempotent).")
     parser.add_argument("--kb-dir", type=Path, default=DEFAULT_KB_DIR)
     parser.add_argument("--index-dir", type=Path, default=DEFAULT_INDEX_DIR)
@@ -175,7 +194,8 @@ def main(argv: list[str] | None = None) -> int:
     settings = load_settings()
     embeddings = HashingEmbeddings() if args.mock else get_embeddings(settings)
     try:
-        report = ingest(args.kb_dir, args.index_dir, embeddings, settings.chunking)
+        report = ingest(args.kb_dir, args.index_dir, embeddings, settings.chunking,
+                        on_kb_changed=_redis_cache_clearer(args, settings, environ))
     except (IngestError, KBValidationError) as exc:
         print(f"ingest failed: {exc}", file=sys.stderr)
         return 1

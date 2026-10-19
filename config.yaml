@@ -137,6 +137,8 @@ prompts:
 cache:
   enabled: true
   max_entries: 1000
+  redis_timeout_seconds: 2
+  redis_retry_seconds: 30
 
 # Drift check (FR-H15): re-runs the golden set (KB set plus gap set) and stores the metrics. The estimate shown before a
 # live run is the per-question token use measured in the live gap run of 2026-10-18 (spend ledger run fed9cc6c090c:

@@ -345,3 +345,59 @@ def test_starting_the_app_on_an_edited_kb_clears_the_shared_redis_cache(settings
     edit_first_policy(kb_copy)
     mock_stack(settings, kb_copy, tmp_path, client, monkeypatch)  # a restart: its ingest sees the edit
     assert client.hlen("smartdesk:answers:mock:entries") == 0
+
+
+# --- the size bound holds when the order set and the hash disagree (deterministic, no threads) ---------------------
+
+class ClearBetweenTheWrites(FakeRedis):
+    """A `clear()` from another thread lands between one put's `hset` and its `zadd`, once: the put then leaves a name in
+    the order set that is in no hash. This is the interleaving behind the rare size-bound failure under threads."""
+
+    def __init__(self):
+        super().__init__()
+        self.armed = False
+
+    def zadd(self, name, mapping):
+        if self.armed:
+            self.armed = False
+            self.delete("ns:entries", "ns:order")
+        super().zadd(name, mapping)
+
+
+def test_a_clear_between_a_puts_two_writes_does_not_break_the_size_bound():
+    client = ClearBetweenTheWrites()
+    backend = RedisBackend(client, namespace="ns", max_entries=3)
+    client.armed = True
+    backend.put("lost", "x")  # its hash entry is wiped by the clear, its name stays in the order set
+    assert len(backend) == 0
+    for key in "abcdef":
+        backend.put(key, key)
+        assert len(backend) <= 3, f"over the bound after putting {key}"
+    assert sorted(k for k, _ in backend.entries()) == ["d", "e", "f"], "the newest three survive"
+
+
+def test_names_in_the_order_set_that_are_in_no_hash_are_skipped_not_counted():
+    client = FakeRedis()
+    backend = RedisBackend(client, namespace="ns", max_entries=2)
+    client.zadd("ns:order", {"ghost1": 0.1, "ghost2": 0.2, "ghost3": 0.3})
+    for key in "abcd":
+        backend.put(key, key)
+    assert sorted(k for k, _ in backend.entries()) == ["c", "d"]
+
+
+def test_entries_missing_from_the_order_set_are_still_evicted_to_keep_the_bound():
+    client = FakeRedis()
+    backend = RedisBackend(client, namespace="ns", max_entries=3)
+    for key in "vwxyz":  # written without an order entry, as a half-finished put or an older writer would leave them
+        client.hset("ns:entries", key, key)
+    backend.put("new", "n")
+    assert len(backend) <= 3 and backend.get("new") == "n", "the bound holds and the new entry is the one kept"
+
+
+def test_the_bound_holds_through_overwrites_and_evictions(new_backend):
+    backend = new_backend(3)
+    for round_ in range(3):
+        for key in "abcde":
+            backend.put(key, f"{key}{round_}")
+            assert len(backend) <= 3
+    assert len(backend) == 3

@@ -110,11 +110,30 @@ class RedisBackend:
     def put(self, key: str, value: str) -> None:
         self._client.hset(self._hash, key, value)
         self._client.zadd(self._order, {key: self._next_score()})
-        excess = self._client.hlen(self._hash) - self._max
-        if excess > 0:
-            dropped = [self._text(member) for member, _ in self._client.zpopmin(self._order, excess)]
-            if dropped:
-                self._client.hdel(self._hash, *dropped)
+        self._trim(keep=key)
+
+    def _trim(self, keep: str) -> None:
+        """Evict the oldest entries until the hash is within its bound. The put is several Redis calls, not one atomic
+        step, so another thread's `clear()` (or a half-finished put, or an older writer) can leave the order set naming
+        entries that are in no hash, or the hash holding entries that are not in the order set. Evicting a fixed count
+        from the order set would then drop nothing real and leave the cache over its bound; so this looks at the hash's
+        real size each time round, skips names that are in no hash, and, with nothing left in the order set to evict by,
+        drops other entries of the hash. It always makes progress, and never evicts `keep`, the entry just written."""
+        while True:
+            excess = int(self._client.hlen(self._hash)) - self._max
+            if excess <= 0:
+                return
+            popped = [self._text(member) for member, _ in self._client.zpopmin(self._order, excess)]
+            if keep in popped:  # the entry just written is the oldest the order set knows: put it back, evict others
+                popped.remove(keep)
+                self._client.zadd(self._order, {keep: self._next_score()})
+            if popped:
+                self._client.hdel(self._hash, *popped)  # a phantom name deletes nothing; the next round goes on
+                continue
+            stray = [k for k, _ in self.entries() if k != keep][:excess]
+            if not stray:
+                return
+            self._client.hdel(self._hash, *stray)
 
     def entries(self) -> list[tuple[str, str]]:
         return [(self._text(k), self._text(v)) for k, v in self._client.hgetall(self._hash).items()]

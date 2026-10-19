@@ -700,6 +700,7 @@ Dense fails where the query is a bare token: `icc@smartdesk.example` never reach
 |---|---|---|---|---|---|
 | T6.8 | Drift check on the golden set (74 questions) | `python -m smartdesk_ai.ops.drift` (shows the estimate, asks `yes`) | about $0.35 | 2x | any time you approve |
 | T6.12 | Right-sizing comparison, tier map against all-Main: 12 scenario scripts per configuration, 53 KB questions, Ragas judge | `python -m evals.tier_comparison --confirm-spend` | about $1.29 (KB set run once: the answer path is Main in both); $2.50 with `--kb-both` | 2x the estimate ($2.57) | combined with T7.11 after Phase 7, so the worker and synthesizer tiers are in the comparison |
+| T6.10 | Re-measure the semantic cache on the orchestrator's rewritten sub-questions (the cache key), after Phase 7: paraphrase cosines of the rewritten forms, and a near-miss pair set (for example sick against casual leave, same topic, different answer) added to the different-answer evidence | `python -m evals.cache_cutoff --embed-new` (extended with the rewrites and the near-miss set) | about $0.01 | n/a | after Phase 7; re-tune `thresholds.semantic_cache_cutoff` only if rewriting closes the gap, keeping it at least 0.10 above the new different-answer maximum |
 
 ## 15. Phase 6 UI build notes (mock only)
 
@@ -787,6 +788,7 @@ Streamlit runs every rerun on its own thread and the app context is one shared o
 The live log shows edits are counted when they happen: `hitl.jsonl` has `edit` at 23:55:42 and 23:59:32, the same seconds as `t_confirm, t_apply_edit` in the trace, and the `yes` five seconds later at 23:55:47 and 23:59:35. That session had no "no", so the only rejection in the totals is the one from the earlier session. An approval is counted at the gate decision, before `t_create` runs, so the three `yes` lines of the crashed session are approvals whose ticket creation then failed with the SQLite error; tests pin both behaviours.
 
 ## 18. T9.1 README notes (collect here until the root README.md exists)
+- **Semantic cache finding (2026-10-19, `evals/results/cache_cutoff.json`).** With `text-embedding-3-small`, 15 held-out paraphrase pairs score cosine 0.56 to 0.84 (median 0.74), while the highest cosine between questions that need different answers is 0.734 (3,881 pairs). The ranges overlap, so a cut-off 0.10 above the different-answer maximum (0.84) catches only 1 of 15 paraphrases. The exact-match cache does the real work; the semantic cache is a safe extra that rarely fires. It is re-measured on the orchestrator's rewritten sub-questions after Phase 7 (section 14.5).
 - KB links use the reserved .example domain (RFC 2606) and don't resolve; they're part of the fictional company's KB. (`https://id.smartdesk.example/reset` is in 5 entries: IT-PWD-01, IT-PWD-02, IT-VPN-02, IT-SEC-01, IT-EQUIP-03; `https://helpdesk.smartdesk.example` is in 13: IT-HELP-01, IT-VPN-02, IT-SW-01, IT-SW-03, IT-WIFI-01, IT-WIFI-02 (as `/wifi` only), IT-MAIL-02, IT-EQUIP-01 to IT-EQUIP-04, HR-ABOUT-01, HR-PAY-02. Checked 2026-10-19 against the indexed entries.)
 
 ### 17.4 `scripts/smoke_ui.py` (definition of done)

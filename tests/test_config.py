@@ -78,7 +78,7 @@ def test_thresholds_present_and_in_unit_range(settings):
     for value in (t.escalation, t.routing_confidence,
                   t.semantic_cache_cutoff, t.injection_heuristic):
         assert 0.0 < value < 1.0
-    assert t.semantic_cache_cutoff >= 0.8  # "high similarity cut-off": 0.10 above the highest different-answer pair, measured (cache_cutoff.json)
+    assert t.semantic_cache_cutoff >= 0.8  # SPEC section 4: set from evidence, 0.10 above the highest different-answer pair (cache_cutoff.json)
 
 
 def test_retrieval_and_chunking_match_spec(settings):

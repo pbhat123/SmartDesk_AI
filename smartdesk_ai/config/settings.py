@@ -217,6 +217,17 @@ class Drift(_Strict):
     ceiling_multiplier: Annotated[float, Field(ge=1)]  # a run stops once spend passes estimate x this
 
 
+class TokenPair(_Strict):
+    main_input: Annotated[int, Field(gt=0)]
+    main_output: Annotated[int, Field(gt=0)]
+
+
+class TierComparison(_Strict):
+    ragas_judge_tokens: TokenPair  # one Ragas judge pass over the KB set, measured (FR-H17 comparison estimate)
+    output_tokens_per_call: Annotated[int, Field(gt=0)]  # a mock reply is short; live replies average this many
+    ceiling_multiplier: Annotated[float, Field(ge=1)]  # a live comparison stops once its spend passes estimate x this
+
+
 class CacheSettings(_Strict):
     enabled: bool  # false: every KB question is searched and answered (evals and drift runs also bypass it)
     max_entries: Annotated[int, Field(gt=0)]  # the oldest entries go first once the cache is full
@@ -244,6 +255,7 @@ class Settings(_Strict):
     reasoning_effort: dict[str, Effort]  # per-task override on the Main tier
     drift: Drift
     cache: CacheSettings
+    tier_comparison: TierComparison
 
     @field_validator("reasoning_effort")
     @classmethod

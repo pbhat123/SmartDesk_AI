@@ -8,7 +8,7 @@ tokens are counted but nothing is priced, so mock runs never touch the real dail
 """
 import threading
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
@@ -42,6 +42,25 @@ class CostEntry(BaseModel):
     usd: float = 0.0
 
 
+def llm_usd(settings: Settings, tier: Tier, input_tokens: int, cached_tokens: int, output_tokens: int) -> float:
+    """Config prices times tokens for one call on `tier`; cached input is billed at the cached rate."""
+    price = getattr(settings.models, tier).price
+    fresh = max(input_tokens - cached_tokens, 0)
+    return (fresh * price.input + cached_tokens * price.cached_input + output_tokens * price.output) / 1_000_000
+
+
+def price_entries(entries: Iterable[CostEntry], settings: Settings) -> float:
+    """What these entries cost at the config prices, whether or not the tracker priced them. A mock run counts real
+    prompt tokens but bills nothing; this prices them as if the tiers had been called (the tier comparison, FR-H17)."""
+    total = 0.0
+    for entry in entries:
+        if entry.step == "llm" and entry.tier is not None:
+            total += llm_usd(settings, entry.tier, entry.input_tokens, entry.cached_tokens, entry.output_tokens)
+        elif entry.step == "embedding":
+            total += entry.input_tokens * settings.models.embedding.price.input / 1_000_000
+    return total
+
+
 class CostTracker:
     def __init__(
         self,
@@ -60,11 +79,7 @@ class CostTracker:
         self._unwritten: list[CostEntry] = []
 
     def llm_usd(self, tier: Tier, input_tokens: int, cached_tokens: int, output_tokens: int) -> float:
-        if not self._priced:
-            return 0.0
-        price = getattr(self._settings.models, tier).price
-        fresh = max(input_tokens - cached_tokens, 0)
-        return (fresh * price.input + cached_tokens * price.cached_input + output_tokens * price.output) / 1_000_000
+        return llm_usd(self._settings, tier, input_tokens, cached_tokens, output_tokens) if self._priced else 0.0
 
     def _add(self, ctx: RequestContext | None, **fields) -> CostEntry:
         entry = CostEntry(

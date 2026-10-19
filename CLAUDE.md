@@ -21,6 +21,7 @@ pytest                                   # unit tests (mock mode, no network)
 python scripts/smoke_ui.py               # real Streamlit server + browser, mock mode, temp data (about 15 s); needs Playwright
 scripts/install_hooks.sh                 # once per clone: pre-commit hook runs pytest and blocks a commit on any failure
 python -m evals.run                      # Ragas + retrieval ablations
+python -m evals.tier_comparison          # right-sizing comparison: prints the estimate and stops (--mock is free, --confirm-spend runs it live)
 python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows the cost estimate, asks to confirm (--estimate only prints it)
 ```
 

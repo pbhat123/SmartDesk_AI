@@ -21,10 +21,11 @@ from evals.common import EVALS_DIR
 from evals.harness import Resources
 from evals.scenario_check import check_turn
 from evals.scenario_schema import Scenario, load_scenario
-from smartdesk_ai.agent.factory import build_stack
+from smartdesk_ai.agent.factory import AgentStack, build_stack
 from smartdesk_ai.agent.graph import run_turn
 from smartdesk_ai.agent.state import new_thread_id
 from smartdesk_ai.config.settings import Settings
+from smartdesk_ai.ops.cost import CostEntry
 from smartdesk_ai.ops.health import Component, HealthRegistry
 from smartdesk_ai.ops.metrics import percentile
 from smartdesk_ai.ops.runtime import RequestContext, request_scope
@@ -44,6 +45,7 @@ class TurnRun(BaseModel):
     tokens: int = 0
     usd: float = 0.0
     problems: list[str] = Field(default_factory=list)
+    entries: list[CostEntry] = Field(default_factory=list, exclude=True)  # this turn's cost entries (the tier comparison reads them)
 
 
 class TaskRun(BaseModel):
@@ -120,18 +122,27 @@ def _failed_reply(reply: str) -> bool:
     return any(phrase in reply.lower() for phrase in FAILURE_PHRASES)
 
 
+StackBuilder = Callable[[Settings, Path, MockTicketClient, HealthRegistry], AgentStack]
+
+
+def mock_stack(settings: Settings, data_dir: Path, client: MockTicketClient, registry: HealthRegistry) -> AgentStack:
+    return build_stack(settings, environ={}, dotenv_path=None, data_dir=data_dir, use_cache=False,
+                       registry=registry, client=client)
+
+
 def run_scenarios(
-    scenarios: Sequence[Scenario], settings: Settings, work_dir: Path, *, clock: Callable[[], float] = time.perf_counter
+    scenarios: Sequence[Scenario], settings: Settings, work_dir: Path, *, clock: Callable[[], float] = time.perf_counter,
+    build: StackBuilder = mock_stack, after_task: Callable[[TaskRun], None] | None = None,
 ) -> list[TaskRun]:
-    """Run each script on its own fresh app (mock models and mock tickets) and time every turn."""
+    """Run each script on its own fresh app (mock models and mock tickets by default) and time every turn.
+    `build` makes the app (the tier comparison passes a live one); `after_task` sees each finished task and may stop the run."""
     runs = []
     for scenario in scenarios:
         client = MockTicketClient()
         registry = HealthRegistry()
         for component in scenario.setup.degraded:
             registry.mark_degraded(_DEGRADE[component], "scripted degraded mode")
-        stack = build_stack(settings, environ={}, dotenv_path=None, data_dir=work_dir / scenario.id, use_cache=False,
-                            registry=registry, client=client)
+        stack = build(settings, work_dir / scenario.id, client, registry)
         client.unreachable = scenario.setup.github == "down"  # after the demo tickets were seeded
         session = new_thread_id()
         turns = []
@@ -157,8 +168,10 @@ def run_scenarios(
             turns.append(TurnRun(
                 matched=not problems, failed=failed, latency_ms=latency, steps=steps,
                 tokens=sum(e.input_tokens + e.output_tokens for e in mine), usd=sum(e.usd for e in mine),
-                problems=problems))
+                problems=problems, entries=mine))
         runs.append(TaskRun(id=scenario.id, kind=scenario.kind, turns=turns))
+        if after_task is not None:
+            after_task(runs[-1])
     return runs
 
 

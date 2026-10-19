@@ -140,6 +140,15 @@ cache:
   redis_timeout_seconds: 2
   redis_retry_seconds: 30
 
+# Right-sizing comparison (FR-H17): the estimate shown before a live run. The Ragas judge tokens are one judge pass over
+# the KB set (ledger run 3d93b4adb21b, 2026-10-18: 773,215 input and 83,220 output tokens, rounded up). A mock run has
+# real prompts but short replies, so each LLM call is priced with at least output_tokens_per_call output tokens (the live
+# gap run of 2026-10-18 averaged 87 per chat call: 18,895 over 217). The run stops past estimate x ceiling_multiplier.
+tier_comparison:
+  ragas_judge_tokens: {main_input: 780000, main_output: 84000}
+  output_tokens_per_call: 90
+  ceiling_multiplier: 2.0
+
 # Drift check (FR-H15): re-runs the golden set (KB set plus gap set) and stores the metrics. The estimate shown before a
 # live run is the per-question token use measured in the live gap run of 2026-10-18 (spend ledger run fed9cc6c090c:
 # 74 questions, 348,948 main input, 18,895 main output and 1,250 embedding tokens), rounded up. The run stops, and stores

@@ -1,34 +1,40 @@
 {
   "model": "text-embedding-3-small",
   "skipped_not_cached": 0,
-  "different_answer_pairs": 3881,
+  "different_answer_pairs": 3897,
   "highest_different_answer": [
+    {
+      "cosine": 0.8641,
+      "a": "near-08",
+      "b": "near-miss"
+    },
+    {
+      "cosine": 0.8137,
+      "a": "near-02",
+      "b": "near-miss"
+    },
     {
       "cosine": 0.7336,
       "a": "gap-014",
       "b": "kb-025"
     },
     {
+      "cosine": 0.7118,
+      "a": "near-04",
+      "b": "near-miss"
+    },
+    {
       "cosine": 0.6672,
       "a": "lex-010",
       "b": "lex-013"
-    },
-    {
-      "cosine": 0.6502,
-      "a": "gap-013",
-      "b": "kb-053"
-    },
-    {
-      "cosine": 0.6278,
-      "a": "lex-008",
-      "b": "lex-010"
-    },
-    {
-      "cosine": 0.6171,
-      "a": "lex-004",
-      "b": "lex-005"
     }
   ],
+  "near_miss_pairs": {
+    "n": 16,
+    "min": 0.23193090909666947,
+    "median": 0.5227296116234369,
+    "max": 0.864082476269105
+  },
   "same_entry_pairs": {
     "n": 17,
     "min": 0.20207505085813277,
@@ -41,8 +47,8 @@
     "median": 0.4318081523368784,
     "max": 0.6330828985285342
   },
-  "embedding_api_calls": 30,
-  "embedding_cost_usd": 7.92e-06,
+  "embedding_api_calls": 48,
+  "embedding_cost_usd": 9.24e-06,
   "paraphrase_pairs": {
     "n": 15,
     "min": 0.562111632185502,
@@ -66,20 +72,113 @@
       0.8429
     ]
   },
-  "recommendation": {
-    "floor": 0.84,
-    "recommended": 0.84,
-    "paraphrase_hits_at_recommended": 1,
-    "paraphrase_hits_at_0.95": 0,
-    "n_paraphrases": 15,
-    "hit_rate_by_cutoff": {
-      "0.70": 10,
-      "0.75": 6,
-      "0.80": 3,
-      "0.85": 0,
-      "0.90": 0,
-      "0.95": 0
+  "rewrite_pairs": {
+    "n": 8,
+    "identical_not_paired": 16,
+    "min": 0.7503219465895299,
+    "median": 0.9794566973154171,
+    "max": 0.9917298131525232,
+    "cosines": {
+      "cmp-003-p2": 0.9875,
+      "cmp-004-p1": 0.7503,
+      "cmp-004-p2": 0.9824,
+      "cmp-005-p2": 0.9891,
+      "cmp-006-p2": 0.8078,
+      "cmp-008-p2": 0.8642,
+      "cmp-011-p2": 0.9765,
+      "cmp-014-p2": 0.9917
     }
   },
-  "configured_cutoff": 0.95
+  "near_miss_cosines": [
+    {
+      "id": "near-01",
+      "cosine": 0.4844
+    },
+    {
+      "id": "near-02",
+      "cosine": 0.8137
+    },
+    {
+      "id": "near-03",
+      "cosine": 0.4475
+    },
+    {
+      "id": "near-04",
+      "cosine": 0.7118
+    },
+    {
+      "id": "near-05",
+      "cosine": 0.5548
+    },
+    {
+      "id": "near-06",
+      "cosine": 0.4918
+    },
+    {
+      "id": "near-07",
+      "cosine": 0.6493
+    },
+    {
+      "id": "near-08",
+      "cosine": 0.8641
+    },
+    {
+      "id": "near-09",
+      "cosine": 0.4406
+    },
+    {
+      "id": "near-10",
+      "cosine": 0.5459
+    },
+    {
+      "id": "near-11",
+      "cosine": 0.4996
+    },
+    {
+      "id": "near-12",
+      "cosine": 0.5753
+    },
+    {
+      "id": "near-13",
+      "cosine": 0.2319
+    },
+    {
+      "id": "near-14",
+      "cosine": 0.3949
+    },
+    {
+      "id": "near-15",
+      "cosine": 0.3722
+    },
+    {
+      "id": "near-16",
+      "cosine": 0.6388
+    }
+  ],
+  "recommendation": {
+    "floor": 0.97,
+    "recommended": 0.97,
+    "paraphrase_hits_at_recommended": 5,
+    "paraphrase_hits_at_0.95": 5,
+    "n_paraphrases": 23,
+    "hit_rate_by_cutoff": {
+      "0.70": 18,
+      "0.75": 14,
+      "0.80": 10,
+      "0.85": 6,
+      "0.90": 5,
+      "0.95": 5
+    }
+  },
+  "configured_cutoff": 0.84,
+  "verdict": {
+    "configured": 0.84,
+    "highest_different_answer": 0.8641,
+    "floor": 0.97,
+    "recommended": 0.97,
+    "paraphrases": 23,
+    "hits_at_configured": 7,
+    "hits_at_recommended": 5,
+    "action": "raise to at least 0.97"
+  }
 }

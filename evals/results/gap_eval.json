@@ -3,8 +3,12 @@
   "n_gap": 21,
   "n_kb": 53,
   "gap_pass_rate": 1.0,
-  "kb_answer_rate": 0.9622641509433962,
-  "escalation_precision": 0.9130434782608695,
+  "kb_answer_rate": 0.9811320754716981,
+  "kb_answered_with_citations": 0.9811320754716981,
+  "kb_not_cited": [
+    "kb-041"
+  ],
+  "escalation_precision": 0.9545454545454546,
   "escalation_recall": 1.0,
   "by_split": {
     "dev": {
@@ -13,7 +17,7 @@
     },
     "test": {
       "gap_pass_rate": 1.0,
-      "kb_answer_rate": 0.9615384615384616
+      "kb_answer_rate": 1.0
     }
   },
   "grey_zone_pass_rate": 1.0,
@@ -24,534 +28,608 @@
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-002",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-003",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-004",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-005",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-006",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-007",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-008",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-009",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-010",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-011",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "deflected"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-012",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-013",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-014",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-015",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-016",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-017",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-018",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-019",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-020",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-021",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-022",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-023",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-024",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-025",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-026",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-027",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-028",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-029",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-030",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-031",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-032",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-033",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-034",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-035",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-036",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-037",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-038",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-039",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-040",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-041",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "kb-042",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-043",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-044",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-045",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-046",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-047",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-048",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-049",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-050",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-051",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-052",
       "label": "kb",
       "split": "test",
       "grey_zone": false,
-      "outcome": "answered"
+      "outcome": "answered",
+      "cited": true
     },
     {
       "id": "kb-053",
       "label": "kb",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "other"
+      "outcome": "other",
+      "cited": true
     },
     {
       "id": "gap-001",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-002",
       "label": "gap",
       "split": "test",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-003",
       "label": "gap",
       "split": "dev",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-004",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-005",
       "label": "gap",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-006",
       "label": "gap",
       "split": "dev",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-007",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-008",
       "label": "gap",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-009",
       "label": "gap",
       "split": "dev",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-010",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-011",
       "label": "gap",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-012",
       "label": "gap",
       "split": "dev",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-013",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-014",
       "label": "gap",
       "split": "test",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-015",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-016",
       "label": "gap",
       "split": "test",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-017",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-018",
       "label": "gap",
       "split": "test",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-019",
       "label": "gap",
       "split": "dev",
       "grey_zone": true,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-020",
       "label": "gap",
       "split": "dev",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     },
     {
       "id": "gap-021",
       "label": "gap",
       "split": "test",
       "grey_zone": false,
-      "outcome": "escalated"
+      "outcome": "escalated",
+      "cited": false
     }
   ],
   "drift": {
-    "ts": "2026-10-19T22:20:43+00:00",
+    "ts": "2026-10-19T23:49:20+00:00",
     "mode": "live",
-    "faithfulness": 0.9636363636363636,
-    "recall_at_k": 0.9622641509433962,
-    "escalation_rate": 0.3108108108108108,
-    "avg_rerank_score": 0.2657964445795886,
+    "faithfulness": 0.9482758620689655,
+    "recall_at_k": 0.9811320754716981,
+    "escalation_rate": 0.2972972972972973,
+    "avg_rerank_score": 0.2647505933610561,
     "k": 5,
     "n_kb": 53,
     "n_gap": 21,
     "retrieval_strategy": "hybrid_rerank",
     "reranker_status": "ok",
     "prompt_versions": {
-      "orchestrator": 5,
+      "orchestrator": 8,
       "answer": 4,
       "worker_it": 1,
       "worker_hr": 1,
@@ -570,15 +648,455 @@
       "embedding": "text-embedding-3-small",
       "reranker": "BAAI/bge-reranker-base"
     },
-    "usd": 0.339043
+    "usd": 0.239339
   },
   "stopped": null,
-  "single_part_clean": 70,
+  "parts": {
+    "kb-041": [
+      {
+        "part_id": "p1",
+        "text": "A vendor wants to send me a festival hamper. Can I accept it?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.3415490388870239,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          false,
+          false
+        ],
+        "judge_grounded": [
+          true,
+          false
+        ],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "kb-053": [
+      {
+        "part_id": "p1",
+        "text": "How many people work at SmartDesk AI?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.7019482851028442,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          false
+        ],
+        "judge_grounded": [
+          true
+        ],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [
+          "HR-ABOUT-01"
+        ],
+        "answered": true
+      },
+      {
+        "part_id": "p2",
+        "text": "In which cities do people work at SmartDesk AI?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.6742146015167236,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          false
+        ],
+        "judge_grounded": [
+          true
+        ],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [
+          "HR-ABOUT-01",
+          "HR-WFH-01"
+        ],
+        "answered": true
+      }
+    ],
+    "gap-001": [
+      {
+        "part_id": "p1",
+        "text": "Why does my monitor flicker every few minutes?",
+        "domain": "IT",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.2008548378944397,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-002": [],
+    "gap-003": [],
+    "gap-004": [
+      {
+        "part_id": "p1",
+        "text": "Where can I leave my car when I come to the Bengaluru office?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.5439540147781372,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-005": [
+      {
+        "part_id": "p1",
+        "text": "Is there a spot for my motorbike at the Pune site, and does it cost anything?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.3177729845046997,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-006": [
+      {
+        "part_id": "p1",
+        "text": "Can I be reimbursed for parking fees when I visit a customer?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.40028494596481323,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-007": [
+      {
+        "part_id": "p1",
+        "text": "What is on the lunch menu in the cafeteria today?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.21096354722976685,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-008": [
+      {
+        "part_id": "p1",
+        "text": "Is there a canteen in the Pune office and when does it open?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.4021061658859253,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-009": [
+      {
+        "part_id": "p1",
+        "text": "Does the company subsidise food for people who come in on core office days?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.5040943026542664,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-010": [
+      {
+        "part_id": "p1",
+        "text": "How do I reserve a desk for my office days?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.4866231679916382,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-011": [
+      {
+        "part_id": "p1",
+        "text": "Is there an app for booking a seat on the days I come in?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.386033296585083,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-012": [
+      {
+        "part_id": "p1",
+        "text": "I'm in on Wednesday. Can I choose a particular desk near my team?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.44268977642059326,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-013": [
+      {
+        "part_id": "p1",
+        "text": "Does SmartDesk AI have a sabbatical programme?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.5832955241203308,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-014": [
+      {
+        "part_id": "p1",
+        "text": "Can I take a three-month unpaid break after five years with the company?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.44069480895996094,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-015": [
+      {
+        "part_id": "p1",
+        "text": "Is there a bonus if a friend I recommend gets hired?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.4072498083114624,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-016": [
+      {
+        "part_id": "p1",
+        "text": "How much do I receive for referring a candidate who then joins?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.3880351781845093,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-017": [
+      {
+        "part_id": "p1",
+        "text": "Is there a yearly training allowance for courses?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.44566822052001953,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-018": [
+      {
+        "part_id": "p1",
+        "text": "Can the company pay for my cloud certification exam?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.35114115476608276,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-019": [
+      {
+        "part_id": "p1",
+        "text": "How do I claim the fee for an online course I took?",
+        "domain": "HR",
+        "agent": "orchestrator",
+        "retrieval_ok": true,
+        "top_cosine": 0.4196833372116089,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          true
+        ],
+        "judge_grounded": [],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-020": [
+      {
+        "part_id": "p1",
+        "text": "When is the next team offsite?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.3846139907836914,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
+    "gap-021": [
+      {
+        "part_id": "p1",
+        "text": "Is there a company annual day this year?",
+        "domain": "MISC",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.3818979263305664,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true
+        ],
+        "judge_grounded": [],
+        "retried": false,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ]
+  },
+  "single_part_clean": 71,
   "single_part_total": 74,
   "not_clean": [
-    "kb-011",
     "kb-053",
-    "gap-003",
-    "gap-005"
+    "gap-002",
+    "gap-003"
   ]
 }

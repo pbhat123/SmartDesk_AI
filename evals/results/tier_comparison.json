@@ -1,0 +1,326 @@
+{
+  "mock": false,
+  "kb_runs": 1,
+  "results": [
+    {
+      "name": "tier_map",
+      "by_agent": {
+        "orchestrator": {
+          "calls": 19,
+          "input_tokens": 28049,
+          "output_tokens": 619,
+          "usd": 0.01043025
+        },
+        "ticket_draft": {
+          "calls": 4,
+          "input_tokens": 1682,
+          "output_tokens": 140,
+          "usd": 0.0003363
+        },
+        "it_worker": {
+          "calls": 2,
+          "input_tokens": 3960,
+          "output_tokens": 483,
+          "usd": 0.0027243
+        },
+        "grounding_judge": {
+          "calls": 3,
+          "input_tokens": 6130,
+          "output_tokens": 598,
+          "usd": 0.0072885
+        },
+        "chitchat": {
+          "calls": 3,
+          "input_tokens": 845,
+          "output_tokens": 50,
+          "usd": 0.00015675
+        },
+        "hr_worker": {
+          "calls": 1,
+          "input_tokens": 2132,
+          "output_tokens": 79,
+          "usd": 0.0019545
+        },
+        "confirm_parse": {
+          "calls": 3,
+          "input_tokens": 1866,
+          "output_tokens": 75,
+          "usd": 0.0003249
+        }
+      },
+      "n_tasks": 12,
+      "completion_rate": 0.9166666666666666,
+      "task_accuracy": 0.9166666666666666,
+      "usd_per_task": 0.0019347116666666667,
+      "tokens_per_task": 3896.6666666666665,
+      "by_tier": {
+        "main": {
+          "calls": 25,
+          "input_tokens": 40271,
+          "output_tokens": 1779,
+          "usd": 0.022397550000000002
+        },
+        "light": {
+          "calls": 10,
+          "input_tokens": 4393,
+          "output_tokens": 265,
+          "usd": 0.0008179500000000001
+        }
+      },
+      "tasks": [
+        {
+          "id": "api_down",
+          "usd": 0.00043545,
+          "tokens": 1831,
+          "completed": false,
+          "accurate": true
+        },
+        {
+          "id": "degraded_mode",
+          "usd": 0.006941330000000001,
+          "tokens": 9795,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "flow_a",
+          "usd": 0.00530774,
+          "tokens": 9694,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "flow_b",
+          "usd": 0.00117915,
+          "tokens": 4492,
+          "completed": true,
+          "accurate": false
+        },
+        {
+          "id": "flow_c",
+          "usd": 0.00034815,
+          "tokens": 1371,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "kb_answer",
+          "usd": 0.0044523900000000005,
+          "tokens": 5780,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_0",
+          "usd": 0.00034815,
+          "tokens": 1371,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_1",
+          "usd": 0.00034815,
+          "tokens": 1371,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_2plus",
+          "usd": 0.0003474,
+          "tokens": 1370,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "ticket_create_edit",
+          "usd": 0.0005394,
+          "tokens": 2468,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "ticket_create_no",
+          "usd": 0.0005394,
+          "tokens": 2471,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "ticket_create_yes",
+          "usd": 0.00242983,
+          "tokens": 4746,
+          "completed": true,
+          "accurate": true
+        }
+      ],
+      "kb": {
+        "n_questions": 53,
+        "n_answered": 51,
+        "faithfulness": 0.9809847015729369,
+        "hallucination_rate": 0.11764705882352941,
+        "answer_correctness": 0.6156955378398572,
+        "usd": 0.17769825000000006,
+        "usd_per_question": 0.003352797169811322,
+        "judge": "ragas"
+      },
+      "kb_shared": true
+    },
+    {
+      "name": "all_main",
+      "by_agent": {
+        "orchestrator": {
+          "calls": 19,
+          "input_tokens": 28111,
+          "output_tokens": 612,
+          "usd": 0.01200045
+        },
+        "ticket_draft": {
+          "calls": 4,
+          "input_tokens": 1674,
+          "output_tokens": 141,
+          "usd": 0.0018899999999999998
+        },
+        "it_worker": {
+          "calls": 2,
+          "input_tokens": 3960,
+          "output_tokens": 509,
+          "usd": 0.0040509
+        },
+        "grounding_judge": {
+          "calls": 3,
+          "input_tokens": 6166,
+          "output_tokens": 464,
+          "usd": 0.0067125
+        },
+        "chitchat": {
+          "calls": 3,
+          "input_tokens": 842,
+          "output_tokens": 68,
+          "usd": 0.0009375
+        },
+        "hr_worker": {
+          "calls": 1,
+          "input_tokens": 2132,
+          "output_tokens": 94,
+          "usd": 0.002022
+        },
+        "confirm_parse": {
+          "calls": 3,
+          "input_tokens": 1836,
+          "output_tokens": 96,
+          "usd": 0.001809
+        }
+      },
+      "n_tasks": 12,
+      "completion_rate": 0.9166666666666666,
+      "task_accuracy": 0.9166666666666666,
+      "usd_per_task": 0.0024519491666666667,
+      "tokens_per_task": 3896.4166666666665,
+      "by_tier": {
+        "main": {
+          "calls": 35,
+          "input_tokens": 44721,
+          "output_tokens": 1984,
+          "usd": 0.029422349999999996
+        }
+      },
+      "tasks": [
+        {
+          "id": "api_down",
+          "usd": 0.00159825,
+          "tokens": 1826,
+          "completed": false,
+          "accurate": true
+        },
+        {
+          "id": "degraded_mode",
+          "usd": 0.00798893,
+          "tokens": 9754,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "flow_a",
+          "usd": 0.0057206900000000005,
+          "tokens": 9753,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "flow_b",
+          "usd": 0.0021888000000000003,
+          "tokens": 4497,
+          "completed": true,
+          "accurate": false
+        },
+        {
+          "id": "flow_c",
+          "usd": 0.00034815,
+          "tokens": 1371,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "kb_answer",
+          "usd": 0.00437364,
+          "tokens": 5770,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_0",
+          "usd": 0.00034815,
+          "tokens": 1371,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_1",
+          "usd": 0.00034815,
+          "tokens": 1371,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_2plus",
+          "usd": 0.0003474,
+          "tokens": 1370,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "ticket_create_edit",
+          "usd": 0.0014064,
+          "tokens": 2462,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "ticket_create_no",
+          "usd": 0.0014064,
+          "tokens": 2462,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "ticket_create_yes",
+          "usd": 0.00334843,
+          "tokens": 4750,
+          "completed": true,
+          "accurate": true
+        }
+      ],
+      "kb": {
+        "n_questions": 53,
+        "n_answered": 51,
+        "faithfulness": 0.9809847015729369,
+        "hallucination_rate": 0.11764705882352941,
+        "answer_correctness": 0.6156955378398572,
+        "usd": 0.17769825000000006,
+        "usd_per_question": 0.003352797169811322,
+        "judge": "ragas"
+      },
+      "kb_shared": true
+    }
+  ]
+}

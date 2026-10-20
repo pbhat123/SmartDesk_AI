@@ -153,6 +153,24 @@ The judge stage is built to survive failure (`judge_run.py`, FR-H12):
 - The spend ceiling stops the run even when the exception is swallowed in a worker thread.
 - A watchdog aborts (exit code 3) after `--stall-seconds` (default 300) with no model call or item finished.
 
+## Post-Phase-7 final runs (2026-10-19)
+
+One resumable command runs them in order, with every stop rule: `python -m evals.post_phase7 --estimate` shows the table of estimates, `--confirm-spend` runs it, `--confirm-spend --resume` carries on after a stop (`--fresh` starts over; PLAN 19.15 has the plan and the rules). Results are in `evals/results/` (`orchestrator_plan_check.json`, `compound_eval_live.json`, `safety_eval.json`, `gap_eval.json`, `cache_cutoff.json`, `tier_comparison.json`, `rag_metrics_final.json`, `diagnostics/`); live traces are kept under `evals/results/traces/` and are not committed.
+
+| Measure | Result |
+|---|---|
+| Gap pass / KB answer rate / answered with citations | 100% / 98.1% / 98.1% (kb-041 is the one miss) |
+| Escalation precision / recall | 95.5% / 100% |
+| Safety: leakage / breach | 0.00 / 0.00 (27 rows) |
+| Planning check (orchestrator v8): intent / domain accuracy | 98.9% / 94.6%; 1 of 74 single-topic questions split after the guard (2 raw); 14 of 14 compound questions with the right number of parts |
+| Live compound set | 13 of 14 rows (cmp-008 fails the retry check); routing 24 of 24 right |
+| Ragas (one judge pass) | grounded 0.981, hallucination 0.118, correctness 0.616, relevancy 0.612, factual precision 0.348, context precision 0.852, context recall 0.965 (answer v4; the 2026-10-18 table used v3) |
+| Drift baseline | faithfulness 0.948, recall@5 0.981, escalation rate 0.297 |
+| Tier comparison | tier map $0.00193 per task, all-Main $0.00245; accuracy 0.917 on both |
+| Semantic cache cut-off | 0.84 is below the highest different-answer cosine (0.864): raise to at least 0.97 (not applied) |
+
+Known limits: the live compound set does not run the single-part controls (the gap and KB run covers them: 71 of 74 used one worker and no synthesizer call); the rewritten sub-questions come from the compound rows only, not from follow-up turns; a message that mixes a KB question with a ticket request stays one intent.
+
 ## Known failure cases
 
 Live gap/KB runs (threshold 0.40, `evals/results/gap_sweep.json`): gap pass 100%, KB answer 98.1%. The one KB

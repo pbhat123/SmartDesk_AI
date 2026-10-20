@@ -695,12 +695,36 @@ Dense fails where the query is a bare token: `icc@smartdesk.example` never reach
 
 **Recommendation (no config change made, revised after the exact-term check): keep hybrid + rerank.** The rule was: if dense is at least as good as hybrid+rerank on both sets, propose dense. It is not. On the paraphrased KB set dense wins (hit@1 0.925 against 0.736, MRR 0.956 against 0.847), but on the exact-term set it loses clearly (hit@1 0.800 against 1.000, hit@5 0.867 against 1.000) and misses one expected entry completely. Hybrid+rerank is the only strategy with hit@5 = 1.000 on both sets, and the answerer is given the top 5, so hit@5 is the number that decides whether the right entry reaches the model; its weakness is only hit@1 on paraphrases (0.736), where the entry is still in the top 3 for 98% of questions. The first recommendation (dense) came from a set that could not reward keyword matching, as the limits above said. Cost of keeping it: about 730 ms per query against 0.4 ms. Things I did not change but you may want next: the reranker costs hit@1 on paraphrases (hybrid 0.774 to 0.736), so a rerank score blended with the fused rank may do better than rerank alone; and a larger mixed set (more than 15 exact-term queries, written by someone other than the author of the KB set) would settle whether the dense gap on literals is as large as 20 points. n = 15 is small: one query is 6.7 points. No SPEC or config edit is proposed.
 
-### 14.5 Pending live runs (built and tested in mock mode, not run; each needs your OK on its estimate)
+### 14.5 Live runs that were pending (all run on 2026-10-19; results in section 14.6)
 | Task | What | Command | Estimate | Ceiling | When |
 |---|---|---|---|---|---|
 | T6.8 | Drift check on the golden set (74 questions) | `python -m smartdesk_ai.ops.drift` (shows the estimate, asks `yes`) | about $0.35 | 2x | any time you approve |
 | T6.12 | Right-sizing comparison, tier map against all-Main: 12 scenario scripts per configuration, 53 KB questions, Ragas judge | `python -m evals.tier_comparison --confirm-spend` | about $1.29 (KB set run once: the answer path is Main in both); $2.50 with `--kb-both` | 2x the estimate ($2.57) | combined with T7.11 after Phase 7, so the worker and synthesizer tiers are in the comparison |
 | T6.10 | Re-measure the semantic cache on the orchestrator's rewritten sub-questions (the cache key), after Phase 7: paraphrase cosines of the rewritten forms, and a near-miss pair set (for example sick against casual leave, same topic, different answer) added to the different-answer evidence | `python -m evals.cache_cutoff --embed-new` (extended with the rewrites and the near-miss set) | about $0.01 | n/a | after Phase 7; re-tune `thresholds.semantic_cache_cutoff` only if rewriting closes the gap, keeping it at least 0.10 above the new different-answer maximum |
+
+### 14.6 Post-Phase-7 final live runs (2026-10-19, `python -m evals.post_phase7`, orchestrator v8, answer v4, judge v3; all stop rules passed)
+| Measure | Result | Before (PLAN 14.1, pre-Phase 7) |
+|---|---|---|
+| Gap pass rate (21) | **100%** | 100% |
+| KB answer rate (53) / answered with citations | **98.1%** (52/53) / **98.1%**; kb-041 is the one miss, as before | 98.1% |
+| Escalation precision / recall | 95.5% / 100% | 95.5% / 100% |
+| Safety (27 rows): PII leakage / policy breach | **0.00 / 0.00** | 0 / 0 |
+| Orchestrator planning check (88): intent / domain accuracy | 98.9% / 94.6% (v5: 96.6% / 90.5%) | n/a |
+| Single-topic questions split (74) | 1 after the fragment guard (kb-053), 2 raw (kb-045, kb-053) | v5: 2 (kb-053, gap-005) |
+| Compound questions with the right number of parts (14) | 14 of 14 (raw 14); domains right 14 of 14 | n/a |
+| Live compound set (14 rows) | **13 of 14**; cmp-008 fails "correctly routed part was retried" (its HR buddy part was judged insufficient on the first attempt and answered after the whole-KB retry); every part routed to the right domain (24 of 24) | n/a |
+| Single-topic questions with exactly one worker and no synthesizer call | 71 of 74 | n/a |
+| Drift baseline (stored in `data/drift.jsonl`) | faithfulness 0.948, recall@5 0.981, escalation rate 0.297, avg rerank score 0.265 | n/a |
+| Ragas, one judge pass (`rag_metrics_final.json`) | grounded-answer rate 0.981, hallucination 0.118, answer correctness 0.616, answer relevancy 0.612, factual precision 0.348, context precision 0.852, context recall 0.965, citation accuracy 0.823 | 0.971, 0.078, 0.695, 0.636, 0.508, 0.862, 0.965, 0.879 |
+| T7.11 tier comparison (12 scenarios) | tier map $0.00193 per task, all-Main $0.00245 (21% cheaper), completion and accuracy 0.917 on both; KB faithfulness 0.981 on both (the KB path is on Main in both) | n/a |
+| Ledger cost | diagnostics $0.029, planning check $0.088, compound $0.128, safety $0.035, gap + KB $0.239, paraphrase about $0, tiers + Ragas $1.283; **batch $1.802** (estimate $2.09); all four attempts of the batch together about $2.5 | |
+
+**Findings.**
+- **The semantic cache cut-off is below the new highest different-answer cosine.** `thresholds.semantic_cache_cutoff` is 0.84. The 16 near-miss pairs give a highest different-answer cosine of 0.864 ("work from a different city" against "work from another country", near-08) and 0.814 (maternity against paternity leave). A semantic hit at 0.84 could serve the wrong policy for those pairs. Verdict: raise the cut-off to at least 0.97, which still catches 5 of the 23 paraphrase pairs (15 held-out, 8 rewrites whose median cosine to the standalone wording is 0.98; 16 more rewrites were identical to it). Not changed: it needs your approval. The exact-match cache is unaffected.
+- **The Ragas drop is most likely answer v4, not Phase 7.** The Ragas baseline in 14.1 was measured with answer v3; v4 answers are 67% longer on average (393 against 235 characters) and 51 of 53 differ, which lowers factual precision and correctness (a longer answer contains more claims the short reference does not). The Ragas KB path in this run is the single-path answer function, not the multi-agent graph, so v8 does not touch it. This is a hypothesis; a v3 Ragas pass (about $0.96) would test it. Grounded-answer rate went up (0.981).
+- **kb-010 and kb-011 are fixed in this run** (cited answers); the earlier misses were an LLM flip and the v5 `out_of_scope` collision (fixed by v7).
+- **The earlier compound failures were variance plus the v5 merge**: with v8 cmp-003 and cmp-013 pass, and only cmp-008 fails, on the retry check.
+- The compound set's "single" criterion is not run live (0 of 0); the gap + KB run covers it (71 of 74).
 
 ## 15. Phase 6 UI build notes (mock only)
 

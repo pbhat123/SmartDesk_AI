@@ -1,24 +1,19 @@
 {
  "n_cases": 88,
  "n_answered": 88,
- "intent_accuracy": 0.9659,
- "domain_accuracy": 0.9054,
+ "intent_accuracy": 0.9886,
+ "domain_accuracy": 0.9459,
  "domain_accuracy_by_kind": {
-  "kb": 0.9057,
-  "gap": 0.9048
+  "kb": 0.9434,
+  "gap": 0.9524
  },
  "wrong_domain": [
-  "kb-011",
   "kb-016",
-  "kb-020",
   "kb-038",
   "kb-053",
-  "gap-003",
-  "gap-021"
+  "gap-003"
  ],
  "wrong_intent": [
-  "kb-011",
-  "kb-038",
   "gap-003"
  ],
  "single_topic": 74,
@@ -38,27 +33,25 @@
      "text": "In which cities do people work at SmartDesk AI?",
      "domain": "MISC"
     }
-   ]
-  },
-  {
-   "id": "gap-005",
-   "kind": "gap",
-   "question": "Is there a spot for my motorbike at the Pune site, and does it cost anything?",
-   "intent": "kb_query",
-   "domain": "MISC",
-   "parts": [
+   ],
+   "raw_parts": [
     {
-     "text": "Is there a spot for my motorbike at the Pune site?",
+     "text": "How many people work at SmartDesk AI?",
      "domain": "MISC"
     },
     {
-     "text": "Does it cost anything?",
+     "text": "In which cities do people work at SmartDesk AI?",
      "domain": "MISC"
     }
    ]
   }
  ],
- "split_rate": 0.027,
+ "split_rate": 0.0135,
+ "split_single_raw": [
+  "kb-045",
+  "kb-053"
+ ],
+ "split_rate_raw": 0.027,
  "compound": [
   {
    "id": "cmp-001",
@@ -72,6 +65,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -86,6 +80,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -100,6 +95,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -114,6 +110,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -128,6 +125,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -142,6 +140,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -156,6 +155,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -170,6 +170,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -184,6 +185,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -198,6 +200,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -214,6 +217,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -228,6 +232,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -242,6 +247,7 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   },
   {
@@ -256,10 +262,13 @@
    ],
    "correct_split": true,
    "right_count": true,
+   "raw_right_count": true,
    "same_domains": true
   }
  ],
  "compound_correct": 14,
+ "compound_right_count": 14,
+ "compound_right_count_raw": 14,
  "errors": [],
  "stopped": null
 }

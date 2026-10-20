@@ -1,0 +1,35 @@
+{
+  "mock": false,
+  "n_gap": 0,
+  "n_kb": 1,
+  "gap_pass_rate": 0.0,
+  "kb_answer_rate": 1.0,
+  "kb_answered_with_citations": 1.0,
+  "kb_not_cited": [],
+  "escalation_precision": null,
+  "escalation_recall": 0.0,
+  "by_split": {
+    "test": {
+      "gap_pass_rate": 0.0,
+      "kb_answer_rate": 1.0
+    }
+  },
+  "grey_zone_pass_rate": null,
+  "failures": [],
+  "cases": [
+    {
+      "id": "kb-010",
+      "label": "kb",
+      "split": "test",
+      "grey_zone": false,
+      "outcome": "answered",
+      "cited": true
+    }
+  ],
+  "drift": null,
+  "stopped": null,
+  "parts": {},
+  "single_part_clean": 1,
+  "single_part_total": 1,
+  "not_clean": []
+}

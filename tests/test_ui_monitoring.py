@@ -60,7 +60,7 @@ def test_a_fresh_install_shows_empty_states_not_errors(tmp_path):
     at = monitoring_app(mock_context(tmp_path))
     assert not at.exception
     shown = element_text(at.main)
-    assert "No tool calls yet" in shown and "No agent metrics yet" in shown
+    assert "No tool calls yet" in shown and "No sessions in this window yet" in shown
 
 
 def test_loading_never_creates_or_changes_files(tmp_path):
@@ -161,3 +161,58 @@ def test_a_broken_metrics_file_degrades_to_the_empty_state(tmp_path):
     ctx.results_dir.mkdir()
     (ctx.results_dir / "agent_metrics.json").write_text("{not json")
     assert _load(ctx).agent_metrics is None
+
+
+# --- live agent metrics and the saved T7.11 scenario results (FR-H11) -------------------------------
+
+def _tier_comparison(ctx, mock=False):
+    ctx.results_dir.mkdir(exist_ok=True)
+    (ctx.results_dir / "tier_comparison.json").write_text(json.dumps({"mock": mock, "kb_runs": 1, "results": [
+        {"name": "tier_map", "n_tasks": 12, "completion_rate": 0.9167, "task_accuracy": 0.9167,
+         "usd_per_task": 0.00193, "tokens_per_task": 3897.0, "by_agent": {}, "by_tier": {}, "tasks": []},
+        {"name": "all_main", "n_tasks": 12, "completion_rate": 0.9167, "task_accuracy": 0.9167,
+         "usd_per_task": 0.00245, "tokens_per_task": 3896.0, "by_agent": {}, "by_tier": {}, "tasks": []}]}))
+
+
+def test_live_metrics_come_from_the_trace_and_follow_the_tool_stats_window(tmp_path):
+    ctx = mock_context(tmp_path)
+    ctx.service.handle("s1", "How do I connect to the VPN from home?")
+    ctx.service.handle("s1", "What is the sick leave policy?")
+    live = _load(ctx).live_metrics
+    assert live.n_tasks == 1 and live.n_turns == 2 and live.completion_rate == 1.0 and live.error_rate == 0.0
+    assert live.steps_to_completion > 0 and live.turn_p95_ms >= live.turn_p50_ms > 0
+    future = datetime.now(timezone.utc).replace(year=2099)  # the window starts after every turn: nothing in it
+    window = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir,
+                             window="app", app_started=future)
+    assert window.live_metrics is None
+
+
+def test_saved_scenario_results_are_labelled_with_run_date_and_source(tmp_path):
+    ctx = mock_context(tmp_path)
+    _tier_comparison(ctx)
+    runs = _load(ctx).scenario_results
+    assert [r.name for r in runs.rows] == ["tier_map", "all_main"] and runs.mock is False
+    assert runs.source.endswith("tier_comparison.json") and runs.saved_on == datetime.now(timezone.utc).date().isoformat()
+    shown = element_text(monitoring_app(ctx).main)
+    assert "tier_comparison.json" in shown and runs.saved_on in shown and "live" in shown.lower()
+    assert "No sessions in this window yet" not in shown  # no live turn yet, but the saved run exists
+    assert "Tier map" in shown and "All Main" in shown
+
+
+def test_the_empty_message_shows_only_when_both_the_live_trace_and_the_saved_run_are_empty(tmp_path):
+    ctx = mock_context(tmp_path)
+    empty = element_text(monitoring_app(ctx).main)
+    assert "No sessions in this window yet" in empty
+    _tier_comparison(ctx)
+    ctx.service.handle("s1", "How do I connect to the VPN from home?")
+    both = element_text(monitoring_app(ctx).main)
+    assert "No sessions in this window yet" not in both and "Live sessions in the tool stats window" in both
+    assert "100.0%" in both and "Tier map" in both
+
+
+def test_a_mock_scenario_run_is_labelled_mock_and_a_broken_file_is_ignored(tmp_path):
+    ctx = mock_context(tmp_path)
+    _tier_comparison(ctx, mock=True)
+    assert _load(ctx).scenario_results.mock is True
+    (ctx.results_dir / "tier_comparison.json").write_text("{nope")
+    assert _load(ctx).scenario_results is None

@@ -27,12 +27,12 @@ from smartdesk_ai.agent.state import new_thread_id
 from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.ops.cost import CostEntry
 from smartdesk_ai.ops.health import Component, HealthRegistry
+from smartdesk_ai.ops.live_agent_metrics import FAILURE_PHRASES
 from smartdesk_ai.ops.metrics import percentile
 from smartdesk_ai.ops.runtime import RequestContext, request_scope
 from smartdesk_ai.tickets import MockTicketClient
 
 SCENARIO_DIR = EVALS_DIR / "scenarios"
-FAILURE_PHRASES = ("try again later", "try again in a few minutes", "temporarily unavailable")
 _DEGRADE = {"reranker": Component.RERANKER, "presidio": Component.PRESIDIO, "redis": Component.REDIS,
             "tracing": Component.LANGFUSE}
 

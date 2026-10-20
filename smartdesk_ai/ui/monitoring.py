@@ -6,7 +6,8 @@ Read-only. It never creates or changes a file: a missing log is an empty section
 - cost by tier: the spend ledger (`data/spend_ledger.jsonl`, the audit trail to compare with the provider's bill)
   next to the request cost tracker's `cost.jsonl`; the daily budget from `ops.db` (FR-H7, H8)
 - stale chunks: the KB hashes in the index state (FR-H6)
-- agent metrics: the last `agent_metrics.json` an eval run saved (FR-H11)
+- agent metrics: computed from the live trace and cost files in the tool stats window (`ops/live_agent_metrics.py`),
+  next to the last saved scenario results (`tier_comparison.json`, T7.11) and `agent_metrics.json` (FR-H11)
 """
 import json
 from collections.abc import Sequence
@@ -37,6 +38,7 @@ from smartdesk_ai.ops.drift import (
 )
 from smartdesk_ai.ops.health import HealthRegistry
 from smartdesk_ai.ops.hitl_counters import HitlCounts, load_counts
+from smartdesk_ai.ops.live_agent_metrics import LiveAgentMetrics, compute_live_metrics, load_events
 from smartdesk_ai.ops.metrics import ToolCallRecord, date_from_trace, load_records, summarize_tools
 from smartdesk_ai.ops.spend_ledger import ledger_path, read_events
 from smartdesk_ai.rag.embeddings import HashingEmbeddings, embedder_id
@@ -49,6 +51,8 @@ COST_FILE = "cost.jsonl"
 HITL_FILE = "hitl.jsonl"
 OPS_DB_FILE = "ops.db"
 AGENT_METRICS_FILE = "agent_metrics.json"
+TIER_COMPARISON_FILE = "tier_comparison.json"
+SCENARIO_LABELS = {"tier_map": "Tier map (Main and Light)", "all_main": "All Main"}
 TIER_ORDER = ("main", "light", "embedding", "other")
 
 ToolWindowName = Literal["app", "today", "all"]
@@ -160,6 +164,26 @@ class AgentMetrics(BaseModel):
     error_rate: float | None = None
 
 
+class ScenarioRow(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    name: str
+    n_tasks: int
+    completion_rate: float | None = None
+    task_accuracy: float | None = None
+    usd_per_task: float | None = None
+    tokens_per_task: float | None = None
+
+
+class ScenarioResults(BaseModel):
+    """The last saved scenario run of the tier comparison (T7.11), with where it came from and when it was saved."""
+
+    source: str
+    saved_on: str
+    mock: bool
+    rows: list[ScenarioRow]
+
+
 class MonitoringData(BaseModel):
     tools: list[ToolRow]
     tool_window: ToolWindow
@@ -177,6 +201,8 @@ class MonitoringData(BaseModel):
     hitl_label: str = "All time"
     drift: list[DriftPoint]
     agent_metrics: AgentMetrics | None
+    live_metrics: LiveAgentMetrics | None = None
+    scenario_results: ScenarioResults | None = None
 
 
 def _parse(ts: str | None) -> datetime | None:
@@ -191,9 +217,13 @@ def _day_start(now: datetime) -> datetime:
     return now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def _window_start(window: ToolWindowName, now: datetime, app_started: datetime) -> datetime | None:
+    return {"app": app_started, "today": _day_start(now), "all": None}[window]
+
+
 def _tool_view(data_dir: Path, window: ToolWindowName, now: datetime, app_started: datetime) -> tuple[list[ToolRow], ToolWindow]:
     records = date_from_trace(load_records(data_dir / TOOL_METRICS_FILE), data_dir / TRACE_FILE)
-    start = {"app": app_started, "today": _day_start(now), "all": None}[window]
+    start = _window_start(window, now, app_started)
     label = {"app": "Since app start", "today": "Today (UTC)", "all": "All time"}[window]
     undated = sum(r.ts is None for r in records)
     kept = [r for r in records if start is None or ((when := _parse(r.ts)) is not None and when >= start)]
@@ -336,6 +366,22 @@ def _agent_metrics(results_dir: Path) -> AgentMetrics | None:
         return None
 
 
+def _scenario_results(results_dir: Path) -> ScenarioResults | None:
+    path = results_dir / TIER_COMPARISON_FILE
+    try:
+        raw = json.loads(path.read_text())
+        rows = [ScenarioRow.model_validate(r) for r in raw["results"]]
+        saved = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).date().isoformat()
+        return ScenarioResults(source=f"evals/results/{TIER_COMPARISON_FILE}", saved_on=saved, mock=bool(raw.get("mock")),
+                               rows=rows) if rows else None
+    except (OSError, ValueError, KeyError, TypeError):  # missing, unreadable, malformed or the wrong shape
+        return None
+
+
+def _live_metrics(data_dir: Path, since: datetime | None) -> LiveAgentMetrics | None:
+    return compute_live_metrics(load_events(data_dir / TRACE_FILE), load_events(data_dir / COST_FILE), since=since)
+
+
 def load_monitoring(
     settings: Settings, data_dir: Path, kb_dir: Path, registry: HealthRegistry, *,
     results_dir: Path, ledger: Path | None = None, window: ToolWindowName = "all",
@@ -367,6 +413,8 @@ def load_monitoring(
         hitl_label={"session": "This session", "today": "Today (UTC)", "all": "All time"}[hitl_window],
         drift=DriftHistory(data_dir / DRIFT_LOG).points(),
         agent_metrics=_agent_metrics(Path(results_dir)),
+        live_metrics=_live_metrics(data_dir, _window_start(window, now, app_started or APP_STARTED)),
+        scenario_results=_scenario_results(Path(results_dir)),
     )
 
 
@@ -505,23 +553,42 @@ def _render_hitl(data: MonitoringData) -> None:
 
 def _render_agent_metrics(data: MonitoringData) -> None:
     st.subheader("Agent metrics")
-    m = data.agent_metrics
-    if m is None:
-        st.caption("No agent metrics yet. Create them with "
-                   "`python -m evals.run --only agent --mock --out-dir evals/results`.")
-        return
-    st.caption(f"From the last saved eval run: {m.n_tasks} scripted tasks, {m.n_turns} turns"
-               + (" (mock models, so cost is 0)." if m.mock else "."))
-    cells = [("Task completion", _pct(m.completion_rate)), ("Task accuracy", _pct(m.task_accuracy)),
-             ("Error rate", _pct(m.error_rate)),
-             ("Steps to completion", "n/a" if m.steps_to_completion is None else f"{m.steps_to_completion:.1f}"),
-             ("Task latency", "n/a" if m.task_latency_ms is None else f"{m.task_latency_ms:.0f} ms"),
-             ("Turn latency p50 / p95", "n/a" if m.turn_p50_ms is None or m.turn_p95_ms is None
-              else f"{m.turn_p50_ms:.0f} / {m.turn_p95_ms:.0f} ms"),
-             ("Cost per task", "n/a" if m.usd_per_task is None else f"${m.usd_per_task:.4f}")]
-    for start in range(0, len(cells), 4):
-        for column, (label, value) in zip(st.columns(4), cells[start:start + 4]):
-            column.metric(label, value)
+    live, runs, m = data.live_metrics, data.scenario_results, data.agent_metrics
+    if live is None and runs is None:
+        st.caption("No sessions in this window yet. Talk to the assistant, or save a scenario run with "
+                   "`python -m evals.tier_comparison --mock` (live: `--confirm-spend`).")
+    if live is not None:
+        st.caption(f"Live sessions in the tool stats window ({data.tool_window.label}): {live.n_tasks} tasks "
+                   f"(one task is one conversation), {live.n_turns} turns, from the local trace and cost files.")
+        cells = [("Completion rate", _pct(live.completion_rate)), ("Error rate", _pct(live.error_rate)),
+                 ("Avg steps", "n/a" if live.steps_to_completion is None else f"{live.steps_to_completion:.1f}"),
+                 ("Cost per task", f"${live.usd_per_task:.4f}"),
+                 ("Turn latency p50", "n/a" if live.turn_p50_ms is None else f"{live.turn_p50_ms:.0f} ms"),
+                 ("Turn latency p95", "n/a" if live.turn_p95_ms is None else f"{live.turn_p95_ms:.0f} ms")]
+        for start in range(0, len(cells), 3):
+            for column, (label, value) in zip(st.columns(3), cells[start:start + 3]):
+                column.metric(label, value)
+    if runs is not None:
+        kind = "mock models, cost is 0" if runs.mock else "live models"
+        st.caption(f"Last saved scenario run (T7.11 tier comparison, {kind}): source `{runs.source}`, saved {runs.saved_on}.")
+        st.dataframe(pd.DataFrame([{"Run": SCENARIO_LABELS.get(r.name, r.name), "Tasks": r.n_tasks,
+                                    "Completion": _pct(r.completion_rate), "Accuracy": _pct(r.task_accuracy),
+                                    "Cost per task": "n/a" if r.usd_per_task is None else f"${r.usd_per_task:.5f}",
+                                    "Tokens per task": "n/a" if r.tokens_per_task is None else f"{r.tokens_per_task:.0f}"}
+                                   for r in runs.rows]), hide_index=True, width="stretch")
+    if m is not None:
+        st.caption(f"Last saved agent-metrics eval run (`agent_metrics.json`): {m.n_tasks} scripted tasks, {m.n_turns} turns"
+                   + (" (mock models, so cost is 0)." if m.mock else "."))
+        cells = [("Task completion", _pct(m.completion_rate)), ("Task accuracy", _pct(m.task_accuracy)),
+                 ("Error rate", _pct(m.error_rate)),
+                 ("Steps to completion", "n/a" if m.steps_to_completion is None else f"{m.steps_to_completion:.1f}"),
+                 ("Task latency", "n/a" if m.task_latency_ms is None else f"{m.task_latency_ms:.0f} ms"),
+                 ("Turn latency p50 / p95", "n/a" if m.turn_p50_ms is None or m.turn_p95_ms is None
+                  else f"{m.turn_p50_ms:.0f} / {m.turn_p95_ms:.0f} ms"),
+                 ("Cost per task", "n/a" if m.usd_per_task is None else f"${m.usd_per_task:.4f}")]
+        for start in range(0, len(cells), 4):
+            for column, (label, value) in zip(st.columns(4), cells[start:start + 4]):
+                column.metric(label, value)
     st.caption("Throughput (requests per second) is measured by `scripts/load_test.py`, not by this tab.")
 
 

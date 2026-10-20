@@ -167,7 +167,7 @@ One resumable command runs them in order, with every stop rule: `python -m evals
 | Ragas (one judge pass) | grounded 0.981, hallucination 0.118, correctness 0.616, relevancy 0.612, factual precision 0.348, context precision 0.852, context recall 0.965 (answer v4; the 2026-10-18 table used v3) |
 | Drift baseline | faithfulness 0.948, recall@5 0.981, escalation rate 0.297 |
 | Tier comparison | tier map $0.00193 per task, all-Main $0.00245; accuracy 0.917 on both |
-| Semantic cache cut-off | 0.84 is below the highest different-answer cosine (0.864): raise to at least 0.97 (not applied) |
+| Semantic cache cut-off | 0.84 was below the highest different-answer cosine (0.864); raised to 0.97 (approved 2026-10-19, catches 5 of 23 paraphrase pairs) |
 
 Known limits: the live compound set does not run the single-part controls (the gap and KB run covers them: 71 of 74 used one worker and no synthesizer call); the rewritten sub-questions come from the compound rows only, not from follow-up turns; a message that mixes a KB question with a ticket request stays one intent.
 

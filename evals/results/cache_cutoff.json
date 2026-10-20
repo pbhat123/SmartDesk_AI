@@ -170,15 +170,15 @@
       "0.95": 5
     }
   },
-  "configured_cutoff": 0.84,
+  "configured_cutoff": 0.97,
   "verdict": {
-    "configured": 0.84,
+    "configured": 0.97,
     "highest_different_answer": 0.8641,
     "floor": 0.97,
     "recommended": 0.97,
     "paraphrases": 23,
-    "hits_at_configured": 7,
+    "hits_at_configured": 5,
     "hits_at_recommended": 5,
-    "action": "raise to at least 0.97"
+    "action": "keep"
   }
 }

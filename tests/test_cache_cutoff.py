@@ -5,6 +5,9 @@ import pytest
 
 from evals.cache_cutoff import analyse
 from evals.harness import EMBEDDING_CACHE
+from evals.common import EVALS_DIR
+
+EVALS_RESULTS = EVALS_DIR / "results"
 
 pytestmark = pytest.mark.skipif(not EMBEDDING_CACHE.is_file(), reason="no embedding cache in this checkout")
 
@@ -15,6 +18,29 @@ def test_the_configured_cut_off_is_safely_above_the_highest_different_answer_pai
         pytest.skip("the questions are not in the embedding cache")
     highest = result["highest_different_answer"][0]["cosine"]
     assert settings.thresholds.semantic_cache_cutoff >= highest + 0.10, highest
+
+
+def test_the_configured_cut_off_is_safely_above_the_near_miss_pairs_too(settings):
+    """T6.10: same-topic, different-entry questions in fresh words reach 0.864, above the old 0.84 cut-off."""
+    from evals.cache_cutoff import _has, paraphrase_vectors
+    from evals.common import EVALS_DIR, load_jsonl
+
+    near = load_jsonl(EVALS_DIR / "near_miss_pairs.jsonl")
+    vec, _ = paraphrase_vectors(settings, False)
+    near = [p for p in near if _has(vec, p)]
+    if not near:
+        pytest.skip("the near-miss questions are not in the embedding cache")
+    result = analyse(settings.models.embedding.id, near)
+    highest = result["highest_different_answer"][0]["cosine"]
+    assert result["near_miss_pairs"]["n"] == len(near) and result["near_miss_pairs"]["max"] <= highest
+    assert settings.thresholds.semantic_cache_cutoff >= highest + 0.10, highest
+
+
+def test_the_saved_evidence_matches_the_configured_cut_off(settings):
+    saved = json.loads((EVALS_RESULTS / "cache_cutoff.json").read_text())
+    assert saved["configured_cutoff"] == settings.thresholds.semantic_cache_cutoff
+    assert saved["highest_different_answer"][0]["cosine"] == pytest.approx(0.8641) and saved["near_miss_pairs"]["max"] > 0.8
+    assert saved["verdict"]["action"] == "keep" and saved["verdict"]["floor"] <= settings.thresholds.semantic_cache_cutoff
 
 
 def test_the_paraphrase_set_is_15_pairs_over_real_kb_entries():

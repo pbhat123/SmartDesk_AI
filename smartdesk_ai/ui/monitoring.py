@@ -668,6 +668,7 @@ def _render_drift(ctx: UiContext, data: MonitoringData) -> None:
 
 
 def render_monitoring(ctx: UiContext) -> None:
+    st.title("Monitoring")
     if st.button("Refresh", key="monitoring_refresh"):
         st.rerun()
     # Each filter sits under its own heading, but the data it picks is needed before the sections draw: the sections

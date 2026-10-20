@@ -87,6 +87,7 @@ class Server:
         cmd = [sys.executable, "-m", "streamlit", "run", str(self.root / "smartdesk_ai" / "ui" / "app.py"),
                "--server.headless", "true", "--server.port", str(self.port), "--server.address", "127.0.0.1",
                "--browser.gatherUsageStats", "false", "--server.fileWatcherType", "none"]
+        shutil.copytree(self.root / ".streamlit", self.work / ".streamlit", dirs_exist_ok=True)  # the theme (cwd-relative)
         log = self.log_path.open("w")
         # cwd is the temp folder: the app looks for `.env` in the working directory and must not find the real one.
         self.proc = subprocess.Popen(cmd, cwd=self.work, env=env, stdout=log, stderr=subprocess.STDOUT)

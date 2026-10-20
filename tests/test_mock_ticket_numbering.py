@@ -23,8 +23,9 @@ def test_the_chat_keeps_only_the_greeting_and_the_sidebar_mode_line_carries_the_
     assert not page.exception
     main = element_text(page.main)
     assert GREETING in main and "Mock tickets live in memory" not in main and OLD_CAPTION not in main
-    mode_line = next(c.value for c in page.sidebar.caption if c.value.startswith("Mode:"))
-    assert "tickets mock" in mode_line and "restart" in mode_line and "#5" in mode_line
+    note = next(c.value for c in page.sidebar.caption if "restart" in c.value)
+    assert "Mock tickets" in note and "#5" in note
+    assert any("Tickets mock" in m.value for m in page.sidebar.markdown)  # the mode pill
 
 
 # --- numbering and the live map -----------------------------------------------------------------------------------

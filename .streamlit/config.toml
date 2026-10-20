@@ -1,0 +1,22 @@
+# Look of the app, matched to docs/ui_mockups/. Streamlit reads this from the folder `streamlit run` is started in
+# (the repo root); scripts/smoke_ui.py copies it into its temp working folder.
+[client]
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#2563EB"
+backgroundColor = "#F6F7F9"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F172A"
+borderColor = "#E2E8F0"
+baseRadius = "12px"
+showWidgetBorder = true
+# No web font is loaded, so the page looks the same offline: Inter if installed, else the system UI font.
+font = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+
+[theme.sidebar]
+backgroundColor = "#0F172A"
+secondaryBackgroundColor = "#1E293B"
+textColor = "#E2E8F0"
+borderColor = "#334155"

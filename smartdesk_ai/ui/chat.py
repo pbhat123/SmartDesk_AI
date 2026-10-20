@@ -8,6 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from smartdesk_ai.ui.context import UiContext
+from smartdesk_ai.ui.formats import usd
+from smartdesk_ai.ui.monitoring import session_cost
 
 DEBUG_LABEL = "Show retrieval debug"
 PANEL_LABEL = "Retrieval debug"
@@ -58,7 +60,7 @@ def _new_conversation() -> None:
     st.session_state["messages"] = []
 
 
-MOCK_TICKETS_NOTE = "mock tickets live in memory; a restart clears them and numbering restarts at #5"  # on the sidebar mode line
+MOCK_TICKETS_NOTE = "Mock tickets live in memory; a restart clears them and numbering restarts at #5."  # under the mode pills
 MOCK_CAPTION = ("Mock mode uses fake embeddings (hashing) and no reranker, so mock retrieval is not meaningful: "
                 "the scores and the order only show that the plumbing works.")
 
@@ -103,21 +105,33 @@ def _render_panel(message: dict[str, Any], ctx: UiContext) -> None:
             st.caption("Steps: " + " → ".join(message["steps"]))
 
 
+def _mode_pills(ctx: UiContext) -> None:
+    """LLM and ticket mode as two badges: blue for live, gray for mock."""
+    def pill(name: str, mode: str) -> str:
+        return f":{'blue' if mode == 'live' else 'gray'}-badge[{name} {mode}]"
+
+    modes = ctx.settings.modes
+    st.markdown(f"{pill('LLM', modes.llm)} {pill('Tickets', modes.tickets)}")
+
+
 def render_chat(ctx: UiContext) -> None:
     if "thread_id" not in st.session_state:
         _new_conversation()
     with st.sidebar:
-        show_debug = st.toggle(DEBUG_LABEL, value=True)
-        if st.button("New conversation"):
+        if st.button("New conversation", icon=":material/add:", width="stretch"):
             _new_conversation()
             st.rerun()
-        note = f" ({MOCK_TICKETS_NOTE})" if ctx.settings.modes.tickets == "mock" else ""
-        st.caption(f"Mode: LLM {ctx.settings.modes.llm}, tickets {ctx.settings.modes.tickets}{note}")
+        _mode_pills(ctx)
+        if ctx.settings.modes.tickets == "mock":
+            st.caption(MOCK_TICKETS_NOTE)
         for health in ctx.registry.degraded_modes():
             st.caption(f"Degraded: {health.component.value} → {health.mode}")
+        cost = session_cost(ctx.service.services.cost, st.session_state.get("thread_ids", []))
+        st.markdown(f"Session cost **{usd(cost.usd)}**")
+        show_debug = st.toggle(DEBUG_LABEL, value=True)
+    st.title("Help desk")
+    st.caption(GREETING)
     messages: list[dict[str, Any]] = st.session_state["messages"]
-    if not messages:
-        st.caption(GREETING)
     for message in messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])

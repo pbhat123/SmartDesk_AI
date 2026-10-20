@@ -231,7 +231,8 @@ def build_stack(
     tools.register("search_kb", make_search_kb(index, search_settings, reranker=reranker, health=registry))
     # Team comments come from a public repo: scan them before anything downstream sees them (FR-C9).
     update_checker = make_injection_checker(settings, builder=inject_b)
-    register_ticket_tools(tools, client, store, screen_update=lambda update: screen_team_update(update, update_checker))
+    register_ticket_tools(tools, client, store, screen_update=lambda update: screen_team_update(update, update_checker),
+                          memory=memory)
     executor = ToolExecutor(
         tools, settings, request_store=store, memory=memory, trace=trace, metrics=MetricsRecorder(Path(data_dir) / TOOL_METRICS_LOG))
     ticket_deps = TicketDeps(

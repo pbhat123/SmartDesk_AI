@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from pydantic import BaseModel, ConfigDict
 
+from smartdesk_ai.memory.long_term import LongTermStore
 from smartdesk_ai.tickets import TeamUpdate, Ticket, TicketClient, TicketCreate, TicketNotFound, find_tickets
 from smartdesk_ai.tickets.sqlite_map import TicketStore
 from smartdesk_ai.tools.definitions import CreateTicketArgs, GetTicketsArgs
@@ -36,11 +37,13 @@ class TicketsResult(BaseModel):
 
 
 def make_get_tickets(
-    client: TicketClient, store: TicketStore, screen_update: UpdateScreen | None = None
+    client: TicketClient, store: TicketStore, screen_update: UpdateScreen | None = None,
+    memory: LongTermStore | None = None,
 ) -> Callable[[GetTicketsArgs], TicketsResult]:
     def get_tickets(args: GetTicketsArgs) -> TicketsResult:
         # The executor has checked the email before this runs (FR-G5).
-        found = find_tickets(args.email, client, store)
+        remembered = memory.ticket_numbers(args.email) if memory is not None else ()  # earlier sessions (FR-H10)
+        found = find_tickets(args.email, client, store, remembered)
         if args.ticket_number is not None:  # only among their own tickets: another employee's number finds nothing
             found = [t for t in found if t.number == args.ticket_number]
         update = None
@@ -58,8 +61,8 @@ def make_get_tickets(
 
 def register_ticket_tools(
     registry: ToolRegistry, client: TicketClient, store: TicketStore | None = None,
-    screen_update: UpdateScreen | None = None,
+    screen_update: UpdateScreen | None = None, memory: LongTermStore | None = None,
 ) -> None:
     registry.register("create_ticket", make_create_ticket(client), recover=client.find_by_request_id)
     if store is not None:
-        registry.register("get_tickets", make_get_tickets(client, store, screen_update))
+        registry.register("get_tickets", make_get_tickets(client, store, screen_update, memory))

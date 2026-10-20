@@ -279,6 +279,20 @@ def span_agents(work: Path) -> set[str]:
     return {e["agent"] for e in events if e.get("kind") == "agent_span"}
 
 
+def step_recall_in_new_conversation(b: Browser, number: int) -> None:
+    """The ticket made in step 3 comes back in a brand-new conversation (new thread, empty chat) from the long-term store, with
+    its title and status read live, without the employee naming it (FR-H10, FR-C1)."""
+    new_conversation(b)
+    reply = b.send("any update on my ticket?")
+    if "email" in reply.lower():
+        reply = b.send(EMAIL)
+    check(f"Ticket #{number} (mock)" in reply and NEW_TITLE in reply and "Status:" in reply,
+          f"expected ticket #{number} ('{NEW_TITLE}') recalled in the new conversation, got {reply[:200]!r}")
+    check(GAP_QUESTION.lower() not in reply.lower() and "http" not in reply, f"unexpected text in the recall: {reply[:200]!r}")
+    check([m for m in b.page.locator(MESSAGE).all_inner_texts() if "tractor" in m.lower() and NEW_TITLE.lower() not in m.lower()] == [],
+          "the new conversation shows messages from the first one")
+
+
 def new_conversation(b: Browser) -> None:
     """Click "New conversation" and wait until the old messages are gone: the greeting can show while the previous
     conversation is still on the page, and a message sent then would be counted against it."""
@@ -379,12 +393,14 @@ def run(args: argparse.Namespace) -> int:
                     lambda: step_repeated_kb_question(b, work))
             attempt("3 gap question -> draft -> edit -> yes -> Ticket #N (mock)", lambda: step_ticket_flow(b))
             attempt("4 status check shows the ticket", lambda: step_status(b, number))
-            attempt("5 second session: every overlapping status lookup answered", sidekick.verify)
-            attempt("6 Monitoring page: no exception, HITL 1 edit / 1 approval, cache hit rate",
+            attempt("5 new conversation, same email: the earlier ticket is recalled (title and status live)",
+                    lambda: step_recall_in_new_conversation(b, number))
+            attempt("6 second session: every overlapping status lookup answered", sidekick.verify)
+            attempt("7 Monitoring page: no exception, HITL 1 edit / 1 approval, cache hit rate",
                     lambda: step_monitoring(b, work))
-            attempt("7 compound question: one merged answer, one panel table per part",
+            attempt("8 compound question: one merged answer, one panel table per part",
                     lambda: step_compound_question(b, work))
-            attempt("8 partial answer: the gap is named, the ticket covers only that part",
+            attempt("9 partial answer: the gap is named, the ticket covers only that part",
                     lambda: step_partial_answer(b, work))
             browser.close()
     except StepFailed as error:
@@ -394,7 +410,7 @@ def run(args: argparse.Namespace) -> int:
         server.stop()
     log = server.log_text()
     bad = [line for line in log.splitlines() if "Traceback" in line or "ProgrammingError" in line]
-    results.append(("9 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
+    results.append(("10 server log has no traceback", "PASS" if not bad else f"FAIL: {len(bad)} line(s), first: {bad[0][:200]}"))
     failed = failed or bool(bad)
     print("\nsmoke_ui results")
     for name, outcome in results:

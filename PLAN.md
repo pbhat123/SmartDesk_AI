@@ -984,3 +984,10 @@ One orchestrator call per question, no history, no workers, tools or tickets, ov
 
 **Next step.** Phase 8: T8.1 (long-term per-email store, numbers and last category only) and T8.2 (cross-session recall on status check), FR-H10 and C1. Test first, one commit per task through the hook, stop at the end of T8.2. Remaining budget about $5.59 (upper bound, from the ledger).
 
+## Phase 8 notes (2026-10-20, T8.1 and T8.2; mock only, nothing paid)
+- **Store.** `smartdesk_ai/memory/long_term.py`: `employee_tickets(user_key, issue_number)` and `employee_categories(user_key, last_category)`; the key is `salted_digest("long-term-memory:" + email)` (MASK_SALT; a different label from the masked user ID). Live mode: `data/memory.db`; mock mode: in memory, like the ticket map (mock tickets restart at #5, so their memory must not outlive them). The email-to-issue map (FR-C10) is unchanged and still holds the raw email by design; the long-term store is separate and holds none.
+- **Written** by the executor after a confirmed, successful create (also the recovered-after-lost-response path); a write failure only logs the exception type.
+- **Read** by `get_tickets` through `find_tickets(..., remembered=...)`: map, search and remembered numbers are merged, one entry per number, all read live. A ticket found only through a remembered number is shown only if its own `Employee:` line is that email (stale numbers after a mock restart cannot show another person's ticket). The new session still asks for the email if the UI has none (FR-C1).
+- **Last category** is stored and readable (`last_category`) but nothing uses it yet; FR-H10 only requires keeping it.
+- **Limit.** The smoke step cannot tell the long-term store from the map (both know the ticket); `tests/test_cross_session.py` does (map wiped, GitHub search off).
+- **Smoke.** `scripts/smoke_ui.py` has a new step 5 (create, new conversation, status, the ticket appears); the later steps are renumbered 6 to 10.

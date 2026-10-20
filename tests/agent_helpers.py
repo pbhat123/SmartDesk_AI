@@ -11,6 +11,7 @@ from smartdesk_ai.agent.synthesizer import make_synthesizer
 from smartdesk_ai.agent.ticket_agent import TicketDeps, make_drafter
 from smartdesk_ai.llm.mock import MockRoutingModel
 from smartdesk_ai.memory.checkpointer import make_checkpointer
+from smartdesk_ai.memory.long_term import LongTermStore
 from smartdesk_ai.ops.health import HealthRegistry
 from smartdesk_ai.rag.embeddings import HashingEmbeddings
 from smartdesk_ai.rag.index import open_index
@@ -37,7 +38,7 @@ class SearchSpy:
 
 def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", routed=False,
              drafter_llm=None, parse_confirm=None, client=None, seeded=False, chitchat=None, judge=None, compactor=None, hitl=None, cache=None,
-             route_model=None, synth_model=None, workers=None):
+             route_model=None, synth_model=None, workers=None, memory=None):
     """Everything the tests need: the compiled graph plus the spy, the tickets client and the store."""
     index = open_index(built_index_dir, HashingEmbeddings())
     spy = SearchSpy(make_search_kb(index, settings, reranker=None, health=HealthRegistry()))
@@ -45,8 +46,9 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
     store = TicketStore(tmp_path / "tickets.db")
     registry = ToolRegistry()
     registry.register("search_kb", spy)
-    register_ticket_tools(registry, client, store)
-    executor = ToolExecutor(registry, settings, request_store=store, sleep=lambda _: None)
+    memory = memory or LongTermStore(":memory:")
+    register_ticket_tools(registry, client, store, memory=memory)
+    executor = ToolExecutor(registry, settings, request_store=store, memory=memory, sleep=lambda _: None)
     if seeded:  # the demo tickets of scripts/seed_tickets.py, through the same client and map
         seed(client, store)
     workers = workers or make_worker_answerers(settings, builder=lambda model_id, cfg: llm or FakeAnswerLLM(), judge=judge)
@@ -66,7 +68,7 @@ def assemble(built_index_dir, settings, tmp_path, *, llm=None, name="chat.db", r
     graph = build_kb_graph(KBDeps(executor=executor, answer=answer, cache=cache, workers=workers, synthesizer=synthesizer), saver, route=route, tickets=tickets,
                              status_max_listed=settings.status.max_listed,
                              limits=OrchestratorLimits.from_settings(settings), chitchat=chitchat, compactor=compactor)
-    return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, executor=executor, saver=saver)
+    return SimpleNamespace(graph=graph, spy=spy, client=client, store=store, memory=memory, executor=executor, saver=saver)
 
 
 def build_test_graph(built_index_dir, settings, tmp_path, llm=None, name="chat.db", routed=False, drafter_llm=None,

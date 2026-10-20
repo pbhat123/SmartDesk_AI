@@ -196,6 +196,8 @@ class MonitoringData(BaseModel):
     agents: list[AgentRow]
     ledger_total_usd: float
     ledger_today_usd: float
+    ledger_window_usd: float  # all sources, inside the Time window
+    window_label: str
     sources_today: list[SourceRow]
     budget: BudgetRow
     stale: StaleReport
@@ -278,14 +280,22 @@ def _configured_model(tier: str, settings: Settings) -> str:
             "embedding": settings.models.embedding.id}.get(tier, "-")
 
 
-def _ledger_view(settings: Settings, ledger: Path, tracker: Path) -> tuple[list[TierRow], float, float, list[SourceRow]]:
+def _in_window(ts: str | None, start: datetime | None) -> bool:
+    """Whether a timestamp is inside the window. No start means all time, so even an undated line counts."""
+    return start is None or ((when := _parse(ts)) is not None and when >= start)
+
+
+def _ledger_view(settings: Settings, ledger: Path, tracker: Path, start: datetime | None = None,
+                 ) -> tuple[list[TierRow], float, float, list[SourceRow], float]:
     rows = {tier: TierRow(tier=tier, model=_configured_model(tier, settings)) for tier in TIER_ORDER}
     sources: dict[str, SourceRow] = {}
     today = datetime.now(timezone.utc).date().isoformat()  # the ledger counts days in UTC, as the billing page does
-    total = today_usd = 0.0
+    total = today_usd = window_usd = 0.0
     for event in read_events(ledger):
         if event.get("event") != "spend":
             continue
+        if _in_window(event.get("ts"), start):
+            window_usd += event.get("usd", 0.0)
         model = event.get("model")
         row = rows[_tier_of(model, settings)]
         row.ledger_calls += event.get("calls", 0)
@@ -312,7 +322,7 @@ def _ledger_view(settings: Settings, ledger: Path, tracker: Path) -> tuple[list[
                                                       else len(SOURCE_ORDER), s.source))
     for source in ordered:
         source.usd = round(source.usd, 6)
-    return list(rows.values()), round(total, 6), round(today_usd, 6), ordered
+    return list(rows.values()), round(total, 6), round(today_usd, 6), ordered, round(window_usd, 6)
 
 
 def session_cost(tracker: Any, thread_ids: Sequence[str]) -> SessionCost:
@@ -325,7 +335,7 @@ def session_cost(tracker: Any, thread_ids: Sequence[str]) -> SessionCost:
                        tokens=sum(e.input_tokens + e.output_tokens for e in mine))
 
 
-def _agent_view(trace_path: Path) -> list[AgentRow]:
+def _agent_view(trace_path: Path, start: datetime | None = None) -> list[AgentRow]:
     """Per-agent totals from the `agent_span` records of the local trace, in the order of the agents of FR-I1 (any other
     agent after them). A missing file or a damaged line is skipped, not an error."""
     rows: dict[str, AgentRow] = {}
@@ -336,7 +346,7 @@ def _agent_view(trace_path: Path) -> list[AgentRow]:
     for line in lines:
         try:
             event = json.loads(line)
-            if event.get("kind") != "agent_span":
+            if event.get("kind") != "agent_span" or not _in_window(event.get("ts"), start):
                 continue
             row = rows.setdefault(event["agent"], AgentRow(agent=event["agent"]))
             row.spans += 1
@@ -398,7 +408,9 @@ def load_monitoring(
     live = settings.modes.llm == "live"
     index_dir = data_dir / ("index" if live else "index_mock")  # the folders `build_stack` uses
     embedder = settings.models.embedding.id if live else embedder_id(HashingEmbeddings())
-    tiers, ledger_total, ledger_today, sources = _ledger_view(settings, ledger or ledger_path(), data_dir / COST_FILE)
+    start = _window_start(window, now, app_started or APP_STARTED)
+    tiers, ledger_total, ledger_today, sources, ledger_window = _ledger_view(
+        settings, ledger or ledger_path(), data_dir / COST_FILE, start)
     return MonitoringData(
         tools=tools, tool_window=tool_window,
         components=[ComponentRow(component=h.component.value, status=h.status.value, running_instead=h.mode or "",
@@ -407,16 +419,17 @@ def load_monitoring(
         degraded=[DegradedRow(component=h.component.value, mode=h.mode or "", reason=mask_emails_in(h.reason or ""),
                               since=h.since.isoformat(timespec="seconds") if h.since else None)
                   for h in registry.degraded_modes()],
-        tiers=tiers, agents=_agent_view(data_dir / TRACE_FILE), ledger_total_usd=ledger_total, ledger_today_usd=ledger_today,
+        tiers=tiers, agents=_agent_view(data_dir / TRACE_FILE, start), ledger_total_usd=ledger_total, ledger_today_usd=ledger_today,
+        ledger_window_usd=ledger_window, window_label=tool_window.label,
         sources_today=sources,
         budget=_budget_row(settings, data_dir / OPS_DB_FILE),
         stale=check_staleness(kb_dir, index_dir, settings.chunking, embedder),
-        cache=summarize_cache(load_cache_records(data_dir / CACHE_FILE)),
+        cache=summarize_cache([r for r in load_cache_records(data_dir / CACHE_FILE) if _in_window(r.ts, start)]),
         hitl=load_counts(data_dir / HITL_FILE, trace_path=data_dir / TRACE_FILE, **hitl_filter),
         hitl_label={"session": "This session", "today": "Today (UTC)", "all": "All time"}[hitl_window],
         drift=DriftHistory(data_dir / DRIFT_LOG).points(),
         agent_metrics=_agent_metrics(Path(results_dir)),
-        live_metrics=_live_metrics(data_dir, _window_start(window, now, app_started or APP_STARTED)),
+        live_metrics=_live_metrics(data_dir, start),
         scenario_results=_scenario_results(Path(results_dir)),
     )
 
@@ -467,7 +480,7 @@ def _render_components(data: MonitoringData) -> None:
     st.caption("Skipped means left out on purpose (the reranker in mock mode); it is not a fault. Mock mode means the "
                "in-memory stand-in is the real thing in this run. Degraded means a component failed or is not "
                "configured, and the substitute shown is running. GitHub and Moderation show \"not checked yet\" "
-               "until their first call.")
+               "until their first call. Not affected by the Time window.")
 
 
 def _render_cost(ctx: UiContext, data: MonitoringData) -> None:
@@ -494,7 +507,8 @@ def _render_cost(ctx: UiContext, data: MonitoringData) -> None:
         "ledger calls (all time)": t.ledger_calls, "ledger USD (all time)": t.ledger_usd,
         "tracker steps": t.tracker_steps, "tracker USD": t.tracker_usd} for t in data.tiers]),
         hide_index=True, width="stretch")
-    st.caption("The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
+    st.caption("Today and all-time figures, by their own definition. Not affected by the Time window. "
+               "The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
                "per-request analytics. Dated model names are grouped under the model configured for their tier. "
                "'other' is a model missing from config.yaml (priced as the Main model).")
 
@@ -507,14 +521,15 @@ def _render_cost_by_agent(data: MonitoringData) -> None:
             "Spans": a.spans, "Input tokens": a.input_tokens, "Output tokens": a.output_tokens,
             "Cost": round(a.usd, 6)} for a in data.agents]), hide_index=True, width="stretch",
             column_config={"Cost": st.column_config.NumberColumn(format="$%.4f")})
-        st.caption("From the agent spans in the local trace: one span per agent per request (a worker per part). "
+        st.caption(f"{data.window_label}. From the agent spans in the local trace: one span per agent per request (a worker per part). "
                    "The grounding judge's calls count in the worker that asked for them. Mock runs price nothing.")
     else:
-        st.caption("No agent spans yet. Ask a question and they appear here.")
+        st.caption(f"No agent spans yet in the window ({data.window_label}). Ask a question and they appear here.")
 
 
 def _render_stale(data: MonitoringData) -> None:
     st.subheader("Stale KB chunks")
+    st.caption("Not affected by the Time window.")
     stale = data.stale
     if stale.reason:
         st.warning(f"All chunks are stale: {stale.reason}. Re-run `python -m smartdesk_ai.rag.ingest`.")
@@ -535,8 +550,8 @@ def _render_cache(data: MonitoringData) -> None:
     st.subheader("Answer cache")
     stats = data.cache
     if not stats.lookups:
-        st.caption("No cache lookups yet. A repeated KB question is answered from the cache and skips retrieval, the "
-                   "worker and the judge.")
+        st.caption(f"No cache lookups yet ({data.window_label}). A repeated KB question is answered from the cache and "
+                   "skips retrieval, the worker and the judge.")
         return
     cells = [("Hit rate", _pct(stats.hit_rate)), ("Exact hits", str(stats.exact_hits)),
              ("Semantic hits", str(stats.semantic_hits)), ("Misses", str(stats.misses))]
@@ -546,7 +561,7 @@ def _render_cache(data: MonitoringData) -> None:
              ("Saved per hit", "n/a" if stats.saved_ms_per_hit is None else f"{stats.saved_ms_per_hit:.0f} ms")]
     for column, (label, value) in zip(st.columns(2), saved):
         column.metric(label, value)
-    st.caption(f"All time, {stats.lookups} KB lookups; the cache was cleared {stats.clears} time(s) after a KB change. "
+    st.caption(f"{data.window_label}: {stats.lookups} KB lookups; the cache was cleared {stats.clears} time(s) after a KB change. "
                "Time saved is what the cached answers' search and answer took when they were first made, less the "
                "lookup. Ticket and status turns never use the cache. The backend (Redis or in memory) is listed under "
                "Components and degraded modes.")
@@ -607,6 +622,7 @@ def _render_agent_metrics(data: MonitoringData) -> None:
         for start in range(0, len(cells), 4):
             for column, (label, value) in zip(st.columns(4), cells[start:start + 4]):
                 column.metric(label, value)
+    st.caption("Live sessions above follow the Time window; the saved eval and scenario results are not affected by the Time window.")
     st.caption("Throughput (requests per second) is measured by `scripts/load_test.py`, not by this tab.")
 
 
@@ -695,6 +711,7 @@ def _render_drift(ctx: UiContext, data: MonitoringData) -> None:
     st.subheader("Drift")
     st.caption("Re-runs the golden set (KB set plus gap set) and charts Faithfulness (the runtime grounding judge's "
                "accept rate), Recall@k, escalation rate and the average top rerank score over time.")
+    st.caption("Not affected by the Time window. It shows every stored check.")
     _drift_controls(ctx)
     _render_drift_history(ctx, data)
 
@@ -711,7 +728,7 @@ def _render_kpis(data: MonitoringData) -> None:
     the approval counts; the spend and the cache rate are all-time or today by their own definition."""
     live, hitl, budget = data.live_metrics, data.hitl, data.budget
     tiles = [
-        ("Spend today (ledger)", usd(data.ledger_today_usd), f"Budget cutoffs \\${budget.cutoff_1_usd:g} / \\${budget.cutoff_2_usd:g}"),
+        ("Spend (window)", usd(data.ledger_window_usd), f"{data.window_label} · cutoffs \\${budget.cutoff_1_usd:g} / \\${budget.cutoff_2_usd:g}"),
         ("Cache hit rate", _pct(data.cache.hit_rate) if data.cache.lookups else "n/a", _redis_line(data)),
         ("Approval gate", f"{hitl.approvals} / {hitl.edits} / {hitl.rejections}", "Approved / edited / rejected"),
         ("Error rate", _pct(live.error_rate) if live else "n/a", f"p95 latency {ms(live.turn_p95_ms) if live else 'n/a'}"),

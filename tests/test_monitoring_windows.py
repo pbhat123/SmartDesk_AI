@@ -253,17 +253,17 @@ def test_one_window_toggle_sits_at_the_top_and_drives_both_filters(tmp_path):
     assert [t for t, v in kinds if t == "button_group"] == ["button_group"]  # and there is only one
     assert kinds.index(("subheader", "Cost by tier")) < kinds.index(("subheader", "Human checks at the ticket approval gate"))
     labels = [v for t, v in kinds if t == "metric"][:4]
-    assert labels == ["Spend today (ledger)", "Cache hit rate", "Approval gate", "Error rate"]  # the four KPI tiles
+    assert labels == ["Spend (window)", "Cache hit rate", "Approval gate", "Error rate"]  # the four KPI tiles
 
 
 def test_the_kpi_tiles_and_the_component_badges_show_the_current_state(tmp_path):
     page = monitoring_app(mock_context(tmp_path))
     assert not page.exception
     tiles = {m.label: m.value for m in page.main.metric}
-    assert tiles["Spend today (ledger)"] == "$0.0000" and tiles["Approval gate"] == "0 / 0 / 0"
+    assert tiles["Spend (window)"] == "$0.0000" and tiles["Approval gate"] == "0 / 0 / 0"
     assert tiles["Cache hit rate"] == "n/a" and tiles["Error rate"] == "n/a"
     notes = " ".join(c.value for c in page.main.caption)
-    assert "Budget cutoffs" in notes and "p95 latency n/a" in notes and "Approved / edited / rejected" in notes
+    assert "cutoffs" in notes and "p95 latency n/a" in notes and "Approved / edited / rejected" in notes
     badges = " ".join(m.value for m in page.main.markdown)
     assert ":gray-badge[skipped]" in badges and ":orange-badge[degraded]" in badges  # reranker skipped, redis not set
 

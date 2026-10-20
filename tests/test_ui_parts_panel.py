@@ -29,8 +29,8 @@ def test_a_compound_reply_has_a_panel_with_one_table_per_part(tmp_path):
 
 def test_a_compound_reply_is_one_merged_answer_with_sources_from_both_domains(tmp_path):
     at = _ask(mock_context(tmp_path), COMPOUND)
-    reply = at.chat_message[-1].markdown[0].value
-    assert "Sources:" in reply and "IT-" in reply and "HR-" in reply
+    reply = " ".join(m.value for m in at.chat_message[-1].markdown)  # the answer, then the source chips
+    assert "Sources" in reply and "IT-" in reply and "HR-" in reply
 
 
 def test_a_single_question_panel_has_no_part_headings(tmp_path):

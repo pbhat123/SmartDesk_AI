@@ -10,9 +10,11 @@ import streamlit as st
 from smartdesk_ai.ui.context import UiContext
 from smartdesk_ai.ui.formats import usd
 from smartdesk_ai.ui.monitoring import session_cost
+from smartdesk_ai.ui.theme import MARK
 
 DEBUG_LABEL = "Show retrieval debug"
 PANEL_LABEL = "Retrieval debug"
+SOURCES_PREFIX = "Sources: "
 GREETING = "Ask an IT or HR question, report a problem, or ask about one of your tickets."
 
 
@@ -105,6 +107,11 @@ def _render_panel(message: dict[str, Any], ctx: UiContext) -> None:
             st.caption("Steps: " + " → ".join(message["steps"]))
 
 
+def _show_cost(slot: Any, ctx: UiContext) -> None:
+    cost = session_cost(ctx.service.services.cost, st.session_state.get("thread_ids", []))
+    slot.markdown(f"Session cost **{usd(cost.usd)}**")
+
+
 def _mode_pills(ctx: UiContext) -> None:
     """LLM and ticket mode as two badges: blue for live, gray for mock."""
     def pill(name: str, mode: str) -> str:
@@ -126,17 +133,14 @@ def render_chat(ctx: UiContext) -> None:
             st.caption(MOCK_TICKETS_NOTE)
         for health in ctx.registry.degraded_modes():
             st.caption(f"Degraded: {health.component.value} → {health.mode}")
-        cost = session_cost(ctx.service.services.cost, st.session_state.get("thread_ids", []))
-        st.markdown(f"Session cost **{usd(cost.usd)}**")
+        cost_slot = st.empty()
+        _show_cost(cost_slot, ctx)
         show_debug = st.toggle(DEBUG_LABEL, value=True)
     st.title("Help desk")
     st.caption(GREETING)
     messages: list[dict[str, Any]] = st.session_state["messages"]
     for message in messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            if message["role"] == "assistant" and show_debug:
-                _render_panel(message, ctx)
+        _render_message(message, ctx, show_debug)
     exchange = st.container()  # the new messages go here, above the input
     prompt = st.chat_input("Type your message")  # a top-level element: pinned to the bottom of the window
     if prompt:
@@ -144,13 +148,72 @@ def render_chat(ctx: UiContext) -> None:
         with exchange:
             with st.chat_message("user"):
                 st.markdown(prompt)
-            with st.chat_message("assistant"):
+            with st.chat_message("assistant", avatar=str(MARK)):
                 with st.spinner("Thinking"):
                     reply = ctx.service.handle(st.session_state["thread_id"], prompt)
-                st.markdown(reply.text)
                 entry = {"role": "assistant", "content": reply.text, "chunks": reply.debug.get("chunks"),
                          "steps": reply.debug.get("steps"), "retrieval": reply.debug.get("retrieval"),
                          "cache": reply.debug.get("cache"), "parts": reply.debug.get("parts")}
                 messages.append(entry)
-                if show_debug:
-                    _render_panel(entry, ctx)
+                _render_reply(entry, ctx, show_debug)
+        _show_cost(cost_slot, ctx)  # the turn just paid for is counted now, not on the next rerun
+
+
+def _render_message(message: dict[str, Any], ctx: UiContext, show_debug: bool) -> None:
+    if message["role"] == "user":
+        with st.chat_message("user"):
+            st.markdown(message["content"])
+        return
+    with st.chat_message("assistant", avatar=str(MARK)):
+        _render_reply(message, ctx, show_debug)
+
+
+def split_sources(text: str) -> list[tuple[str, str | list[str]]]:
+    """A reply as ("text", markdown) and ("sources", entry ids) segments in order. A "Sources: ID (Title); ..." line
+    can close the reply or sit before a later part (a partial answer names the unanswered part after it)."""
+    segments: list[tuple[str, str | list[str]]] = []
+    buffer: list[str] = []
+    for line in text.split("\n"):
+        if not line.startswith(SOURCES_PREFIX):
+            buffer.append(line)
+            continue
+        if "\n".join(buffer).strip():
+            segments.append(("text", "\n".join(buffer).strip()))
+        buffer = []
+        ids = [item.split(" (", 1)[0].strip() for item in line[len(SOURCES_PREFIX):].split("; ")]
+        segments.append(("sources", [i for i in ids if i]))
+    if "\n".join(buffer).strip():
+        segments.append(("text", "\n".join(buffer).strip()))
+    return segments
+
+
+def _domain(agent: str) -> str:
+    return agent.removesuffix("_worker").upper()
+
+
+def parts_chip(message: dict[str, Any]) -> str | None:
+    """"2 parts · IT + HR · cache miss" for a compound question, else just the cache state when there is one."""
+    parts = message.get("parts") or []
+    if parts:
+        states = [(p.get("cache") or {}).get("status") for p in parts]
+        hits = sum(state == "hit" for state in states)
+        cache = "hit" if hits == len(parts) else "miss" if not hits else f"{hits} of {len(parts)} hit"
+        domains = " + ".join(dict.fromkeys(_domain(p["agent"]) for p in parts))
+        return f"{len(parts)} parts · {domains} · cache {cache}"
+    if message.get("cache"):
+        return f"cache {'hit' if message['cache'].get('status') == 'hit' else 'miss'}"
+    return None
+
+
+def _render_reply(message: dict[str, Any], ctx: UiContext, show_debug: bool) -> None:
+    chip = parts_chip(message)
+    segments = split_sources(message["content"])
+    for kind, value in segments:
+        if kind == "text":
+            st.markdown(value)
+        else:
+            st.markdown(":gray[**Sources**] " + " ".join(f":blue-badge[{source}]" for source in value))
+    if chip:
+        st.markdown(f":gray-badge[{chip}]")
+    if show_debug:
+        _render_panel(message, ctx)

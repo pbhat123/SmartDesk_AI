@@ -23,7 +23,7 @@ def test_a_question_gets_a_cited_reply(tmp_path):
     assert len(texts) == 2
     assert ASK in texts[0]
     assert "reset a forgotten or expired password" in texts[1]
-    assert "Sources: IT-PWD-01" in texts[1]  # the citation line of the reply (FR-A9)
+    assert "Sources" in texts[1] and "IT-PWD-01" in texts[1]  # the citations of the reply, as chips (FR-A9)
 
 
 def test_the_debug_panel_lists_chunks_with_scores_in_rank_order(tmp_path):
@@ -102,3 +102,22 @@ def test_the_conversation_survives_a_visit_to_the_monitoring_page(tmp_path):
     at.switch_page("views/monitoring_page.py").run()
     at.switch_page("views/chat_page.py").run()
     assert len(_chat_texts(at)) == 2
+
+
+def test_split_sources_turns_each_sources_line_into_chips_in_place():
+    from smartdesk_ai.ui.chat import split_sources
+
+    assert split_sources("Do this.\n\nSources: IT-PWD-01 (Reset it (yourself)); HR-LEAVE-01 (Casual leave)") == [
+        ("text", "Do this."), ("sources", ["IT-PWD-01", "HR-LEAVE-01"])]
+    assert split_sources("A.\n\nSources: IT-1 (T)\n\nNot found: B.") == [
+        ("text", "A."), ("sources", ["IT-1"]), ("text", "Not found: B.")]
+    assert split_sources("No sources here.") == [("text", "No sources here.")]
+
+
+def test_parts_chip_names_parts_domains_and_cache_state():
+    from smartdesk_ai.ui.chat import parts_chip
+
+    parts = [{"agent": "it_worker", "cache": {"status": "miss"}}, {"agent": "hr_worker", "cache": {"status": "miss"}}]
+    assert parts_chip({"parts": parts}) == "2 parts · IT + HR · cache miss"
+    assert parts_chip({"parts": [{**p, "cache": {"status": "hit"}} for p in parts]}) == "2 parts · IT + HR · cache hit"
+    assert parts_chip({"cache": {"status": "hit"}}) == "cache hit" and parts_chip({}) is None

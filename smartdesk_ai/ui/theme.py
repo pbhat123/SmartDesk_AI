@@ -17,6 +17,17 @@ CARD_CSS = """
 [data-testid="stMetric"] {
   background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 16px;
 }
+/* chat: the employee's messages are accent bubbles on the right, the assistant's are white cards with the SD avatar */
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+  flex-direction: row-reverse; margin-left: auto; width: fit-content; max-width: 70%;
+  background: #2563EB; color: #FFFFFF; border-radius: 14px 14px 4px 14px; padding: 0.6rem 1rem;
+}
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) [data-testid="stChatMessageAvatarUser"] { display: none; }
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) a { color: #FFFFFF; }
+[data-testid="stChatMessage"]:not(:has([data-testid="stChatMessageAvatarUser"])) [data-testid="stChatMessageContent"] {
+  background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 4px 14px 14px 14px; padding: 0.9rem 1.1rem;
+}
+[data-testid="stChatMessage"]:not(:has([data-testid="stChatMessageAvatarUser"])) { background: transparent; }
 [data-testid="stMetricLabel"] { color: #64748B; }
 .stApp h1 { font-size: 1.6rem; font-weight: 600; padding-bottom: 0.25rem; }
 [data-testid="stSidebar"] [data-testid="stSidebarNav"] a { border-radius: 8px; }

@@ -208,14 +208,14 @@ class Browser:
 
 def step_kb_question(b: Browser) -> None:
     reply = b.send(KB_QUESTION)
-    check("Sources:" in reply and "IT-PWD-01" in reply, f"expected an answer with 'Sources: IT-PWD-01', got {reply[:200]!r}")
+    check("Sources" in reply and "IT-PWD-01" in reply, f"expected an answer with the source chip IT-PWD-01, got {reply[:200]!r}")
     check(b.page.get_by_text("Retrieval debug").count() >= 1, "the retrieval-debug panel is missing")
 
 
 def step_repeated_kb_question(b: Browser, work: Path) -> None:
     """The same KB question again is served by the answer cache: same answer, and the panel says exact hit."""
     reply = b.send(KB_QUESTION)
-    check("Sources:" in reply and "IT-PWD-01" in reply, f"expected the same answer with sources, got {reply[:200]!r}")
+    check("Sources" in reply and "IT-PWD-01" in reply, f"expected the same answer with sources, got {reply[:200]!r}")
     b.page.locator('[data-testid="stExpander"]').last.locator("summary").click()
     b.page.get_by_text("Cache: hit (exact)").first.wait_for(timeout=b.timeout)
     log = work / "data" / "cache.jsonl"
@@ -312,7 +312,7 @@ def step_compound_question(b: Browser, work: Path) -> None:
     b.page.locator(CHAT_INPUT).wait_for(timeout=b.timeout)
     new_conversation(b)
     reply = b.send(COMPOUND_QUESTION)
-    check("Sources:" in reply and "IT-" in reply and "HR-" in reply,
+    check("Sources" in reply and "IT-" in reply and "HR-" in reply,
           f"expected one answer with sources from an IT and an HR entry, got {reply[:300]!r}")
     b.page.locator('[data-testid="stExpander"]').last.locator("summary").click()
     for text in ("Part 1 (it_worker)", "Part 2 (hr_worker)", "fan_out:2", "synthesize"):
@@ -326,7 +326,7 @@ def step_partial_answer(b: Browser, work: Path) -> None:
     ticket offer for it only, and the ticket draft covers only that part (FR-I7, FR-B6)."""
     new_conversation(b)
     reply = b.send(PARTIAL_QUESTION)
-    check("Sources: IT-" in reply, f"expected the answerable part answered with an IT source, got {reply[:300]!r}")
+    check(re.search(r"Sources\s+IT-", reply), f"expected the answerable part answered with an IT source, got {reply[:300]!r}")
     check("couldn't find an answer to this part of your question" in reply and "park my car at the Bengaluru office" in reply,
           f"expected the unanswered part to be named, got {reply[:400]!r}")
     check("support ticket for that part" in reply and "work email" in reply,

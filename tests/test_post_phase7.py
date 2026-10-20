@@ -338,3 +338,63 @@ def test_a_state_saved_before_the_start_was_recorded_is_dated_from_its_first_fin
 
     assert pp.batch_start(state) == datetime.fromisoformat("2026-10-19T20:00:00+00:00").timestamp() - 300
     assert abs(pp.batch_start(pp.State(None, "sig")) - time.time()) < 5
+
+
+# --- the post-Phase-8 profile: v9 rerun, five runs, scenarios only, no Ragas ---------------------------------------------
+
+PHASE8 = ["plan_check", "compound", "safety", "gap_kb", "tiers_scenarios"]
+
+
+@pytest.fixture(scope="module")
+def steps8():
+    from smartdesk_ai.config.settings import load_settings
+
+    return pp.build_steps(load_settings(), profile="phase8")
+
+
+def test_the_phase8_profile_is_the_five_agreed_runs_without_ragas_or_diagnostics(steps8):
+    assert [s.name for s in steps8] == PHASE8 and [s.phase for s in steps8] == list("bcdde")
+    by = {s.name: s for s in steps8}
+    assert by["tiers_scenarios"].flags == ("--scenarios-only",) and by["tiers_scenarios"].result_files == ("tier_comparison.json",)
+    assert not any(s.name in ("diag_compound", "diag_kb", "paraphrase", "tiers_ragas") for s in steps8)
+
+
+def test_the_phase8_stop_rules_are_the_phase7_ones(steps8, steps):
+    old = {s.name: s for s in steps}
+    for s in steps8:
+        if s.name != "tiers_scenarios":
+            assert s.check is old[s.name].check and s.ok_codes == old[s.name].ok_codes and s.flags == old[s.name].flags, s.name
+
+
+def test_the_phase8_estimate_has_no_judge_pass_and_a_ceiling_of_twice_each_run(steps8, steps):
+    by, old = {s.name: s for s in steps8}, {s.name: s for s in steps}
+    assert by["tiers_scenarios"].estimate.usd < old["tiers_ragas"].estimate.usd / 5
+    assert "judge" not in by["tiers_scenarios"].estimate.detail and "KB answers" not in by["tiers_scenarios"].estimate.detail and all(
+        s.estimate.ceiling_usd == pytest.approx(2 * s.estimate.usd) for s in steps8)
+
+
+def test_the_phase8_profile_has_its_own_state_file_and_the_phase7_state_is_left_alone(tmp_path, monkeypatch):
+    seen = {}
+
+    def fake_batch(steps, runner, root, **kw):
+        seen["path"] = kw["state"].path
+        return pp.Outcome()
+
+    old = tmp_path / "post_phase7_state.json"
+    old.write_text('{"signature": "x", "runs": {"gap_kb": {"passed": true}}}')
+    monkeypatch.setattr(pp, "STATE_FILE", old)
+    monkeypatch.setattr(pp, "STATE_FILE_PHASE8", tmp_path / "post_phase8_state.json")
+    monkeypatch.setattr(pp, "run_batch", fake_batch)
+    pp.main(["--profile", "phase8", "--confirm-spend"], state_path=old, runner=lambda s, a: 0)
+    assert seen["path"] == tmp_path / "post_phase8_state.json" and "gap_kb" in old.read_text()
+
+
+def test_the_final_table_handles_a_scenarios_only_tier_file(steps8, tmp_path):
+    for name in ("plan_check", "compound", "safety", "gap_kb"):
+        for file in next(s for s in steps8 if s.name == name).result_files:
+            write(tmp_path / file, GOOD[(name, file)])
+    write(tmp_path / "tier_comparison.json", {"mock": False, "kb_runs": 0, "scenarios_only": True, "results": [
+        {"name": "tier_map", "usd_per_task": 0.002, "completion_rate": 0.9, "task_accuracy": 0.9, "kb": None}]})
+    outcome = batch(steps8, tmp_path, lambda s, a: 0)
+    table = pp.final_table(outcome, tmp_path, balance_before=5.0, since=0)
+    assert "tier comparison, tier_map" in table and "no KB run" in table

@@ -248,3 +248,36 @@ def test_kept_answers_are_scored_again_on_a_rerun_without_asking_the_models(sett
     assert asked == [r.id for r in rows] and again.usd == first.usd and again.n_questions == 3
     other = tc.run_kb_set(settings, answer, rows[:2], score, "tier_map", guard, cache_dir=tmp_path)  # other questions: asked again
     assert len(asked) == 5 and other.n_questions == 2
+
+
+# --- scenarios only (the post-Phase-8 rerun: no KB answers, no Ragas judge pass) --------------------------------------
+
+
+def test_scenarios_only_skips_the_kb_set_and_the_judge(tmp_path):
+    class NoJudge:
+        def __getattr__(self, name):
+            raise AssertionError("the Ragas judge must not be called in a scenarios-only run")
+
+    res = make_resources(mock=True, need_reranker=False)
+    comparison = tc.compare(res, tmp_path, scenarios=SCENARIOS, scenarios_only=True, judge=NoJudge())
+    assert comparison.scenarios_only is True and [r.name for r in comparison.results] == ["tier_map", "all_main"]
+    assert all(r.kb is None and r.n_tasks == len(SCENARIOS) for r in comparison.results)
+    text = "\n".join(tc.format_table(comparison))
+    assert "cost per task" in text and "KB faithfulness" not in text and "Quality judge" not in text
+    saved = json.loads(tc.save(comparison, tmp_path / "out").read_text())
+    assert saved["scenarios_only"] is True and all(r["kb"] is None for r in saved["results"])
+
+
+def test_the_scenarios_only_estimate_has_no_kb_or_judge_cost(settings):
+    full = tc.estimate_comparison(settings, SCENARIOS, n_kb=10, kb_runs=1)
+    only = tc.estimate_comparison(settings, SCENARIOS, n_kb=0, kb_runs=0)
+    assert only.total_usd == pytest.approx(sum(full.scenario_usd.values())) and only.kb_usd_per_run == 0.0
+    assert only.ceiling_usd == pytest.approx(only.total_usd * settings.tier_comparison.ceiling_multiplier)
+    text = "\n".join(tc.describe_estimate(only))
+    assert "Ragas" not in text and "scenario scripts" in text
+
+
+def test_the_command_line_has_a_scenarios_only_estimate_that_is_free(capsys):
+    assert tc.main(["--scenarios-only", "--estimate"]) == 0
+    out = capsys.readouterr().out
+    assert "scenario" in out and "Ragas" not in out

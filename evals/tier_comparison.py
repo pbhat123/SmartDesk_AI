@@ -128,13 +128,14 @@ class ConfigResult(BaseModel):
     tokens_per_task: float
     by_tier: dict[str, TierUse]
     tasks: list[TaskCost]
-    kb: KbResult
+    kb: KbResult | None = None  # None in a scenarios-only run (no KB answers, no Ragas judge pass)
     kb_shared: bool = False  # the KB numbers come from one run that both configurations share
 
 
 class Comparison(BaseModel):
     mock: bool
     kb_runs: int
+    scenarios_only: bool = False
     results: list[ConfigResult] = Field(default_factory=list)
 
     @property
@@ -251,31 +252,34 @@ def compare(
     kb_pipeline: KbPipeline | None = None,
     score: Score | None = None,
     keep_answers: bool = False,
+    scenarios_only: bool = False,
 ) -> Comparison:
     """Run both configurations. The defaults are the free mock run; the live run passes live builders, a pipeline and a
     scorer. A `guard` stops the run between tasks and questions once its ceiling is passed."""
     guard = guard or SpendGuard(None)
     scenarios = list(scenarios) if scenarios is not None else all_scenarios()
     rows = kb_rows()[:kb_limit]
-    if index is None and kb_pipeline is None:
+    if index is None and kb_pipeline is None and not scenarios_only:
         from evals.run import get_index  # a throwaway index in mock mode
 
         index = get_index(res, None)
-    pipeline = kb_pipeline or mock_pipeline(res, index)
+    pipeline = None if scenarios_only else kb_pipeline or mock_pipeline(res, index)
     judge = judge or MockJudge()
     score = score or (lambda name, outputs, rows: compute_metrics(outputs, rows, judge))
     shared = not (kb_both or kb_path_differs(res.settings))
-    comparison = Comparison(mock=res.mock, kb_runs=1 if shared else 2)
+    comparison = Comparison(mock=res.mock, kb_runs=0 if scenarios_only else 1 if shared else 2, scenarios_only=scenarios_only)
     kb_done: KbResult | None = None
     for name in CONFIGS:
         variant = settings_for(name, res.settings)
         tasks = agent_metrics.run_scenarios(
             scenarios, variant, work_dir / name, build=scenario_builder,
             after_task=lambda task, v=variant: guard.add(price_entries(_task_entries(task), v)))
-        if kb_done is None or not shared:
+        if scenarios_only:
+            kb_done = None
+        elif kb_done is None or not shared:
             kb_done = run_kb_set(variant, pipeline(variant), rows, score, name, guard,
                                  cache_dir=work_dir / name if keep_answers else None)
-        comparison.results.append(ConfigResult(kb=kb_done, kb_shared=shared, **scenario_result(name, variant, tasks)))
+        comparison.results.append(ConfigResult(kb=kb_done, kb_shared=shared and not scenarios_only, **scenario_result(name, variant, tasks)))
     return comparison
 
 
@@ -324,6 +328,13 @@ def estimate_comparison(settings: Settings, scenarios: Sequence[Scenario], *, n_
 
 
 def describe_estimate(estimate: Estimate) -> list[str]:
+    if estimate.kb_runs == 0:  # scenarios only: no KB answers, no Ragas judge pass
+        return [
+            f"Right-sizing comparison, scenarios only: {estimate.n_scenarios} scenario scripts on each configuration; no KB set and no judge pass.",
+            f"Estimated cost: about ${estimate.total_usd:.2f} = scenarios ${estimate.scenario_usd['tier_map']:.3f} (tier map) + "
+            f"${estimate.scenario_usd['all_main']:.3f} (all Main).",
+            f"A live run stops after the task in flight once it passes the ceiling of ${estimate.ceiling_usd:.2f}.",
+        ]
     shared = ("The KB answer path is on Main-Model in both configurations, so the KB set runs once and both columns "
               "carry its numbers (--kb-both runs it for each)." if estimate.kb_runs == 1 else
               "The KB set runs once for each configuration.")
@@ -368,6 +379,8 @@ def format_table(comparison: Comparison) -> list[str]:
         row("cost by agent (all tasks, USD)", "", "")
         for name in dict.fromkeys(agents):
             row(f"  {name}", _n(a.by_agent.get(name, TierUse()).usd, 5), _n(b.by_agent.get(name, TierUse()).usd, 5))
+    if a.kb is None or b.kb is None:
+        return lines
     row("KB faithfulness (grounded rate)", _n(a.kb.faithfulness), _n(b.kb.faithfulness))
     row("KB hallucination rate", _n(a.kb.hallucination_rate), _n(b.kb.hallucination_rate))
     row("KB answer correctness", _n(a.kb.answer_correctness), _n(b.kb.answer_correctness))
@@ -441,7 +454,8 @@ def run_live(settings: Settings, args: argparse.Namespace, estimate: Estimate) -
 
         try:
             comparison = compare(res, work_dir, index=index, kb_limit=args.kb_limit, kb_both=args.kb_both, guard=guard,
-                                 scenario_builder=_live_stack, kb_pipeline=pipeline, score=live_score, keep_answers=True)
+                                 scenario_builder=_live_stack, kb_pipeline=pipeline, score=live_score, keep_answers=True,
+                                 scenarios_only=args.scenarios_only)
         except SpendCeilingExceeded as stop:
             run.status = "ceiling"
             print(f"[stopped] {stop}. Nothing was saved; the judge pass resumes from {work_dir} on the next run.", file=sys.stderr)
@@ -451,6 +465,8 @@ def run_live(settings: Settings, args: argparse.Namespace, estimate: Estimate) -
     print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls ({cost.input_tokens:,} input, "
           f"{cost.output_tokens:,} output tokens)")
     print(f"saved: {save(comparison, args.out_dir)}")
+    if args.scenarios_only:
+        return 0
     ragas = save_ragas(work_dir, args.out_dir)
     print(f"final Ragas report (the same judge pass): {ragas}" if ragas else "no Ragas report was saved")
     return 0
@@ -462,6 +478,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--estimate", action="store_true", help="print the cost estimate and stop")
     parser.add_argument("--confirm-spend", action="store_true", help="allow the live run, which calls paid models")
     parser.add_argument("--kb-both", action="store_true", help="run the KB set for each configuration even if the models match")
+    parser.add_argument("--scenarios-only", action="store_true", help="only the scenario scripts: no KB answers and no Ragas judge pass")
     parser.add_argument("--kb-limit", type=int, default=None, help="use only the first N KB questions")
     parser.add_argument("--out-dir", type=Path, default=RESULTS_DIR, help="write tier_comparison.json (and rag_metrics_final.json) here")
     parser.add_argument("--work-dir", type=Path, default=WORK_DIR, help="live run: where the judge checkpoint is kept, to resume")
@@ -470,13 +487,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mock:
         res = make_resources(mock=True, need_reranker=False)
         with tempfile.TemporaryDirectory(prefix="tier_comparison_") as work:
-            comparison = compare(res, Path(work), kb_limit=args.kb_limit, kb_both=args.kb_both)
+            comparison = compare(res, Path(work), kb_limit=args.kb_limit, kb_both=args.kb_both, scenarios_only=args.scenarios_only)
         print("\n".join(format_table(comparison)))
         if args.out_dir != RESULTS_DIR:
             print(f"saved: {save(comparison, args.out_dir)}")  # a mock run never writes into the real results folder
         return 0
-    n_kb = len(kb_rows()[:args.kb_limit])
-    kb_runs = 2 if args.kb_both or kb_path_differs(settings) else 1
+    n_kb = 0 if args.scenarios_only else len(kb_rows()[:args.kb_limit])
+    kb_runs = 0 if args.scenarios_only else 2 if args.kb_both or kb_path_differs(settings) else 1
     estimate = estimate_comparison(settings, all_scenarios(), n_kb=n_kb, kb_runs=kb_runs)
     print("\n".join(describe_estimate(estimate)))
     if args.estimate:

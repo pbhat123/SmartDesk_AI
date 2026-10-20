@@ -61,6 +61,8 @@ COMPOUND_MIN_PASSED = 12
 TOP_UP_USD = 9.50  # the balance after the 2026-10-18 top-up
 EXIT_STALLED = 3
 STATE_FILE = ROOT / "data" / "eval_checkpoints" / "post_phase7_state.json"
+STATE_FILE_PHASE8 = ROOT / "data" / "eval_checkpoints" / "post_phase8_state.json"  # the v9 rerun keeps its own state
+PROFILES = {"phase7": None, "phase8": ("plan_check", "compound", "safety", "gap_kb", "tiers_scenarios")}
 DIAG_DIR = "diagnostics"
 DIAG_COMPOUND_ROWS = "cmp-003,cmp-008,cmp-013"
 DIAG_KB_QUESTIONS = "kb-010"
@@ -159,6 +161,13 @@ def _no_rule(out_dir: Path) -> str | None:
 # --- the steps and their estimates -----------------------------------------------------------------------------
 
 
+def _scenarios_estimate(settings: Settings) -> Estimate:
+    """The T7.11 scenarios alone: no KB answers and no Ragas judge pass (the post-Phase-8 rerun)."""
+    e = tier_comparison.estimate_comparison(settings, tier_comparison.all_scenarios(), n_kb=0, kb_runs=0)
+    return Estimate("the T7.11 scenarios only (no KB set, no Ragas)", round(e.total_usd, 4),
+                    f"tier map ${e.scenario_usd['tier_map']:.3f}, all Main ${e.scenario_usd['all_main']:.3f}")
+
+
 def _tiers_estimate(settings: Settings) -> Estimate:
     key = settings.model_dump_json()
     if key not in _tier_estimates:
@@ -171,7 +180,7 @@ def _tiers_estimate(settings: Settings) -> Estimate:
     return _tier_estimates[key]
 
 
-def build_steps(settings: Settings) -> list[Step]:
+def build_steps(settings: Settings, profile: str = "phase7") -> list[Step]:
     live = live_settings(settings)
     rows = [SafetyRow(**r) for r in load_jsonl(safety_eval.SAFETY_SET)]
     compound_rows = compound_eval.load_rows()
@@ -182,7 +191,7 @@ def build_steps(settings: Settings) -> list[Step]:
     plan = orchestrator_plan_check.estimate(live, cases, 0.0)
     plan_estimate = Estimate("the orchestrator planning check (v8)", round(plan.usd, 4),
                              f"{plan.calls} orchestrator calls, no workers")
-    return [
+    steps = [
         Step("diag_compound", "a", "evals.compound_eval", ("--live", "--only", DIAG_COMPOUND_ROWS),
              compound_eval.estimate_live(live, diag_rows), ("compound_eval_live.json",),
              lambda d: check_diag(d, "compound_eval_live.json"), ok_codes=(0, 1), subdir=DIAG_DIR),
@@ -199,6 +208,13 @@ def build_steps(settings: Settings) -> list[Step]:
         Step("tiers_ragas", "e", "evals.tier_comparison", (), _tiers_estimate(settings),
              ("tier_comparison.json", "rag_metrics_final.json"), _no_rule),
     ]
+    wanted = PROFILES[profile]
+    if wanted is None:
+        return steps
+    # The v9 rerun: the same runs, flags, ceilings and stop rules, minus the diagnostics, the paraphrase run and Ragas.
+    steps.append(Step("tiers_scenarios", "e", "evals.tier_comparison", ("--scenarios-only",), _scenarios_estimate(settings),
+                      ("tier_comparison.json",), _no_rule))
+    return [s for s in steps if s.name in wanted]
 
 
 def estimate_table(steps: Sequence[Step]) -> list[str]:
@@ -435,7 +451,7 @@ def final_table(outcome: Outcome, root: Path, *, balance_before: float, since: f
     if (t := _try(root, "tier_comparison.json", since)):
         for res in t.get("results", []):
             L.append(f"tier comparison, {res['name']}: ${res['usd_per_task']:.5f} per task, completion {_num(res['completion_rate'])}, "
-                     f"accuracy {_num(res['task_accuracy'])}, KB faithfulness {_num(res['kb']['faithfulness'])}")
+                     f"accuracy {_num(res['task_accuracy'])}, " + (f"KB faithfulness {_num(res['kb']['faithfulness'])}" if res.get("kb") else "no KB run"))
     else:
         L.append("tier comparison: not run")
     L.append("ledger cost per run: " + ", ".join(
@@ -461,11 +477,15 @@ def main(argv: Sequence[str] | None = None, *, state_path: Path | None = STATE_F
     parser.add_argument("--confirm-spend", action="store_true", help="run the batch (calls paid models)")
     parser.add_argument("--resume", action="store_true", help="skip the runs that already finished and passed")
     parser.add_argument("--fresh", action="store_true", help="discard a saved state and start over")
+    parser.add_argument("--profile", choices=sorted(PROFILES), default="phase7",
+                        help="phase7: the original eight runs; phase8: the v9 rerun (plan check, compound, safety, gap + KB, T7.11 scenarios)")
     parser.add_argument("--out-dir", type=Path, default=RESULTS_DIR, help="where the runs write their result files")
     parser.add_argument("--topup", type=float, default=TOP_UP_USD, help="the OpenAI balance after the last top-up (USD)")
     args = parser.parse_args(argv)
     settings = load_settings()
-    steps = build_steps(settings)
+    steps = build_steps(settings, args.profile)
+    if args.profile == "phase8" and state_path == STATE_FILE:
+        state_path = STATE_FILE_PHASE8
     print("\n".join(estimate_table(steps)))
     if args.estimate:
         return 0

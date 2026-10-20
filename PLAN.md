@@ -748,6 +748,9 @@ Source: the saved judge scores of the final pass (`data/eval_checkpoints/tier_co
 - kb-024 (0.5 to 0.0, 79 to 171): adds the 30/90-day/month-5 review times to "6 months".
 In all five the core fact is the same in v3 and v4. So the drop measures extra true detail against a one-line reference, not worse accuracy. Answer correctness (0.695 to 0.616) and relevancy move the same way. This confirms the hypothesis from 14.6 from the saved scores; the v3 Ragas pass ($0.96) is no longer needed to test it.
 
+### 14.8 Three requests with no reply in `data/trace.jsonl` (checked 2026-10-19, no spend)
+The local trace holds 60 requests and 57 replies. The three requests without a reply (request ids starting 1413bdfa, 3ac4eb8b, 4052d833; three different sessions) were logged at 2026-10-18 23:55:47, 23:56:47 and 23:59:35 UTC. The thread-safe ticket map fix, commit 5ee5d95, is dated 2026-10-18 20:06:24 -04:00, which is 2026-10-19 00:06:24 UTC, so all three come 7 to 11 minutes **before** the fix. Each has only its `request` event: no graph step (not even `start`), no tool call, no LLM call. That fits a turn that failed before the graph ran its first step, which is what the cross-thread SQLite error of the old ticket map would do; I did not find an error line to prove it, so the link to that bug is consistent, not confirmed. No request logged after the fix is missing a reply. The new live agent metrics (T6.6 follow-up) count such a turn as an error, so the Monitoring tab's error rate on an unfiltered "All time" window includes these three until the trace is rotated or the window is set to today or since app start.
+
 ## 15. Phase 6 UI build notes (mock only)
 
 ### 15.1 T6.5 (chat UI, FR-A12, SPEC section 4 item 3)

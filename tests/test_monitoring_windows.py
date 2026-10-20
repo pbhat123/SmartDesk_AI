@@ -113,12 +113,12 @@ def test_the_page_has_a_window_filter_the_window_line_and_the_last_error_column(
     write_metrics(tmp_path / "tool_metrics.jsonl", [rec(ts=iso(-72), outcome="error", code="error")])
     page = monitoring_app(ctx)
     assert not page.exception
-    radio = next(r for r in page.main.radio if r.label == "Tool stats window")
-    assert radio.options == ["Since app start", "Today (UTC)", "All time"]
-    radio.set_value("All time").run()
+    toggle = next(g for g in page.main.get("button_group") if g.label == "Time window")
+    assert toggle.options == ["This session", "Today (UTC)", "All time"]
+    toggle.set_value("All time").run()
     shown = element_text(page.main)
     assert "All time" in shown and "since 2026-10-16" in shown and "last error" in shown
-    page.main.radio[0].set_value("Since app start").run()
+    page.main.get("button_group")[0].set_value("This session").run()
     assert "No tool calls yet" in element_text(page.main) or "since" in element_text(page.main)
 
 
@@ -231,15 +231,14 @@ def test_the_page_shows_the_split_and_a_window_filter(tmp_path):
     for text in (*start, "yes"):
         ctx.service.handle("b", text)
     page = monitoring_app(ctx)
-    radio = next(r for r in page.main.radio if r.label == "Human checks window")
-    assert radio.options == ["This session", "Today (UTC)", "All time"]
-    radio.set_value("All time").run()
+    toggle = next(g for g in page.main.get("button_group") if g.label == "Time window")
+    toggle.set_value("All time").run()
     metrics = {m.label: m.value for m in page.main.metric}
     assert metrics["Approved, ticket created"] == "1" and metrics["Approved, creation failed"] == "1"
     assert metrics["Approvals"] == "2" and metrics["Rejections"] == "0"
 
 
-def test_each_filter_sits_directly_under_its_own_heading(tmp_path):
+def test_one_window_toggle_sits_at_the_top_and_drives_both_filters(tmp_path):
     page = monitoring_app(mock_context(tmp_path))
 
     def flat(node):
@@ -249,8 +248,37 @@ def test_each_filter_sits_directly_under_its_own_heading(tmp_path):
                 yield from flat(child)
 
     shown = [(e.type, getattr(e, "label", None) or getattr(e, "value", None)) for e in flat(page.main)]
-    kinds = [(t, v) for t, v in shown if t in ("subheader", "radio")]
-    assert kinds.index(("radio", "Tool stats window")) == kinds.index(("subheader", "Tool stats")) + 1
-    heading = ("subheader", "Human checks at the ticket approval gate")
-    assert kinds.index(("radio", "Human checks window")) == kinds.index(heading) + 1
-    assert kinds.index(("subheader", "Cost by tier")) < kinds.index(heading)  # the page order is unchanged
+    kinds = [(t, v) for t, v in shown if t in ("subheader", "button_group", "metric")]
+    assert [t for t, _ in kinds].index("button_group") < [t for t, _ in kinds].index("subheader")  # the toggle comes first
+    assert [t for t, v in kinds if t == "button_group"] == ["button_group"]  # and there is only one
+    assert kinds.index(("subheader", "Cost by tier")) < kinds.index(("subheader", "Human checks at the ticket approval gate"))
+    labels = [v for t, v in kinds if t == "metric"][:4]
+    assert labels == ["Spend today (ledger)", "Cache hit rate", "Approval gate", "Error rate"]  # the four KPI tiles
+
+
+def test_the_kpi_tiles_and_the_component_badges_show_the_current_state(tmp_path):
+    page = monitoring_app(mock_context(tmp_path))
+    assert not page.exception
+    tiles = {m.label: m.value for m in page.main.metric}
+    assert tiles["Spend today (ledger)"] == "$0.0000" and tiles["Approval gate"] == "0 / 0 / 0"
+    assert tiles["Cache hit rate"] == "n/a" and tiles["Error rate"] == "n/a"
+    notes = " ".join(c.value for c in page.main.caption)
+    assert "Budget cutoffs" in notes and "p95 latency n/a" in notes and "Approved / edited / rejected" in notes
+    badges = " ".join(m.value for m in page.main.markdown)
+    assert ":gray-badge[skipped]" in badges and ":orange-badge[degraded]" in badges  # reranker skipped, redis not set
+
+
+def test_the_drift_card_shows_the_latest_check_as_tiles_with_the_change(tmp_path):
+    from smartdesk_ai.ops.drift import DriftHistory, DriftPoint
+
+    def point(ts, faithfulness):
+        return DriftPoint(ts=ts, mode="mock", faithfulness=faithfulness, recall_at_k=0.9, escalation_rate=0.3,
+                          avg_rerank_score=None, k=5, n_kb=2, n_gap=1, retrieval_strategy="hybrid",
+                          reranker_status="skipped", prompt_versions={"answer": 4}, models={"main": "m"}, usd=0.0)
+
+    history = DriftHistory(tmp_path / "drift.jsonl")
+    history.append(point("2026-10-19T10:00:00+00:00", 0.90))
+    history.append(point("2026-10-20T10:00:00+00:00", 0.95))
+    tiles = {m.label: (m.value, m.delta) for m in monitoring_app(mock_context(tmp_path)).main.metric}
+    assert tiles["Faithfulness"] == ("0.95", "+0.05") and tiles["Recall@5"][0] == "0.90"
+    assert tiles["Avg rerank score"][0] == "n/a"

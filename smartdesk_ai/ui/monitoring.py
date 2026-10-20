@@ -44,6 +44,7 @@ from smartdesk_ai.ops.spend_ledger import ledger_path, read_events
 from smartdesk_ai.rag.embeddings import HashingEmbeddings, embedder_id
 from smartdesk_ai.rag.staleness import StaleReport, check_staleness
 from smartdesk_ai.ui.context import UiContext
+from smartdesk_ai.ui.formats import ms, pct as _pct, usd
 
 TOOL_METRICS_FILE = "tool_metrics.jsonl"
 TRACE_FILE = "trace.jsonl"
@@ -57,8 +58,10 @@ TIER_ORDER = ("main", "light", "embedding", "other")
 
 ToolWindowName = Literal["app", "today", "all"]
 HitlWindowName = Literal["session", "today", "all"]
-TOOL_WINDOWS: dict[str, ToolWindowName] = {"Since app start": "app", "Today (UTC)": "today", "All time": "all"}
-HITL_WINDOWS: dict[str, HitlWindowName] = {"This session": "session", "Today (UTC)": "today", "All time": "all"}
+# One toggle at the top of the page drives both filters: the tool stats read "This session" as since the app started
+# (the server process), the human checks read it as this browser session's conversations.
+WINDOW_CHOICES: dict[str, tuple[ToolWindowName, HitlWindowName]] = {
+    "This session": ("app", "session"), "Today (UTC)": ("today", "today"), "All time": ("all", "all")}
 APP_STARTED = datetime.now(timezone.utc)  # set when the server process first imports this module
 
 
@@ -420,12 +423,14 @@ def load_monitoring(
 
 # --- rendering ------------------------------------------------------------------------------------
 
-def _pct(value: float | None) -> str:
-    return "n/a" if value is None else f"{value:.1%}"
+def _card():
+    """One section of the page: a bordered white card."""
+    return st.container(border=True)
 
 
-def _choose(label: str, options: dict[str, Any], key: str) -> Any:
-    return options[st.radio(label, list(options), index=len(options) - 1, horizontal=True, key=key)]
+def _window_toggle() -> tuple[ToolWindowName, HitlWindowName]:
+    chosen = st.segmented_control("Time window", list(WINDOW_CHOICES), default="All time", key="monitoring_window")
+    return WINDOW_CHOICES[chosen or "All time"]  # clicking the selected one again clears it: back to all time
 
 
 def _render_tools(data: MonitoringData) -> None:
@@ -445,13 +450,18 @@ def _render_tools(data: MonitoringData) -> None:
                    "they appear only under All time.")
 
 
-def _render_degraded(data: MonitoringData) -> None:
+STATUS_BADGES = {"ok": "green", "degraded": "orange", "skipped": "gray", "unknown": "gray", "mock": "blue"}
+
+
+def _render_components(data: MonitoringData) -> None:
     st.subheader("Components and degraded modes")
-    st.dataframe(pd.DataFrame([{
-        "component": c.component, "status": "not checked yet" if c.status == "unknown" else c.status,
-        "load time (s)": None if c.load_seconds is None else round(c.load_seconds, 2),
-        "running instead": c.running_instead or "-", "detail": c.detail or "-"} for c in data.components]),
-        hide_index=True, width="stretch")
+    for c in data.components:
+        label = "not checked yet" if c.status == "unknown" else c.status
+        st.markdown(f"**{c.component}** :{STATUS_BADGES.get(c.status, 'gray')}-badge[{label}]")
+        text = [part for part in (c.detail, f"running instead: {c.running_instead}" if c.running_instead else "",
+                                  f"load time {c.load_seconds:.1f} s" if c.load_seconds else "") if part]
+        if text:
+            st.caption(" · ".join(text))
     st.caption("Skipped means left out on purpose (the reranker in mock mode); it is not a fault. "
                "Degraded means a component failed or is not configured, and the substitute shown is running.")
 
@@ -459,17 +469,17 @@ def _render_degraded(data: MonitoringData) -> None:
 def _render_cost(ctx: UiContext, data: MonitoringData) -> None:
     st.subheader("Cost by tier")
     left, middle, right = st.columns(3)
-    left.metric("Today (UTC), all sources", f"${data.ledger_today_usd:.4f}",
+    left.metric("Today (UTC), all sources", usd(data.ledger_today_usd),
                 help="Everything the spend ledger recorded today: this app, eval runs, scripts and drift checks.")
     session = session_cost(ctx.service.services.cost, st.session_state.get("thread_ids", []))
-    middle.metric("This session (tracker estimate)", f"${session.usd:.4f}",
+    middle.metric("This session (tracker estimate)", usd(session.usd),
                   help=f"{session.llm_calls} model calls and {session.tokens:,} tokens in this browser session's "
                        "conversations, from the request cost tracker. Mock runs price nothing, so it stays at $0.")
     spent = data.budget.spent_today_usd
-    right.metric("Daily budget used", "no spend recorded" if spent is None else f"${spent:.4f}",
+    right.metric("Daily budget used", "no spend recorded" if spent is None else usd(spent),
                  help=f"Cutoff 1 at ${data.budget.cutoff_1_usd:.2f} (Light-Model only), "
                       f"cutoff 2 at ${data.budget.cutoff_2_usd:.2f} (service stops). Level now: {data.budget.level}.")
-    st.caption(f"Ledger, all time: ${data.ledger_total_usd:.4f}.")
+    st.caption(f"Ledger, all time: {usd(data.ledger_total_usd)}.")
     if data.sources_today:
         st.dataframe(pd.DataFrame([{"today, by source": s.source, "ledger USD": s.usd, "ledger calls": s.calls}
                                    for s in data.sources_today]), hide_index=True, width="stretch")
@@ -480,19 +490,23 @@ def _render_cost(ctx: UiContext, data: MonitoringData) -> None:
         "ledger calls (all time)": t.ledger_calls, "ledger USD (all time)": t.ledger_usd,
         "tracker steps": t.tracker_steps, "tracker USD": t.tracker_usd} for t in data.tiers]),
         hide_index=True, width="stretch")
+    st.caption("The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
+               "per-request analytics. Dated model names are grouped under the model configured for their tier. "
+               "'other' is a model missing from config.yaml (priced as the Main model).")
+
+
+def _render_cost_by_agent(data: MonitoringData) -> None:
     st.subheader("Cost by agent")
     if data.agents:
         st.dataframe(pd.DataFrame([{
-            "agent": a.agent, "spans": a.spans, "model calls": a.calls, "tool calls": a.tool_calls,
-            "input tokens": a.input_tokens, "output tokens": a.output_tokens, "tiers": ", ".join(a.tiers),
-            "tracker USD": round(a.usd, 6)} for a in data.agents]), hide_index=True, width="stretch")
+            "Agent": a.agent, "Tier": ", ".join(a.tiers), "Calls": a.calls, "Tool calls": a.tool_calls,
+            "Spans": a.spans, "Input tokens": a.input_tokens, "Output tokens": a.output_tokens,
+            "Cost": round(a.usd, 6)} for a in data.agents]), hide_index=True, width="stretch",
+            column_config={"Cost": st.column_config.NumberColumn(format="$%.4f")})
         st.caption("From the agent spans in the local trace: one span per agent per request (a worker per part). "
                    "The grounding judge's calls count in the worker that asked for them. Mock runs price nothing.")
     else:
         st.caption("No agent spans yet. Ask a question and they appear here.")
-    st.caption("The ledger is the audit trail to compare with the provider's billing page; the tracker is the "
-               "per-request analytics. Dated model names are grouped under the model configured for their tier. "
-               "'other' is a model missing from config.yaml (priced as the Main model).")
 
 
 def _render_stale(data: MonitoringData) -> None:
@@ -562,9 +576,9 @@ def _render_agent_metrics(data: MonitoringData) -> None:
                    f"(one task is one conversation), {live.n_turns} turns, from the local trace and cost files.")
         cells = [("Completion rate", _pct(live.completion_rate)), ("Error rate", _pct(live.error_rate)),
                  ("Avg steps", "n/a" if live.steps_to_completion is None else f"{live.steps_to_completion:.1f}"),
-                 ("Cost per task", f"${live.usd_per_task:.4f}"),
-                 ("Turn latency p50", "n/a" if live.turn_p50_ms is None else f"{live.turn_p50_ms:.0f} ms"),
-                 ("Turn latency p95", "n/a" if live.turn_p95_ms is None else f"{live.turn_p95_ms:.0f} ms")]
+                 ("Cost per task", usd(live.usd_per_task)),
+                 ("Turn latency p50", ms(live.turn_p50_ms)),
+                 ("Turn latency p95", ms(live.turn_p95_ms))]
         for start in range(0, len(cells), 3):
             for column, (label, value) in zip(st.columns(3), cells[start:start + 3]):
                 column.metric(label, value)
@@ -582,10 +596,10 @@ def _render_agent_metrics(data: MonitoringData) -> None:
         cells = [("Task completion", _pct(m.completion_rate)), ("Task accuracy", _pct(m.task_accuracy)),
                  ("Error rate", _pct(m.error_rate)),
                  ("Steps to completion", "n/a" if m.steps_to_completion is None else f"{m.steps_to_completion:.1f}"),
-                 ("Task latency", "n/a" if m.task_latency_ms is None else f"{m.task_latency_ms:.0f} ms"),
+                 ("Task latency", ms(m.task_latency_ms)),
                  ("Turn latency p50 / p95", "n/a" if m.turn_p50_ms is None or m.turn_p95_ms is None
                   else f"{m.turn_p50_ms:.0f} / {m.turn_p95_ms:.0f} ms"),
-                 ("Cost per task", "n/a" if m.usd_per_task is None else f"${m.usd_per_task:.4f}")]
+                 ("Cost per task", "n/a" if m.usd_per_task is None else usd(m.usd_per_task))]
         for start in range(0, len(cells), 4):
             for column, (label, value) in zip(st.columns(4), cells[start:start + 4]):
                 column.metric(label, value)
@@ -601,6 +615,19 @@ def _drift_frame(points: list[DriftPoint]) -> pd.DataFrame:
                         | {"Average rerank score": [p.avg_rerank_score for p in points]}, index=index)
 
 
+def _drift_tiles(points: list[DriftPoint]) -> None:
+    """The latest check as four tiles, each with its change since the check before (when there is one)."""
+    last, before = points[-1], points[-2] if len(points) > 1 else None
+    cells = [("Faithfulness", last.faithfulness, before and before.faithfulness),
+             (f"Recall@{last.k}", last.recall_at_k, before and before.recall_at_k),
+             ("Escalation rate", last.escalation_rate, before and before.escalation_rate),
+             ("Avg rerank score", last.avg_rerank_score, before and before.avg_rerank_score)]
+    for column, (label, value, previous) in zip(st.columns(4), cells):
+        shown = "n/a" if value is None else f"{value:.2f}"
+        change = None if value is None or previous is None else f"{value - previous:+.2f}"
+        column.metric(label, shown, delta=change, delta_color="off")
+
+
 def _render_drift_history(ctx: UiContext, data: MonitoringData) -> None:
     mode = ctx.settings.modes.llm
     points = [p for p in data.drift if p.mode == mode]
@@ -610,6 +637,7 @@ def _render_drift_history(ctx: UiContext, data: MonitoringData) -> None:
                    f"No drift checks yet in {mode} mode ({other[next(iter(other))]} from the other mode are hidden).")
         return
     frame = _drift_frame(points)
+    _drift_tiles(points)
     hidden = sum(other.values())
     st.caption(f"{len(points)} point{'s' if len(points) != 1 else ''} from {mode} runs"
                + (f"; {hidden} from {next(iter(other))} runs are hidden, since the two are not comparable" if hidden else "")
@@ -667,32 +695,58 @@ def _render_drift(ctx: UiContext, data: MonitoringData) -> None:
     _render_drift_history(ctx, data)
 
 
+def _redis_line(data: MonitoringData) -> str:
+    redis = next((c for c in data.components if c.component == "redis"), None)
+    if redis is None:
+        return "Cache backend unknown"
+    return f"Redis · {redis.status}"
+
+
+def _render_kpis(data: MonitoringData) -> None:
+    """The four numbers to look at first, each with one line under it. The window toggle changes the error rate and
+    the approval counts; the spend and the cache rate are all-time or today by their own definition."""
+    live, hitl, budget = data.live_metrics, data.hitl, data.budget
+    tiles = [
+        ("Spend today (ledger)", usd(data.ledger_today_usd), f"Budget cutoffs \\${budget.cutoff_1_usd:g} / \\${budget.cutoff_2_usd:g}"),
+        ("Cache hit rate", _pct(data.cache.hit_rate) if data.cache.lookups else "n/a", _redis_line(data)),
+        ("Approval gate", f"{hitl.approvals} / {hitl.edits} / {hitl.rejections}", "Approved / edited / rejected"),
+        ("Error rate", _pct(live.error_rate) if live else "n/a", f"p95 latency {ms(live.turn_p95_ms) if live else 'n/a'}"),
+    ]
+    for column, (label, value, note) in zip(st.columns(4), tiles):
+        with column, st.container(border=True, height=140):  # one height, so a long note cannot make a tile taller
+            st.metric(label, value)
+            st.caption(note)
+
+
 def render_monitoring(ctx: UiContext) -> None:
-    st.title("Monitoring")
-    if st.button("Refresh", key="monitoring_refresh"):
+    title, toggle, refresh = st.columns([4, 4, 1], vertical_alignment="center")
+    title.title("Monitoring")
+    with toggle:
+        tool_window, hitl_window = _window_toggle()
+    if refresh.button("Refresh", key="monitoring_refresh"):
         st.rerun()
-    # Each filter sits under its own heading, but the data it picks is needed before the sections draw: the sections
-    # fill containers that were opened in page order.
-    tools_box, degraded_box, cost_box, stale_box, hitl_box = (st.container() for _ in range(5))
-    with tools_box:
-        st.subheader("Tool stats")
-        tool_window = _choose("Tool stats window", TOOL_WINDOWS, "monitoring_tool_window")
-    with hitl_box:
-        st.subheader("Human checks at the ticket approval gate")
-        hitl_window = _choose("Human checks window", HITL_WINDOWS, "monitoring_hitl_window")
     data = load_monitoring(ctx.settings, ctx.data_dir, ctx.kb_dir, ctx.registry, results_dir=ctx.results_dir,
                            window=tool_window, hitl_window=hitl_window,
                            sessions=st.session_state.get("thread_ids", []))
-    with tools_box:
+    _render_kpis(data)
+    agents, components = st.columns([3, 2])
+    with agents, _card():
+        _render_cost_by_agent(data)
+    with components, _card():
+        _render_components(data)
+    with _card():
+        _render_drift(ctx, data)
+    with _card():
+        st.subheader("Tool stats")
         _render_tools(data)
-    with degraded_box:
-        _render_degraded(data)
-    with cost_box:
+    with _card():
         _render_cost(ctx, data)
-    with stale_box:
+    with _card():
         _render_stale(data)
-    with hitl_box:
+    with _card():
+        st.subheader("Human checks at the ticket approval gate")
         _render_hitl(data)
-    _render_cache(data)
-    _render_agent_metrics(data)
-    _render_drift(ctx, data)
+    with _card():
+        _render_cache(data)
+    with _card():
+        _render_agent_metrics(data)

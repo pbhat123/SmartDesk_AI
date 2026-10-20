@@ -12,6 +12,9 @@ textColor = "#0F172A"
 borderColor = "#E2E8F0"
 baseRadius = "12px"
 showWidgetBorder = true
+paddingTop = "2.5rem"
+headingFontSizes = ["1.6rem", "1.3rem", "1.05rem", "1rem", "0.9rem", "0.8rem"]
+headingFontWeights = [600, 600, 600, 600, 600, 600]
 # No web font is loaded, so the page looks the same offline: Inter if installed, else the system UI font.
 font = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
 

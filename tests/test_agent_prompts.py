@@ -226,3 +226,40 @@ def test_the_eval_wording_check_catches_verbatim_and_near_verbatim_examples():
     assert eval_matches('Say "How many sick days do I get, and when is my salary paid today?" as is.')
     assert eval_matches('Say "Is there a sabbatical policy?" as is.')
     assert eval_matches('Say "Which colour is the sky on Mars?" as is.') == []
+
+
+# --- the same check over every prompt file, active and old (FR-A18) ---------------------------------------------------------
+# Old versions kept their eval-shaped examples (found 2026-10-20): orchestrator v5 to v8, and ticket_summary_v1 once v2 replaced it. They
+# are inactive and stay as they are; any other file that is flagged, including a new version, fails the test.
+KNOWN_FLAGGED_OLD = {"orchestrator_v5.md", "orchestrator_v6.md", "orchestrator_v7.md", "orchestrator_v8.md", "ticket_summary_v1.md"}
+
+
+def _prompt_files():
+    return sorted(PROMPTS_DIR.glob("*_v*.md"))
+
+
+def _is_active(path, settings):
+    name, _, version = path.stem.rpartition("_v")
+    return settings.prompts.get(name) == int(version)
+
+
+def test_every_active_prompt_is_free_of_eval_wording(settings):
+    files = [p for p in _prompt_files() if _is_active(p, settings)]
+    assert len(files) == len(settings.prompts), "every configured prompt has an active file"
+    flagged = {p.name: eval_matches(p.read_text()) for p in files if eval_matches(p.read_text())}
+    assert flagged == {}
+
+
+def test_only_the_known_old_prompt_versions_are_flagged(settings):
+    flagged = {p.name for p in _prompt_files() if eval_matches(p.read_text())}
+    assert not any(_is_active(PROMPTS_DIR / n, settings) for n in KNOWN_FLAGGED_OLD), "a known-flagged file must stay inactive"
+    assert flagged == KNOWN_FLAGGED_OLD, "a newly flagged file fails; a cleaned one leaves the list"
+
+
+def test_ticket_summary_v2_is_v1_with_the_title_example_paraphrased(settings):
+    v1 = (PROMPTS_DIR / "ticket_summary_v1.md").read_text().splitlines()
+    v2 = load_prompt("ticket_summary", settings)
+    assert v2.version == 2
+    lines = v2.text.splitlines()
+    assert len(lines) == len(v1) and [i + 1 for i, (a, b) in enumerate(zip(v1, lines)) if a != b] == [8]
+    assert "Shared drive will not open since Monday" in lines[7] and "Unable to connect to VPN" not in v2.text

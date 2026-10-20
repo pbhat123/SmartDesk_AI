@@ -135,7 +135,7 @@ prompts:
   worker_hr: 1
   synthesizer: 1
   grounding_judge: 3
-  ticket_summary: 1
+  ticket_summary: 2
   tool_select: 1
   injection_classifier: 1
   compaction: 1

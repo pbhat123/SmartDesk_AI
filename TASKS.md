@@ -200,7 +200,7 @@ Exit: `python -m evals.run` produces Ragas + ablation tables; Streamlit chat + M
 
 | Done | ID | Task | FRs | Files | Acceptance test |
 |---|---|---|---|---|---|
-| [ ] | T8.1 | Long-term per-email store: ticket numbers and last category only | H10 | `sd/memory/long_term.py`, `tests/test_long_term_store.py` | Store holds only numbers and last category; title/status never stored; emails masked in logs |
+| [x] | T8.1 | Long-term per-email store: ticket numbers and last category only | H10 | `smartdesk_ai/memory/long_term.py`, `tests/test_long_term_store.py` | Store holds only numbers and last category; title/status never stored; emails masked in logs |
 | [ ] | T8.2 | Cross-session recall on status check (title/status fetched live) | H10, C1 | `sd/agent/status_flow.py`, `tests/test_cross_session.py` | Session 1 creates a ticket; new session/thread with same email recalls it without naming it; no session-1 messages in session 2 context; different email recalls nothing |
 
 ---

@@ -3,6 +3,7 @@
 Every tool call goes through `ToolExecutor.execute`: lookup in the registry, argument validation,
 then at most `tools.max_attempts` attempts with backoff, retrying transient failures only.
 """
+import logging
 import time
 import uuid
 from collections.abc import Callable
@@ -12,6 +13,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, ValidationError
 
 from smartdesk_ai.config.settings import Settings
+from smartdesk_ai.memory.long_term import LongTermStore
 from smartdesk_ai.ops.metrics import MetricsRecorder, ToolCallRecord
 from smartdesk_ai.ops.runtime import current_scope
 from smartdesk_ai.ops.trace_log import TraceLog
@@ -20,6 +22,8 @@ from smartdesk_ai.tickets.sqlite_map import TicketStore, request_fingerprint
 from smartdesk_ai.tools.definitions import get_definition
 from smartdesk_ai.tools.errors import TRANSIENT
 from smartdesk_ai.tools.registry import RegisteredTool, ToolRegistry, UnknownToolError
+
+logger = logging.getLogger(__name__)
 
 
 class Outcome(StrEnum):
@@ -117,6 +121,7 @@ class ToolExecutor:
         *,
         sleep: Callable[[float], None] = time.sleep,
         request_store: TicketStore | None = None,
+        memory: LongTermStore | None = None,
         metrics: MetricsRecorder | None = None,
         trace: TraceLog | None = None,
         clock: Callable[[], float] = time.perf_counter,
@@ -125,6 +130,7 @@ class ToolExecutor:
         self._cfg = settings.tools
         self._sleep = sleep
         self._store = request_store
+        self._memory = memory
         self._metrics = metrics
         self._trace = trace
         self._clock = clock
@@ -229,7 +235,17 @@ class ToolExecutor:
             if number is not None:
                 self._store.complete(request_id, number)
                 self._store.link_email(args.email, number)  # FR-B3, FR-C10
+                self._remember(args, number)
         return result
+
+    def _remember(self, args: BaseModel, number: int) -> None:
+        """Long-term memory (FR-H10): the number and category only; a failure here never fails the create."""
+        if self._memory is None:
+            return
+        try:
+            self._memory.remember(args.email, number, args.category)
+        except Exception as exc:  # the message is not kept (FR-G11)
+            logger.warning("long-term memory write failed (%s)", type(exc).__name__)
 
     def _settle_unfinished(
         self, name: str, tool: RegisteredTool, args: BaseModel, fingerprint: str, attempt_ms: list[tuple[float, str]],
@@ -269,6 +285,7 @@ class ToolExecutor:
                 continue
             self._store.complete(stale_id, found.number)
             self._store.link_email(args.email, found.number)  # FR-B3, FR-C10
+            self._remember(args, found.number)
             return ToolResult(tool=name, outcome=Outcome.SUCCESS, attempts=1, data=found, recovered=True)
         return None
 

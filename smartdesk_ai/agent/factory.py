@@ -42,6 +42,7 @@ from smartdesk_ai.llm.mock import (
     MockSynthesizerModel,
 )
 from smartdesk_ai.memory.checkpointer import make_checkpointer
+from smartdesk_ai.memory.long_term import LongTermStore
 from smartdesk_ai.guardrails.pii import PiiRedactor
 from smartdesk_ai.ops.cache import AnswerCache, clear_answers, open_backend
 from smartdesk_ai.ops.cache_log import CACHE_LOG_FILE, CacheLog
@@ -79,6 +80,7 @@ SKIPPED_IN_MOCK = "skipped in mock mode"
 HITL_LOG = "hitl.jsonl"  # approvals, rejections and edits at the ticket gate (FR-H4); the Monitoring tab reads it
 TOOL_METRICS_LOG = "tool_metrics.jsonl"  # per-call records; the Monitoring tab reads them
 TICKET_MAP_DB = "app.db"  # the live email-to-ticket map; scripts/seed_tickets.py writes the same file
+LONG_TERM_DB = "memory.db"  # the live long-term memory (FR-H10): salted email keys, ticket numbers, last category
 
 
 @dataclass(frozen=True)
@@ -86,6 +88,7 @@ class AgentStack:
     graph: Any
     client: TicketClient
     store: TicketStore
+    memory: LongTermStore
     executor: ToolExecutor
     services: Services
     registry: HealthRegistry
@@ -219,6 +222,8 @@ def build_stack(
     Path(data_dir).mkdir(parents=True, exist_ok=True)
     # Mock tickets live in memory, so their numbers never reach the live map in app.db.
     store = TicketStore(Path(data_dir) / TICKET_MAP_DB if settings.modes.tickets == "live" else ":memory:")
+    # Mock tickets live in memory and are numbered again from #5 after a restart, so their memory must not outlive them either.
+    memory = LongTermStore(Path(data_dir) / LONG_TERM_DB if settings.modes.tickets == "live" else ":memory:")
     if settings.modes.tickets == "mock":
         # Demo data for the status flow with no keys: the seed script's tickets, in memory only.
         seed(client, store)
@@ -228,7 +233,7 @@ def build_stack(
     update_checker = make_injection_checker(settings, builder=inject_b)
     register_ticket_tools(tools, client, store, screen_update=lambda update: screen_team_update(update, update_checker))
     executor = ToolExecutor(
-        tools, settings, request_store=store, trace=trace, metrics=MetricsRecorder(Path(data_dir) / TOOL_METRICS_LOG))
+        tools, settings, request_store=store, memory=memory, trace=trace, metrics=MetricsRecorder(Path(data_dir) / TOOL_METRICS_LOG))
     ticket_deps = TicketDeps(
         drafter=make_drafter(settings, builder=draft_b),
         executor=executor,
@@ -255,7 +260,7 @@ def build_stack(
         budget_level=current_budget_level,
         compactor=Compactor(settings, make_summarizer(settings, builder=compact_b), overhead_tokens=prompt_tokens),
     )
-    return AgentStack(graph=graph, client=client, store=store, executor=executor, services=services,
+    return AgentStack(graph=graph, client=client, store=store, memory=memory, executor=executor, services=services,
                       registry=registry)
 
 

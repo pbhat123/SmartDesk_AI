@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SmartDesk AI chat</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:#0F172A;background:#F6F7F9}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #F6F7F9; font-family: Inter, system-ui, sans-serif; color: #0F172A">
+
+<aside style="flex: 1 1 240px; max-width: 280px; background: #0F172A; color: #E2E8F0; padding: 24px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 40px; height: 40px; border-radius: 10px; background: {{accent}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px">SD</div>
+<div style="display: flex; flex-direction: column">
+<span style="font-weight: 600; font-size: 16px; color: #FFFFFF">SmartDesk AI</span>
+<span style="font-size: 12px; color: #94A3B8">IT and HR help desk</span>
+</div>
+</div>
+<nav style="display: flex; flex-direction: column; gap: 4px" aria-label="Pages">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #1E293B; color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 500">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</a>
+<a href="Monitoring.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: #CBD5E1; text-decoration: none; font-size: 14px; font-weight: 500">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Monitoring</a>
+</nav>
+<button style="height: 44px; border-radius: 8px; border: 1px solid #334155; background: transparent; color: #FFFFFF; font: 500 14px Inter, sans-serif; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer">
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New conversation</button>
+<div style="margin-top: auto; display: flex; flex-direction: column; gap: 10px; font-size: 12px; color: #94A3B8">
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<span style="padding: 4px 8px; border-radius: 999px; background: #1E3A8A; color: #DBEAFE; font-weight: 500">LLM live</span>
+<span style="padding: 4px 8px; border-radius: 999px; background: #334155; color: #E2E8F0; font-weight: 500">Tickets mock</span>
+</div>
+<span>Session cost <strong style="color: #FFFFFF">[$0.00]</strong></span>
+<label style="display: flex; align-items: center; gap: 8px; color: #CBD5E1"><input type="checkbox" checked>Show retrieval debug</label>
+</div>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; min-height: 900px">
+<header style="padding: 24px 40px 16px; border-bottom: 1px solid #E2E8F0; background: #FFFFFF">
+<h1 style="margin: 0; font-size: 22px; font-weight: 600">Help desk</h1>
+<p style="margin: 6px 0 0; font-size: 14px; color: #475569">Ask an IT or HR question, report a problem, or ask about one of your tickets.</p>
+</header>
+
+<section style="flex: 1; padding: 28px 40px; display: flex; flex-direction: column; gap: 20px; max-width: 920px; width: 100%; box-sizing: border-box">
+
+<div style="align-self: flex-end; max-width: 70%; background: {{accent}}; color: #FFFFFF; padding: 12px 16px; border-radius: 14px 14px 4px 14px; font-size: 15px; line-height: 1.5">My VPN keeps disconnecting, and how many sick days do I get?</div>
+
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<div style="flex: 0 0 auto; width: 32px; height: 32px; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">SD</div>
+<div style="flex: 1; min-width: 0; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 4px 14px 14px 14px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-size: 15px; line-height: 1.6"><strong>VPN drops:</strong> [answer from the IT entry, with its steps].</p>
+<p style="margin: 0; font-size: 15px; line-height: 1.6"><strong>Sick leave:</strong> [answer from the HR entry].</p>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 12px; color: #64748B; font-weight: 500">Sources</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #EFF6FF; color: #1D4ED8; font-size: 12px; font-weight: 500">IT-VPN-02</span>
+<span style="padding: 4px 10px; border-radius: 999px; background: #EFF6FF; color: #1D4ED8; font-size: 12px; font-weight: 500">HR-LEAVE-01</span>
+<span style="margin-left: auto; padding: 4px 10px; border-radius: 999px; background: #F1F5F9; color: #475569; font-size: 12px">2 parts · IT + HR · cache miss</span>
+</div>
+<details style="border-top: 1px solid #F1F5F9; padding-top: 10px; font-size: 13px; color: #475569">
+<summary style="cursor: pointer; font-weight: 500">Retrieval debug</summary>
+<div style="margin-top: 8px">Rank, entry, dense cosine, rerank score per part.</div>
+</details>
+</div>
+</div>
+
+<div style="align-self: flex-end; max-width: 70%; background: {{accent}}; color: #FFFFFF; padding: 12px 16px; border-radius: 14px 14px 4px 14px; font-size: 15px; line-height: 1.5">Can I bring my dog to the office?</div>
+
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<div style="flex: 0 0 auto; width: 32px; height: 32px; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">SD</div>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+<p style="margin: 0; font-size: 15px; line-height: 1.6">I couldn't find this in the knowledge base. I can open a ticket for the team. Here's the draft:</p>
+<div style="background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; overflow: hidden">
+<div style="padding: 12px 16px; background: #F8FAFC; border-bottom: 1px solid #E2E8F0; display: flex; align-items: center; justify-content: space-between">
+<span style="font-size: 13px; font-weight: 600; color: #334155">Ticket draft</span>
+<span style="padding: 3px 8px; border-radius: 999px; background: #FEF3C7; color: #92400E; font-size: 12px; font-weight: 500">Waiting for your OK</span>
+</div>
+<div style="padding: 14px 16px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; font-size: 14px">
+<div><div style="font-size: 12px; color: #64748B">Title</div><div style="font-weight: 500">Pet policy question</div></div>
+<div><div style="font-size: 12px; color: #64748B">Category</div><div style="font-weight: 500">HR</div></div>
+<div style="grid-column: 1 / -1"><div style="font-size: 12px; color: #64748B">Description</div><div>Employee asks whether dogs are allowed in the office.</div></div>
+</div>
+<div style="padding: 10px 16px; border-top: 1px solid #E2E8F0; font-size: 13px; color: #475569">Reply <strong>yes</strong> to create it, <strong>no</strong> to cancel, or tell me what to change.</div>
+</div>
+</div>
+</div>
+
+<div style="align-self: flex-end; max-width: 70%; background: {{accent}}; color: #FFFFFF; padding: 12px 16px; border-radius: 14px 14px 4px 14px; font-size: 15px">yes</div>
+
+<div style="display: flex; gap: 12px; align-items: center">
+<div style="flex: 0 0 auto; width: 32px; height: 32px; border-radius: 8px; background: {{accent}}; color: #FFFFFF; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">SD</div>
+<div style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: #ECFDF5; border: 1px solid #A7F3D0; border-radius: 12px; color: #065F46; font-size: 14px">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+<span><strong>Ticket #5 created</strong> · Open · the team will reply on the ticket.</span>
+</div>
+</div>
+</section>
+
+<div style="position: sticky; bottom: 0; padding: 16px 40px 24px; background: #F6F7F9">
+<div style="max-width: 920px; display: flex; align-items: center; gap: 10px; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 12px; padding: 6px 6px 6px 16px">
+<label for="msg" style="position: absolute; left: -9999px">Message</label>
+<input id="msg" placeholder="Ask a question or describe a problem…" style="flex: 1; min-width: 0; border: 0; outline: none; font: 15px Inter, sans-serif; color: #0F172A; height: 40px">
+<button aria-label="Send" style="width: 44px; height: 44px; border: 0; border-radius: 8px; background: {{accent}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2563EB","options":["#2563EB","#0F766E","#7C3AED","#C2410C"]},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#2563EB' };
+  }
+}
+</script>
+</body>
+</html>

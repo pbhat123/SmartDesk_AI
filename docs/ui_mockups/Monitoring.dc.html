@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SmartDesk AI monitoring</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;font-family:Inter,system-ui,sans-serif;color:#0F172A;background:#F6F7F9}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #F6F7F9; font-family: Inter, system-ui, sans-serif; color: #0F172A">
+
+<aside style="flex: 1 1 240px; max-width: 280px; background: #0F172A; color: #E2E8F0; padding: 24px 20px; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px">
+<div style="display: flex; align-items: center; gap: 12px">
+<div style="width: 40px; height: 40px; border-radius: 10px; background: {{accent}}; color: #FFFFFF; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px">SD</div>
+<div style="display: flex; flex-direction: column">
+<span style="font-weight: 600; font-size: 16px; color: #FFFFFF">SmartDesk AI</span>
+<span style="font-size: 12px; color: #94A3B8">IT and HR help desk</span>
+</div>
+</div>
+<nav style="display: flex; flex-direction: column; gap: 4px" aria-label="Pages">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: #CBD5E1; text-decoration: none; font-size: 14px; font-weight: 500">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Chat</a>
+<a href="Monitoring.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #1E293B; color: #FFFFFF; text-decoration: none; font-size: 14px; font-weight: 500">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>Monitoring</a>
+</nav>
+</aside>
+
+<main style="flex: 999 1 560px; min-width: 0; padding: 28px 40px 40px; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px">
+<div style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px">
+<div>
+<h1 style="margin: 0; font-size: 22px; font-weight: 600">Monitoring</h1>
+<p style="margin: 6px 0 0; font-size: 14px; color: #475569">Sample values shown as [placeholders]; the app fills in real numbers.</p>
+</div>
+<div role="group" aria-label="Time window" style="display: flex; background: #FFFFFF; border: 1px solid #CBD5E1; border-radius: 8px; padding: 3px">
+<button style="height: 36px; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; font: 500 13px Inter, sans-serif; color: #475569">This session</button>
+<button style="height: 36px; padding: 0 14px; border: 0; border-radius: 6px; background: #0F172A; font: 500 13px Inter, sans-serif; color: #FFFFFF">Today</button>
+<button style="height: 36px; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; font: 500 13px Inter, sans-serif; color: #475569">All time</button>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px 18px">
+<div style="font-size: 13px; color: #64748B">Spend today (ledger)</div>
+<div style="font-size: 28px; font-weight: 600; margin-top: 6px">[$0.00]</div>
+<div style="font-size: 12px; color: #64748B; margin-top: 4px">Budget cutoffs $5 / $10</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px 18px">
+<div style="font-size: 13px; color: #64748B">Cache hit rate</div>
+<div style="font-size: 28px; font-weight: 600; margin-top: 6px">[0%]</div>
+<div style="font-size: 12px; color: #64748B; margin-top: 4px">Redis · ok</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px 18px">
+<div style="font-size: 13px; color: #64748B">Approval gate</div>
+<div style="font-size: 28px; font-weight: 600; margin-top: 6px">[0 / 0 / 0]</div>
+<div style="font-size: 12px; color: #64748B; margin-top: 4px">Approved / edited / rejected</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px 18px">
+<div style="font-size: 13px; color: #64748B">Error rate</div>
+<div style="font-size: 28px; font-weight: 600; margin-top: 6px">[0.0%]</div>
+<div style="font-size: 12px; color: #64748B; margin-top: 4px">p95 latency [0.0 s]</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px">
+<section style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px">
+<h2 style="margin: 0 0 12px; font-size: 15px; font-weight: 600">Cost by agent</h2>
+<div style="overflow-x: auto">
+<table style="width: 100%; border-collapse: collapse; font-size: 13px">
+<thead><tr style="color: #64748B; text-align: left"><th style="padding: 8px 6px; border-bottom: 1px solid #E2E8F0; font-weight: 500">Agent</th><th style="padding: 8px 6px; border-bottom: 1px solid #E2E8F0; font-weight: 500">Tier</th><th style="padding: 8px 6px; border-bottom: 1px solid #E2E8F0; font-weight: 500; text-align: right">Calls</th><th style="padding: 8px 6px; border-bottom: 1px solid #E2E8F0; font-weight: 500; text-align: right">Cost</th></tr></thead>
+<tbody>
+<tr><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">Orchestrator</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">Main</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[0]</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[$0.000]</td></tr>
+<tr><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">IT worker</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">Main</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[0]</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[$0.000]</td></tr>
+<tr><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">HR worker</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">Main</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[0]</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[$0.000]</td></tr>
+<tr><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">Synthesizer</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9">Main</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[0]</td><td style="padding: 9px 6px; border-bottom: 1px solid #F1F5F9; text-align: right">[$0.000]</td></tr>
+<tr><td style="padding: 9px 6px">Ticket agent</td><td style="padding: 9px 6px">Light</td><td style="padding: 9px 6px; text-align: right">[0]</td><td style="padding: 9px 6px; text-align: right">[$0.000]</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Components</h2>
+<div style="display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<div style="display: flex; align-items: center; justify-content: space-between"><span>Reranker</span><span style="padding: 3px 10px; border-radius: 999px; background: #ECFDF5; color: #065F46; font-size: 12px; font-weight: 500">ok · loaded in [3.6 s]</span></div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span>Redis cache</span><span style="padding: 3px 10px; border-radius: 999px; background: #ECFDF5; color: #065F46; font-size: 12px; font-weight: 500">ok</span></div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span>GitHub tickets</span><span style="padding: 3px 10px; border-radius: 999px; background: #F1F5F9; color: #334155; font-size: 12px; font-weight: 500">mock mode</span></div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span>Langfuse tracing</span><span style="padding: 3px 10px; border-radius: 999px; background: #FEF3C7; color: #92400E; font-size: 12px; font-weight: 500">degraded · no key</span></div>
+<div style="display: flex; align-items: center; justify-content: space-between"><span>Moderation</span><span style="padding: 3px 10px; border-radius: 999px; background: #ECFDF5; color: #065F46; font-size: 12px; font-weight: 500">ok</span></div>
+</div>
+</section>
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 18px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px">
+<h2 style="margin: 0; font-size: 15px; font-weight: 600">Drift over time</h2>
+<button style="height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid #CBD5E1; background: #FFFFFF; font: 500 13px Inter, sans-serif; color: #0F172A">Check for drift (shows cost first)</button>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; font-size: 13px">
+<div style="padding: 12px; background: #F8FAFC; border-radius: 8px"><div style="color: #64748B">Faithfulness</div><div style="font-weight: 600; font-size: 18px; margin-top: 4px">[0.00]</div></div>
+<div style="padding: 12px; background: #F8FAFC; border-radius: 8px"><div style="color: #64748B">Recall@5</div><div style="font-weight: 600; font-size: 18px; margin-top: 4px">[0.00]</div></div>
+<div style="padding: 12px; background: #F8FAFC; border-radius: 8px"><div style="color: #64748B">Escalation rate</div><div style="font-weight: 600; font-size: 18px; margin-top: 4px">[0.00]</div></div>
+<div style="padding: 12px; background: #F8FAFC; border-radius: 8px"><div style="color: #64748B">Avg rerank score</div><div style="font-weight: 600; font-size: 18px; margin-top: 4px">[0.00]</div></div>
+</div>
+<div style="height: 120px; border: 1px dashed #CBD5E1; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: #64748B">[Line chart: one point per drift run]</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"accent":{"editor":"color","default":"#2563EB","options":["#2563EB","#0F766E","#7C3AED","#C2410C"]},"$preview":{"width":1280,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { accent: this.props.accent ?? '#2563EB' };
+  }
+}
+</script>
+</body>
+</html>

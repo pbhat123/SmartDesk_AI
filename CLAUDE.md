@@ -56,7 +56,7 @@ python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows 
 - Commits go through the pre-commit hook (`scripts/install_hooks.sh`). Never bypass it with `--no-verify`.
 - Every LLM call goes through `FallbackChat` (guarded by `tests/test_llm_observed.py`).
 - Retrieval stays hybrid + rerank (see `evals/README.md`, "Retrieval ablation").
-- Active versions: answer prompt v4 (workers are v4 verbatim), grounding judge v3, orchestrator_v8 plus the `merge_fragments` guard, `semantic_cache_cutoff` 0.97, escalation threshold 0.40. The post-Phase-7 final runs are done (PLAN 14.6). Changing any of these after the final runs needs my approval, because it means rerunning gap, safety and Ragas. Prompts change only by adding a new version file.
+- Active versions: answer prompt v4 (workers are v4 verbatim), grounding judge v3, orchestrator_v9 (v8 with paraphrased examples, approved 2026-10-20; final rerun with v9 is deferred to after Phase 8) plus the `merge_fragments` guard, `semantic_cache_cutoff` 0.97, escalation threshold 0.40. The post-Phase-7 final runs are done (PLAN 14.6). Changing any of these after the final runs needs my approval, because it means rerunning gap, safety and Ragas. Prompts change only by adding a new version file.
 - PII checks in tests use `tests/pii_helpers` (whole-token match only, never a bare substring such as `"98765" in blob`).
 - Never run git checkout/restore/reset on files with uncommitted work. For mutation tests use git stash or a git worktree.
 - Never create or edit files in the repo while a commit hook is running; wait for it to finish. Use the scratchpad for drafts.

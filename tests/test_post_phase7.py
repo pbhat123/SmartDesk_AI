@@ -215,12 +215,12 @@ def test_a_state_for_other_prompts_does_not_match(tmp_path):
     assert pp.State(tmp_path / "s.json", "old").matches and not pp.State(tmp_path / "s.json", "new").matches
 
 
-def test_the_active_orchestrator_prompt_is_v8_and_part_of_the_signature(steps):
+def test_the_active_orchestrator_prompt_is_v9_and_part_of_the_signature(steps):
     from smartdesk_ai.config.settings import load_settings
 
     s = load_settings()
-    assert s.prompts["orchestrator"] == 8
-    older = s.model_copy(update={"prompts": {**s.prompts, "orchestrator": 7}})
+    assert s.prompts["orchestrator"] == 9
+    older = s.model_copy(update={"prompts": {**s.prompts, "orchestrator": 8}})
     assert pp.plan_signature(s, steps) != pp.plan_signature(older, steps)
 
 

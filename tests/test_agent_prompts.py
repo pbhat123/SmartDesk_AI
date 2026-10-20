@@ -2,6 +2,8 @@
 
 Mock models, no network."""
 import json
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 from langchain_core.messages import HumanMessage
@@ -147,8 +149,7 @@ def test_orchestrator_v8_is_v7_plus_the_fragment_rule(settings):
     same thing's timing, count, place or duration stays with it. Its examples have the shape of the two over-split golden questions
     in other words, so the golden set does not leak into the prompt."""
     v7 = (PROMPTS_DIR / "orchestrator_v7.md").read_text().splitlines()
-    v8 = load_prompt("orchestrator", settings)
-    assert v8.version == 8
+    v8 = type("P", (), {"text": (PROMPTS_DIR / "orchestrator_v8.md").read_text()})()
     changed = [line for line in v7 if line not in v8.text.splitlines()]
     assert len(changed) == 1 and changed[0].startswith('- "parts" lists each separate question') and len(v8.text.splitlines()) == len(v7)
     [new] = [line for line in v8.text.splitlines() if line not in v7]
@@ -158,3 +159,70 @@ def test_orchestrator_v8_is_v7_plus_the_fragment_rule(settings):
     assert "Who is the person assigned to help new starters" not in v8.text and "possible performance scores" not in v8.text
     out_of_scope = [line for line in v8.text.splitlines() if line.startswith("- out_of_scope:")][0]
     assert "write me a Python sort function" in out_of_scope  # v7's clarification is kept
+
+
+def test_orchestrator_v9_is_v8_with_paraphrased_examples_and_is_active(settings):
+    """v9 rewrites only the quoted examples of v8 (FR-A18): lines 11 and 27 change, no rule changes, and the golden-shaped
+    wording of v8 is gone."""
+    v8 = (PROMPTS_DIR / "orchestrator_v8.md").read_text().splitlines()
+    v9 = load_prompt("orchestrator", settings)
+    assert v9.version == 9
+    lines = v9.text.splitlines()
+    assert len(lines) == len(v8) and [i + 1 for i, (a, b) in enumerate(zip(v8, lines)) if a != b] == [11, 27]
+    for old in ("public AI chatbot", "probation period, and does the company offer a sabbatical", "do I need a certificate",
+                "look after a new joiner"):
+        assert old not in v9.text
+    assert "is two parts" in v9.text and v9.text.count("is one part") == 1 and "At most four parts" in v9.text
+    assert 'never list a fragment such as "for how long?" as a part' in v9.text and "write me a Python sort function" in v9.text
+
+
+# --- FR-A18: no quoted example in the active prompt is eval or golden wording ---------------------------------------------
+EVALS_DIR = Path(__file__).resolve().parents[1] / "evals"
+QUESTION_KEYS = {"question", "utterance", "sub_question", "a", "b", "input"}
+MIN_TOKENS, MAX_OVERLAP = 4, 0.8
+
+
+def _tokens(text):
+    return re.findall(r"[a-z0-9']+", text.lower())
+
+
+def _eval_questions():
+    found = []
+    for path in sorted(EVALS_DIR.glob("*.jsonl")):
+        for line in path.read_text().splitlines():
+            row = json.loads(line)
+            found += [(path.name, row.get("id"), row[k]) for k in QUESTION_KEYS if isinstance(row.get(k), str)]
+            found += [(path.name, row.get("id"), p["sub_question"]) for p in row.get("parts", []) if isinstance(p, dict) and "sub_question" in p]
+    return found
+
+
+def _overlap(a, b):
+    """Shared distinct tokens over the shorter side, so a prompt example that contains a whole eval question (or the reverse) scores 1.0."""
+    sa, sb = set(a), set(b)
+    return len(sa & sb) / min(len(sa), len(sb))
+
+
+def quoted_examples(prompt_text):
+    """Every double-quoted span of at least four words, leaving out the JSON schema line."""
+    body = "\n".join(line for line in prompt_text.splitlines() if not line.startswith('{"intent"'))
+    return [q for q in re.findall(r'"([^"\n]+)"', body) if len(_tokens(q)) >= MIN_TOKENS]
+
+
+def eval_matches(prompt_text):
+    questions = [(f, i, q, _tokens(q)) for f, i, q in _eval_questions() if len(_tokens(q)) >= MIN_TOKENS]
+    return [(ex, f, i) for ex in quoted_examples(prompt_text) for f, i, q, qt in questions if _overlap(_tokens(ex), qt) >= MAX_OVERLAP]
+
+
+def test_no_quoted_example_in_the_active_orchestrator_prompt_is_eval_wording(settings):
+    text = load_prompt("orchestrator", settings).text
+    assert len(quoted_examples(text)) >= 8, "the extractor must still find the prompt's examples"
+    assert eval_matches(text) == []
+
+
+def test_the_eval_wording_check_catches_verbatim_and_near_verbatim_examples():
+    """It fails on v8, whose examples were kb-011, cmp-013 and int-005 wording (the leak found on 2026-10-20)."""
+    leaks = eval_matches((PROMPTS_DIR / "orchestrator_v8.md").read_text())
+    assert {i for _, _, i in leaks} >= {"kb-011", "cmp-013", "int-005"}
+    assert eval_matches('Say "How many sick days do I get, and when is my salary paid today?" as is.')
+    assert eval_matches('Say "Is there a sabbatical policy?" as is.')
+    assert eval_matches('Say "Which colour is the sky on Mars?" as is.') == []

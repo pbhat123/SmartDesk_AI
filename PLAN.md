@@ -123,7 +123,7 @@ class TicketClient(Protocol):
     def latest_update(self, number: int) -> TeamUpdate | None            # newest comment by OWNER/MEMBER/COLLABORATOR; text is untrusted, use .quoted()
     def find_by_request_id(self, request_id: str) -> Ticket | None   # uses list-issues, not search (flag F-03)
     def search_by_email(self, email: str) -> list[Ticket]
-class GitHubRestClient; class MockTicketClient                       # GitHubMcpClient only if time allows
+class GitHubRestClient; class MockTicketClient                       # no MCP client: decided 2026-10-20, REST only
 class TicketStore:  begin/complete/get (request log, FR-G6); link_email(email, number); numbers_for(email)   # built T3.7, T3.13
 def find_tickets(email, client, store) -> list[Ticket]               # map + search merged by issue number, new numbers backfilled (FR-C11)
 def derive_status(state: str, labels) -> TicketStatus                # FR-C6
@@ -317,7 +317,7 @@ Every phase ends with `pytest` green and TASKS.md updated. One TASKS.md task at 
 
 Coverage check: A1 to A19, B1 to B13, C1 to C11, D1 to D9, F1 to F7, G1 to G12, H1 to H17, I1 to I9 each appear in at least one phase.
 
-**Schedule risk:** 10 days for everything. If behind, cut in this order: stretch (SPEC section 5), GitHub MCP, LangSmith *or* Langfuse (keep one), semantic cache (keep exact-match), multi-agent fan-out (keep single-path), drift chart.
+**Schedule risk:** 10 days for everything. If behind, cut in this order: stretch (SPEC section 5), LangSmith *or* Langfuse (keep one), semantic cache (keep exact-match), multi-agent fan-out (keep single-path), drift chart.
 
 ---
 
@@ -1016,10 +1016,10 @@ One orchestrator call per question, no history, no workers, tools or tickets, ov
 
 **Known limitations for the README (collected in section 18).** A message mixing a KB question with a ticket request stays one intent; the 6 Ragas-flagged answers (0 wrong facts, 2 minor ungrounded sentences, 14.7); Ragas factual precision, correctness and relevancy are lower than the v3 baseline because v4 answers are longer (14.7); mock tickets reset on restart and restart at #5; the 3 reply-less requests in the old local trace predate the thread fix (14.8).
 
-**Deferred.** The post-Phase-8 final rerun with orchestrator_v9 and ticket_summary_v2 is done (14.9, batch $0.848, v9 stays active). Still open: the MCP decision (GitHub MCP, stretch), Ragas's own statement list for the six flagged answers (about $0.05, optional), and the `phase8-complete` tag. Open question from 14.9: v9's lower planning-check accuracy and the kb-018 routing flip (a v10 example would need your approval).
+**Deferred.** The post-Phase-8 final rerun with orchestrator_v9 and ticket_summary_v2 is done (14.9, batch $0.848, v9 stays active). MCP is decided: not used, REST only (2026-10-20). Still open: Ragas's own statement list for the six flagged answers (about $0.05, optional), and the `phase8-complete` tag. Open question from 14.9: v9's lower planning-check accuracy and the kb-018 routing flip (a v10 example would need your approval).
 
 **Next steps, in order.**
-1. **MCP decision (stretch), time-boxed.** Either a GitHub MCP client behind the `tickets/` wrapper (REST stays the default, MCP only an alternative behind the same interface), or a README-only note. Decide first, then build only if time allows.
+1. **MCP: decided 2026-10-20, not used.** Tickets go through the GitHub REST API only; the README carries the line "MCP: not used; direct GitHub REST API (allowed per FAQ Q12)". Nothing to build.
 2. **UI polish (built 2026-10-20, four commits e1ac531 to 619b430, awaiting your visual check against `docs/ui_mockups/`).** Done: theme config in `.streamlit/config.toml`, logo and cards in `ui/theme.py`, source and parts chips, `ui/ticket_card.py`, KPI tiles, badges, one Time window toggle (replaces the two separate radios; "This session" = since app start for tool stats, this browser's conversations for human checks). Original brief: match the approved Chat and Monitoring mockups: dark sidebar with logo and nav, mode pills, source chips, collapsible debug panel, ticket draft card, success badge, KPI tiles, cost-by-agent table, component status badges. Keep every label `scripts/smoke_ui.py` looks for; the smoke test must still pass.
 3. **Phase 9, T9.1 to T9.8** (README, architecture diagram, load test, deliverables check, fresh-clone run, demo video). README notes already collected in section 18, including the two-stores note (raw-email map vs hashed long-term store).
 Remaining budget about $4.72 (upper bound, from the ledger). Open from 14.9: v9's lower planning-check accuracy and the kb-018 routing flip (a v10 example needs approval). Deadline Oct 23, 2026.

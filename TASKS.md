@@ -82,7 +82,7 @@ Exit: executor tests (retry x3, no retry on bad args, no create before confirmat
 | [x] | T3.7 | Duplicate protection: request ID in issue body, written to SQLite before the call, list-issues check before retry | G6 | `sd/tools/executor.py`, `sd/tickets/sqlite_map.py`, `tests/test_duplicate_protection.py` | Mock where the create response is lost then retried: exactly one issue exists; check uses list-issues, not search |
 | [x] | T3.8 | `search_kb` tool implementation returning chunks, scores, `answerable` | G7 | `sd/tools/search_kb.py`, `tests/test_search_kb_tool.py` | Result carries chunks, scores and `answerable` from signals 1-2; domain filter honoured |
 | [x] | T3.9 | Per-call metrics in executor (tool, agent, outcome, attempts, latency per attempt and total) | G9 | `sd/ops/metrics.py`, `sd/tools/executor.py`, `tests/test_tool_metrics.py` | After a failing-mock run the record shows outcome, attempts used, and latencies |
-| [x] | T3.10 | Tickets client wrapper: interface + mock mode + REST implementation (hides REST/MCP) | B12, B10 | `sd/tickets/github_client.py`, `sd/tickets/schemas.py`, `tests/test_tickets_client.py` | Agent code imports only the wrapper; mock mode returns realistic dummy data; REST impl is exercised with a mocked HTTP layer only |
+| [x] | T3.10 | Tickets client wrapper: interface + mock mode + REST implementation (hides how GitHub is called; REST only, no MCP) | B12, B10 | `sd/tickets/github_client.py`, `sd/tickets/schemas.py`, `tests/test_tickets_client.py` | Agent code imports only the wrapper; mock mode returns realistic dummy data; REST impl is exercised with a mocked HTTP layer only |
 | [x] | T3.11 | Issue format: title, body with `Employee: <email>` and request ID, category/priority labels, status labels; labels created once | B11, B3 | `sd/tickets/github_client.py`, `scripts/setup_labels.py`, `tests/test_issue_format.py` | Built issue has exact `Employee: <email>` line, request ID, correct labels; category only IT/HR/MISC; priority only low/medium/high/critical |
 | [x] | T3.12 | No-invention rule: ticket ID, link and status only from GitHub response; missing email asked for, never guessed | B13 | `sd/tickets/github_client.py`, `sd/tools/executor.py`, `tests/test_no_invented_details.py` | Mocked response with specific id/link/status: reply shows exactly those; no email provided gives ask-for-email |
 | [x] | T3.13 | SQLite email-to-issue map | C2, C10, B3 | `sd/tickets/sqlite_map.py`, `tests/test_sqlite_map.py` | Create stores email to issue number; lookup returns all issue numbers for an email; persists across reopen |
@@ -211,7 +211,7 @@ Exit: `python -m evals.run` produces Ragas + ablation tables; Streamlit chat + M
 | Done | ID | Task | FRs | Files | Acceptance test |
 |---|---|---|---|---|---|
 | [ ] | T9.1 | README: setup, env vars, populate KB, run, approach, chunking rationale + ablation, test results | E | `README.md`, `tests/test_readme.py` | README contains each required section heading; ablation table present |
-| [ ] | T9.2 | README additions: example conversations, models and task-to-tier map, hardware requirements, MCP notes, mock mode, seed script, GitHub setup | E | `README.md` | Test greps for each required item; fake emails only |
+| [ ] | T9.2 | README additions: example conversations, models and task-to-tier map, hardware requirements, the MCP note ("MCP: not used; direct GitHub REST API (allowed per FAQ Q12)"), mock mode, seed script, GitHub setup | E | `README.md` | Test greps for each required item; fake emails only |
 | [ ] | T9.3 | Architecture diagram (single source `docs/architecture.md`, embedded in README, includes all section 3I agents) | E | `docs/architecture.md`, `README.md` | Mermaid block present; names Orchestrator, IT worker, HR worker, Synthesizer, Ticket agent; README embeds it |
 | [ ] | T9.4 | README: GitHub-integration/mock disclosure (B10 note) | B10 | `README.md` | README states clearly whether live GitHub or mock is used and how to enable mock mode |
 | [ ] | T9.5 | `scripts/load_test.py` (throughput, requests per second) | H11 | `scripts/load_test.py`, `tests/test_load_test.py` | Mock-mode run prints requests/sec; result feeds Monitoring tab and README |
@@ -222,4 +222,4 @@ Exit: `python -m evals.run` produces Ragas + ablation tables; Streamlit chat + M
 ---
 
 ## Cut order if behind (PLAN section 7)
-Stretch (SPEC section 5), GitHub MCP, one of LangSmith/Langfuse, semantic cache (keep exact-match), multi-agent fan-out (keep single-path), drift chart.
+Stretch (SPEC section 5), one of LangSmith/Langfuse, semantic cache (keep exact-match), multi-agent fan-out (keep single-path), drift chart.

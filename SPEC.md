@@ -75,7 +75,7 @@ Constraints from the project document:
 | Company | Fictional company named SmartDesk AI (decided) | Realistic policies, not generic |
 | KB data source | Option C: public HR datasets adapted to the fictional company plus LLM-generated IT documents (decided) | Document section 3.3 recommends combining both |
 | KB format | Markdown (one file per policy area, indexed) plus JSON Q&A (not indexed, feeds evals) (decided) | FAQ Q18 |
-| Ticket access | GitHub REST API first, then the GitHub MCP server behind the same wrapper if time allows (decided) | MCP is allowed (FAQ Q12) |
+| Ticket access | GitHub REST API only (decided 2026-10-20: MCP is not used) | The REST API is allowed (FAQ Q12) |
 | Authentication | None | Employee is identified by the email given in conversation (FAQ Q19) |
 | Routing | Intent classifier first; the model's tool pick only if the classifier errors or is low-confidence (decided) | FR-D8 |
 | Evaluation | Ragas for RAG metrics, pytest for deterministic checks | DeepEval skipped, it overlaps Ragas. The judge model is the provided OpenAI key |
@@ -138,7 +138,7 @@ Notes: these values go into the price table and context window sizes in `config.
 - FR-B9: After creation the agent confirms it, gives the ticket ID and a link, and tells the employee they can ask for updates anytime.
 - FR-B10: If the live GitHub integration cannot be made to work, the ticket API is mocked with realistic dummy data and this is documented clearly in the README (partial marks only, FAQ Q7). A mock mode is also used for tests.
 - FR-B11: GitHub issue format: the title is the issue summary, the body is the description plus an exact line `Employee: <email>` and the request ID (FR-G6), and labels carry the category (`IT`, `HR`, `MISC`) and the priority (`low`, `medium`, `high`, `critical`). The status labels are `in-progress` and `resolved` (FR-C6). All labels are created once in the tickets repo. The ticket ID is the issue number and the link is the issue URL. The tickets repo is public (decided).
-- FR-B12: A thin client wrapper in `tickets/` hides how GitHub is called (REST API or MCP server) from the agent graph.
+- FR-B12: A thin client wrapper in `tickets/` hides how GitHub is called from the agent graph. The only implementation is the REST API (a mock client stands in for it in mock mode); MCP is not used (decided 2026-10-20).
 - FR-B13: No invented ticket details: the ticket ID, link, and status come only from GitHub's response, the ticket summary contains only what the employee said, and the agent never guesses an email.
 - AC: scripted scenario creates exactly one issue after confirmation, none after "no".
 - AC (added): the confirmation summary contains all listed fields. Priority only accepts the four listed values. Category only accepts IT, HR, MISC. The reply after creation contains the ticket ID and link.
@@ -176,8 +176,8 @@ Notes: these values go into the price table and context window sizes in `config.
 - README: setup, env var list, populate KB, run, approach, chunking rationale and ablation, test results.
 - Architecture diagram (Mermaid) showing components and data flow, including every agent in section 3I. The single source is `docs/architecture.md`, embedded in the README.
 - Modular layout (section 6). Code is well-structured, modular, and readable with meaningful names.
-- The README also includes: run commands; recorded example conversations for a KB answer, a ticket creation, and a status check (guiding step 17); the models used and the task-to-tier map; hardware requirements, always (CPU is sufficient; about 1 GB download for the reranker and about 0.5 GB for the spaCy model used by Presidio) (FAQ Q2); how to configure and start the MCP server if one is used (FAQ Q12); how to enable mock mode; how to run the seed script.
-- The README documents the GitHub setup: create the public tickets repo, create a token with Issues access limited to that repo, set `GITHUB_TOKEN`, run the seed script, and how the GitHub MCP server is started if one is used.
+- The README also includes: run commands; recorded example conversations for a KB answer, a ticket creation, and a status check (guiding step 17); the models used and the task-to-tier map; hardware requirements, always (CPU is sufficient; about 1 GB download for the reranker and about 0.5 GB for the spaCy model used by Presidio) (FAQ Q2); the line "MCP: not used; direct GitHub REST API (allowed per FAQ Q12)"; how to enable mock mode; how to run the seed script.
+- The README documents the GitHub setup: create the public tickets repo, create a token with Issues access limited to that repo, set `GITHUB_TOKEN`, run the seed script, and the line "MCP: not used; direct GitHub REST API (allowed per FAQ Q12)".
 
 ### F. Robustness (10)
 - FR-F1: GitHub unreachable: polite message, suggest retry.
@@ -340,7 +340,7 @@ SPEC.md  CLAUDE.md  PLAN.md  TASKS.md  README.md  .env.example  config.yaml
 - Decided: deadline is 10/23 (October 23, 2026). Target: core (sections 3A to 3G) done by October 18. The safety and operations items that section 10 maps to Robustness (FR-H1, H2, H3, H8, H13) are due October 19; the core ships with no-op guard hooks in the chat pipeline so they plug in without graph changes.
 - Resolved: the document says code and docs must be entirely your own (FAQ Q8). The user states that full use of Claude Code or any other platform is allowed.
 - Decided: KB data source is Option C. KB format is Markdown per policy area (indexed) plus JSON Q&A (evals only). Chunking per FR-A3.
-- Decided: tickets live in GitHub Issues, accessed through the REST API first, with the GitHub MCP server added behind the same wrapper if time allows. Seed script plus search fallback for status lookups.
+- Decided: tickets live in GitHub Issues, accessed through the GitHub REST API only; MCP is not used (decided 2026-10-20). Seed script plus search fallback for status lookups.
 - Decided: status mapping from GitHub issue state and labels to Open, In Progress, Resolved, Closed (FR-C6). Categories IT, HR, MISC.
 - Decided: escalation fires if any one signal fires, with one whole-KB retry first. TBD: the escalation threshold value and the routing confidence threshold (both tuned on the dev half of the eval sets once the KB exists, FR-A5).
 - Decided: multi-agent architecture (section 3I) and cross-session memory (FR-H10) are in scope.

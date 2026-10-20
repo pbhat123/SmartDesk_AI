@@ -1,12 +1,13 @@
 """Mock tickets live in memory and reset on restart (numbering starts again at #5, after the four seeded demo tickets):
-the chat says so, and no mock ticket or map row ever reaches data/app.db. Mock tickets only (FR-B10, C10)."""
+the sidebar mode line says so, and no mock ticket or map row ever reaches data/app.db. Mock tickets only (FR-B10, C10)."""
 import sqlite3
 
 from tests.ui_helpers import app_test, element_text, mock_context
 
 EMAIL = "priya.k@smartdesk.example"
 ASK = "My laptop screen is cracked, please raise a ticket"
-CAPTION = "Mock tickets live in memory and reset on restart (numbering starts again at #5)."
+OLD_CAPTION = "Mock tickets live in memory and reset on restart (numbering starts again at #5)."
+GREETING = "Ask an IT or HR question, report a problem, or ask about one of your tickets."
 
 
 def new_ticket(ctx, thread):
@@ -17,9 +18,13 @@ def new_ticket(ctx, thread):
 
 # --- the caption ---------------------------------------------------------------------------------------------------
 
-def test_the_chat_says_mock_tickets_reset_on_restart(tmp_path):
+def test_the_chat_keeps_only_the_greeting_and_the_sidebar_mode_line_carries_the_reset_note(tmp_path):
     page = app_test(mock_context(tmp_path))
-    assert not page.exception and CAPTION in element_text(page.main)
+    assert not page.exception
+    main = element_text(page.main)
+    assert GREETING in main and "Mock tickets live in memory" not in main and OLD_CAPTION not in main
+    mode_line = next(c.value for c in page.sidebar.caption if c.value.startswith("Mode:"))
+    assert "tickets mock" in mode_line and "restart" in mode_line and "#5" in mode_line
 
 
 # --- numbering and the live map -----------------------------------------------------------------------------------

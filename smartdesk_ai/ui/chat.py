@@ -58,7 +58,7 @@ def _new_conversation() -> None:
     st.session_state["messages"] = []
 
 
-MOCK_TICKETS_CAPTION = "Mock tickets live in memory and reset on restart (numbering starts again at #5)."
+MOCK_TICKETS_NOTE = "mock tickets live in memory; a restart clears them and numbering restarts at #5"  # on the sidebar mode line
 MOCK_CAPTION = ("Mock mode uses fake embeddings (hashing) and no reranker, so mock retrieval is not meaningful: "
                 "the scores and the order only show that the plumbing works.")
 
@@ -111,7 +111,8 @@ def render_chat(ctx: UiContext) -> None:
         if st.button("New conversation"):
             _new_conversation()
             st.rerun()
-        st.caption(f"Mode: LLM {ctx.settings.modes.llm}, tickets {ctx.settings.modes.tickets}")
+        note = f" ({MOCK_TICKETS_NOTE})" if ctx.settings.modes.tickets == "mock" else ""
+        st.caption(f"Mode: LLM {ctx.settings.modes.llm}, tickets {ctx.settings.modes.tickets}{note}")
         for health in ctx.registry.degraded_modes():
             st.caption(f"Degraded: {health.component.value} → {health.mode}")
     messages: list[dict[str, Any]] = st.session_state["messages"]
@@ -123,8 +124,6 @@ def render_chat(ctx: UiContext) -> None:
             if message["role"] == "assistant" and show_debug:
                 _render_panel(message, ctx)
     exchange = st.container()  # the new messages go here, above the input
-    if ctx.settings.modes.tickets == "mock":
-        st.caption(MOCK_TICKETS_CAPTION)
     prompt = st.chat_input("Type your message")  # a top-level element: pinned to the bottom of the window
     if prompt:
         messages.append({"role": "user", "content": prompt})

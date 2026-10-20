@@ -27,6 +27,17 @@ def ledger_never_touches_the_repo(tmp_path, monkeypatch):
     spend_ledger.reset_for_tests()
 
 
+@pytest.fixture(scope="module", autouse=True)
+def chroma_clients_are_released():
+    """ChromaDB keeps every PersistentClient it opens in a process-wide cache. About 450 of them in one process make the native
+    start hang for good (reproduced outside pytest; the suite builds that many agent stacks), so the cache is dropped after
+    each test module. Nothing is shared across modules: the session fixtures only hold a path to the index, not a client."""
+    yield
+    from chromadb.api.shared_system_client import SharedSystemClient
+
+    SharedSystemClient.clear_system_cache()
+
+
 @pytest.fixture(scope="session")
 def settings():
     return load_settings()

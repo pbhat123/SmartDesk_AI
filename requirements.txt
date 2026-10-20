@@ -38,4 +38,5 @@ datasets==5.1.0
 
 # Test
 pytest==9.1.1
+pytest-timeout==2.4.0  # per-test timeout (pytest.ini), so a hung test fails instead of blocking the commit gate
 playwright==1.64.0  # scripts/smoke_ui.py drives the real app in a browser; uses installed Google Chrome, else: python -m playwright install chromium

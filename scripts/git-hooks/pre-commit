@@ -7,16 +7,18 @@
 cd "$(git rev-parse --show-toplevel)" || exit 1
 PY=.venv/bin/python
 [ -x "$PY" ] || PY=python
+LIMIT=600  # seconds for the whole of pytest, and again for smoke: a hung run fails the commit instead of waiting for ever
+RUN="$PY scripts/run_with_limit.py $LIMIT --"
 echo "pre-commit: running pytest ..."
-if ! "$PY" -m pytest -q -p no:cacheprovider; then
-  echo "pre-commit: pytest FAILED, commit blocked. Fix the failure and commit again." >&2
+if ! $RUN "$PY" -m pytest -q -p no:cacheprovider; then
+  echo "pre-commit: pytest FAILED or hung past ${LIMIT}s, commit blocked. Fix the failure and commit again." >&2
   exit 1
 fi
 echo "pre-commit: pytest green."
 if git diff --cached --name-only | grep -qE '^(smartdesk_ai/|scripts/smoke_ui\.py$)'; then
   echo "pre-commit: app code or the smoke test is staged, running scripts/smoke_ui.py ..."
-  if ! "$PY" scripts/smoke_ui.py; then
-    echo "pre-commit: smoke_ui.py FAILED, commit blocked. Fix the failure and commit again." >&2
+  if ! $RUN "$PY" scripts/smoke_ui.py; then
+    echo "pre-commit: smoke_ui.py FAILED or hung past ${LIMIT}s, commit blocked. Fix the failure and commit again." >&2
     exit 1
   fi
   echo "pre-commit: smoke_ui.py green."

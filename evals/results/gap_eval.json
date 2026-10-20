@@ -617,25 +617,25 @@
     }
   ],
   "drift": {
-    "ts": "2026-10-19T23:49:20+00:00",
+    "ts": "2026-10-20T19:36:59+00:00",
     "mode": "live",
-    "faithfulness": 0.9482758620689655,
+    "faithfulness": 0.9655172413793104,
     "recall_at_k": 0.9811320754716981,
     "escalation_rate": 0.2972972972972973,
-    "avg_rerank_score": 0.2647505933610561,
+    "avg_rerank_score": 0.2610914978448616,
     "k": 5,
     "n_kb": 53,
     "n_gap": 21,
     "retrieval_strategy": "hybrid_rerank",
     "reranker_status": "ok",
     "prompt_versions": {
-      "orchestrator": 8,
+      "orchestrator": 9,
       "answer": 4,
       "worker_it": 1,
       "worker_hr": 1,
       "synthesizer": 1,
       "grounding_judge": 3,
-      "ticket_summary": 1,
+      "ticket_summary": 2,
       "tool_select": 1,
       "injection_classifier": 1,
       "compaction": 1,
@@ -648,7 +648,7 @@
       "embedding": "text-embedding-3-small",
       "reranker": "BAAI/bge-reranker-base"
     },
-    "usd": 0.239339
+    "usd": 0.234709
   },
   "stopped": null,
   "parts": {
@@ -659,7 +659,7 @@
         "domain": "HR",
         "agent": "orchestrator",
         "retrieval_ok": false,
-        "top_cosine": 0.3415490388870239,
+        "top_cosine": 0.34162378311157227,
         "threshold": 0.4,
         "worker_insufficient": [
           false,
@@ -667,7 +667,7 @@
         ],
         "judge_grounded": [
           true,
-          false
+          true
         ],
         "retried": true,
         "searched_domain": null,
@@ -682,7 +682,7 @@
         "domain": "MISC",
         "agent": "orchestrator",
         "retrieval_ok": true,
-        "top_cosine": 0.7019482851028442,
+        "top_cosine": 0.7019944787025452,
         "threshold": 0.4,
         "worker_insufficient": [
           false
@@ -727,7 +727,7 @@
         "domain": "IT",
         "agent": "orchestrator",
         "retrieval_ok": false,
-        "top_cosine": 0.2008548378944397,
+        "top_cosine": 0.1982884407043457,
         "threshold": 0.4,
         "worker_insufficient": [
           true,
@@ -740,7 +740,28 @@
         "answered": false
       }
     ],
-    "gap-002": [],
+    "gap-002": [
+      {
+        "part_id": "p1",
+        "text": "The external screen on my dock flickers whenever I plug it in. Who can fix it?",
+        "domain": "IT",
+        "agent": "orchestrator",
+        "retrieval_ok": false,
+        "top_cosine": 0.26212966442108154,
+        "threshold": 0.4,
+        "worker_insufficient": [
+          true,
+          false
+        ],
+        "judge_grounded": [
+          false
+        ],
+        "retried": true,
+        "searched_domain": null,
+        "citations": [],
+        "answered": false
+      }
+    ],
     "gap-003": [],
     "gap-004": [
       {
@@ -768,7 +789,7 @@
         "domain": "MISC",
         "agent": "orchestrator",
         "retrieval_ok": false,
-        "top_cosine": 0.3177729845046997,
+        "top_cosine": 0.3177664279937744,
         "threshold": 0.4,
         "worker_insufficient": [
           true
@@ -787,7 +808,7 @@
         "domain": "MISC",
         "agent": "orchestrator",
         "retrieval_ok": true,
-        "top_cosine": 0.40028494596481323,
+        "top_cosine": 0.4002453088760376,
         "threshold": 0.4,
         "worker_insufficient": [
           true
@@ -844,7 +865,7 @@
         "domain": "MISC",
         "agent": "orchestrator",
         "retrieval_ok": true,
-        "top_cosine": 0.5040943026542664,
+        "top_cosine": 0.5041062831878662,
         "threshold": 0.4,
         "worker_insufficient": [
           true
@@ -920,7 +941,7 @@
         "domain": "HR",
         "agent": "orchestrator",
         "retrieval_ok": true,
-        "top_cosine": 0.5832955241203308,
+        "top_cosine": 0.5833322405815125,
         "threshold": 0.4,
         "worker_insufficient": [
           true,
@@ -1060,7 +1081,7 @@
         "domain": "MISC",
         "agent": "orchestrator",
         "retrieval_ok": false,
-        "top_cosine": 0.3846139907836914,
+        "top_cosine": 0.38457977771759033,
         "threshold": 0.4,
         "worker_insufficient": [
           true
@@ -1079,7 +1100,7 @@
         "domain": "MISC",
         "agent": "orchestrator",
         "retrieval_ok": false,
-        "top_cosine": 0.3818979263305664,
+        "top_cosine": 0.3818886876106262,
         "threshold": 0.4,
         "worker_insufficient": [
           true
@@ -1092,11 +1113,10 @@
       }
     ]
   },
-  "single_part_clean": 71,
+  "single_part_clean": 72,
   "single_part_total": 74,
   "not_clean": [
     "kb-053",
-    "gap-002",
     "gap-003"
   ]
 }

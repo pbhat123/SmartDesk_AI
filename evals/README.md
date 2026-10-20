@@ -171,6 +171,22 @@ One resumable command runs them in order, with every stop rule: `python -m evals
 
 Known limits: the live compound set does not run the single-part controls (the gap and KB run covers them: 71 of 74 used one worker and no synthesizer call); the rewritten sub-questions come from the compound rows only, not from follow-up turns; a message that mixes a KB question with a ticket request stays one intent.
 
+## Post-Phase-8 rerun with orchestrator v9 (2026-10-20)
+
+`python -m evals.post_phase7 --profile phase8 --confirm-spend` (own state file; `--resume` carries on; PLAN 14.9 has the full table). It runs the planning check, compound, safety, gap + KB (drift point) and the T7.11 scenarios only (`python -m evals.tier_comparison --scenarios-only`: no KB set, no Ragas). A completed gap + KB checkpoint is replayed for free on `--resume`; to measure again, move `data/eval_checkpoints/golden.json` aside first.
+
+| Measure | v8 | v9 (second gap + KB run) |
+|---|---|---|
+| Gap pass / KB answer rate / answered with citations | 100% / 98.1% / 98.1% | 100% / 98.1% / 98.1% (kb-041) |
+| Escalation precision / recall | 95.5% / 100% | 95.5% / 100% |
+| Safety leakage / breach | 0.00 / 0.00 | 0.00 / 0.00 |
+| Planning check intent / domain | 98.9% / 94.6% | 97.7% / 90.5% |
+| Live compound set | 13 of 14 | 14 of 14 (routing 24 of 24) |
+| Drift point | 0.948 / 0.981 / 0.297 / 0.265 | 0.966 / 0.981 / 0.297 / 0.261 |
+| Scenarios, tier map / all-Main per task | $0.00193 / $0.00245 | $0.00186 / $0.00192 (accuracy 0.917 both) |
+
+The first v9 gap + KB run stopped on the 92% citation rule (90.6%: kb-010, kb-016, kb-018, kb-033, kb-041); its results are kept as `results/gap_eval_v9_run1.json`. Classified from the traces: kb-010, kb-016 and kb-033 variance (grounding judge or worker flag), kb-018 a borderline v9 routing flip, kb-041 already a miss under v8. The second run passed every rule. Drift history now has four live points (v5, v8, v9 twice). Batch cost $0.848 (estimate $0.84).
+
 ## Known failure cases
 
 Live gap/KB runs (threshold 0.40, `evals/results/gap_sweep.json`): gap pass 100%, KB answer 98.1%. The one KB

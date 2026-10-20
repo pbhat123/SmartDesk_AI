@@ -1,52 +1,28 @@
 {
  "n_cases": 88,
  "n_answered": 88,
- "intent_accuracy": 0.9886,
- "domain_accuracy": 0.9459,
+ "intent_accuracy": 0.9773,
+ "domain_accuracy": 0.9054,
  "domain_accuracy_by_kind": {
-  "kb": 0.9434,
-  "gap": 0.9524
+  "kb": 0.9057,
+  "gap": 0.9048
  },
  "wrong_domain": [
   "kb-016",
+  "kb-018",
+  "kb-020",
   "kb-038",
   "kb-053",
-  "gap-003"
+  "gap-003",
+  "gap-021"
  ],
  "wrong_intent": [
+  "kb-018",
   "gap-003"
  ],
  "single_topic": 74,
- "split_single": [
-  {
-   "id": "kb-053",
-   "kind": "kb",
-   "question": "How many people work at SmartDesk AI and in which cities?",
-   "intent": "kb_query",
-   "domain": "MISC",
-   "parts": [
-    {
-     "text": "How many people work at SmartDesk AI?",
-     "domain": "MISC"
-    },
-    {
-     "text": "In which cities do people work at SmartDesk AI?",
-     "domain": "MISC"
-    }
-   ],
-   "raw_parts": [
-    {
-     "text": "How many people work at SmartDesk AI?",
-     "domain": "MISC"
-    },
-    {
-     "text": "In which cities do people work at SmartDesk AI?",
-     "domain": "MISC"
-    }
-   ]
-  }
- ],
- "split_rate": 0.0135,
+ "split_single": [],
+ "split_rate": 0.0,
  "split_single_raw": [
   "kb-045",
   "kb-053"

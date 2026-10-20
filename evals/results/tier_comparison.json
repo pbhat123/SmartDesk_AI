@@ -1,326 +1,309 @@
 {
   "mock": false,
-  "kb_runs": 1,
+  "kb_runs": 0,
+  "scenarios_only": true,
   "results": [
     {
       "name": "tier_map",
       "by_agent": {
         "orchestrator": {
           "calls": 19,
-          "input_tokens": 28049,
-          "output_tokens": 619,
-          "usd": 0.01043025
+          "input_tokens": 28025,
+          "output_tokens": 612,
+          "usd": 0.01038075
         },
         "ticket_draft": {
           "calls": 4,
           "input_tokens": 1682,
-          "output_tokens": 140,
-          "usd": 0.0003363
+          "output_tokens": 136,
+          "usd": 0.00033390000000000004
         },
         "it_worker": {
           "calls": 2,
           "input_tokens": 3960,
-          "output_tokens": 483,
-          "usd": 0.0027243
+          "output_tokens": 441,
+          "usd": 0.0025353
         },
         "grounding_judge": {
           "calls": 3,
-          "input_tokens": 6130,
-          "output_tokens": 598,
-          "usd": 0.0072885
+          "input_tokens": 6090,
+          "output_tokens": 465,
+          "usd": 0.00666
         },
         "chitchat": {
           "calls": 3,
           "input_tokens": 845,
-          "output_tokens": 50,
-          "usd": 0.00015675
+          "output_tokens": 55,
+          "usd": 0.00015974999999999998
         },
         "hr_worker": {
           "calls": 1,
           "input_tokens": 2132,
-          "output_tokens": 79,
-          "usd": 0.0019545
+          "output_tokens": 81,
+          "usd": 0.0019635
         },
         "confirm_parse": {
           "calls": 3,
-          "input_tokens": 1866,
+          "input_tokens": 1863,
           "output_tokens": 75,
-          "usd": 0.0003249
+          "usd": 0.00032445
         }
       },
       "n_tasks": 12,
       "completion_rate": 0.9166666666666666,
       "task_accuracy": 0.9166666666666666,
-      "usd_per_task": 0.0019347116666666667,
-      "tokens_per_task": 3896.6666666666665,
+      "usd_per_task": 0.0018632241666666667,
+      "tokens_per_task": 3876.1666666666665,
       "by_tier": {
         "main": {
           "calls": 25,
-          "input_tokens": 40271,
-          "output_tokens": 1779,
-          "usd": 0.022397550000000002
+          "input_tokens": 40207,
+          "output_tokens": 1599,
+          "usd": 0.021539549999999998
         },
         "light": {
           "calls": 10,
-          "input_tokens": 4393,
-          "output_tokens": 265,
-          "usd": 0.0008179500000000001
+          "input_tokens": 4390,
+          "output_tokens": 266,
+          "usd": 0.0008181
         }
       },
       "tasks": [
         {
           "id": "api_down",
-          "usd": 0.00043545,
-          "tokens": 1831,
+          "usd": 0.00043499999999999995,
+          "tokens": 1830,
           "completed": false,
           "accurate": true
         },
         {
           "id": "degraded_mode",
-          "usd": 0.006941330000000001,
-          "tokens": 9795,
+          "usd": 0.006395330000000001,
+          "tokens": 9607,
           "completed": true,
           "accurate": true
         },
         {
           "id": "flow_a",
-          "usd": 0.00530774,
-          "tokens": 9694,
+          "usd": 0.0052114399999999995,
+          "tokens": 9671,
           "completed": true,
           "accurate": true
         },
         {
           "id": "flow_b",
-          "usd": 0.00117915,
-          "tokens": 4492,
+          "usd": 0.0011607,
+          "tokens": 4498,
           "completed": true,
           "accurate": false
         },
         {
           "id": "flow_c",
-          "usd": 0.00034815,
-          "tokens": 1371,
+          "usd": 0.00034889999999999997,
+          "tokens": 1372,
           "completed": true,
           "accurate": true
         },
         {
           "id": "kb_answer",
-          "usd": 0.0044523900000000005,
-          "tokens": 5780,
+          "usd": 0.00425214,
+          "tokens": 5738,
           "completed": true,
           "accurate": true
         },
         {
           "id": "status_0",
-          "usd": 0.00034815,
-          "tokens": 1371,
+          "usd": 0.00034889999999999997,
+          "tokens": 1372,
           "completed": true,
           "accurate": true
         },
         {
           "id": "status_1",
+          "usd": 0.00034889999999999997,
+          "tokens": 1372,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_2plus",
           "usd": 0.00034815,
           "tokens": 1371,
           "completed": true,
           "accurate": true
         },
         {
-          "id": "status_2plus",
-          "usd": 0.0003474,
-          "tokens": 1370,
-          "completed": true,
-          "accurate": true
-        },
-        {
           "id": "ticket_create_edit",
-          "usd": 0.0005394,
-          "tokens": 2468,
+          "usd": 0.000543,
+          "tokens": 2479,
           "completed": true,
           "accurate": true
         },
         {
           "id": "ticket_create_no",
-          "usd": 0.0005394,
-          "tokens": 2471,
+          "usd": 0.0005356499999999999,
+          "tokens": 2457,
           "completed": true,
           "accurate": true
         },
         {
           "id": "ticket_create_yes",
-          "usd": 0.00242983,
-          "tokens": 4746,
+          "usd": 0.00243058,
+          "tokens": 4747,
           "completed": true,
           "accurate": true
         }
       ],
-      "kb": {
-        "n_questions": 53,
-        "n_answered": 51,
-        "faithfulness": 0.9809847015729369,
-        "hallucination_rate": 0.11764705882352941,
-        "answer_correctness": 0.6156955378398572,
-        "usd": 0.17769825000000006,
-        "usd_per_question": 0.003352797169811322,
-        "judge": "ragas"
-      },
-      "kb_shared": true
+      "kb": null,
+      "kb_shared": false
     },
     {
       "name": "all_main",
       "by_agent": {
         "orchestrator": {
           "calls": 19,
-          "input_tokens": 28111,
-          "output_tokens": 612,
-          "usd": 0.01200045
+          "input_tokens": 28071,
+          "output_tokens": 663,
+          "usd": 0.00787995
         },
         "ticket_draft": {
           "calls": 4,
           "input_tokens": 1674,
-          "output_tokens": 141,
-          "usd": 0.0018899999999999998
+          "output_tokens": 143,
+          "usd": 0.001899
         },
         "it_worker": {
           "calls": 2,
           "input_tokens": 3960,
-          "output_tokens": 509,
-          "usd": 0.0040509
+          "output_tokens": 466,
+          "usd": 0.0026478000000000005
         },
         "grounding_judge": {
           "calls": 3,
-          "input_tokens": 6166,
-          "output_tokens": 464,
-          "usd": 0.0067125
+          "input_tokens": 6126,
+          "output_tokens": 558,
+          "usd": 0.007105499999999999
         },
         "chitchat": {
           "calls": 3,
           "input_tokens": 842,
-          "output_tokens": 68,
-          "usd": 0.0009375
+          "output_tokens": 75,
+          "usd": 0.000969
         },
         "hr_worker": {
           "calls": 1,
           "input_tokens": 2132,
-          "output_tokens": 94,
-          "usd": 0.002022
+          "output_tokens": 98,
+          "usd": 0.000744
         },
         "confirm_parse": {
           "calls": 3,
-          "input_tokens": 1836,
+          "input_tokens": 1835,
           "output_tokens": 96,
-          "usd": 0.001809
+          "usd": 0.00180825
         }
       },
       "n_tasks": 12,
       "completion_rate": 0.9166666666666666,
       "task_accuracy": 0.9166666666666666,
-      "usd_per_task": 0.0024519491666666667,
-      "tokens_per_task": 3896.4166666666665,
+      "usd_per_task": 0.0019212116666666665,
+      "tokens_per_task": 3899.25,
       "by_tier": {
         "main": {
           "calls": 35,
-          "input_tokens": 44721,
-          "output_tokens": 1984,
-          "usd": 0.029422349999999996
+          "input_tokens": 44640,
+          "output_tokens": 2099,
+          "usd": 0.023053499999999994
         }
       },
       "tasks": [
         {
           "id": "api_down",
-          "usd": 0.00159825,
-          "tokens": 1826,
+          "usd": 0.0008213999999999999,
+          "tokens": 1827,
           "completed": false,
           "accurate": true
         },
         {
           "id": "degraded_mode",
-          "usd": 0.00798893,
-          "tokens": 9754,
+          "usd": 0.0055289300000000005,
+          "tokens": 9760,
           "completed": true,
           "accurate": true
         },
         {
           "id": "flow_a",
-          "usd": 0.0057206900000000005,
-          "tokens": 9753,
+          "usd": 0.005795689999999999,
+          "tokens": 9698,
           "completed": true,
           "accurate": true
         },
         {
           "id": "flow_b",
-          "usd": 0.0021888000000000003,
-          "tokens": 4497,
+          "usd": 0.00146745,
+          "tokens": 4527,
           "completed": true,
           "accurate": false
         },
         {
           "id": "flow_c",
-          "usd": 0.00034815,
-          "tokens": 1371,
+          "usd": 0.00034889999999999997,
+          "tokens": 1372,
           "completed": true,
           "accurate": true
         },
         {
           "id": "kb_answer",
-          "usd": 0.00437364,
-          "tokens": 5770,
+          "usd": 0.0031983899999999997,
+          "tokens": 5801,
           "completed": true,
           "accurate": true
         },
         {
           "id": "status_0",
-          "usd": 0.00034815,
-          "tokens": 1371,
+          "usd": 0.00034889999999999997,
+          "tokens": 1372,
           "completed": true,
           "accurate": true
         },
         {
           "id": "status_1",
+          "usd": 0.00034889999999999997,
+          "tokens": 1372,
+          "completed": true,
+          "accurate": true
+        },
+        {
+          "id": "status_2plus",
           "usd": 0.00034815,
           "tokens": 1371,
           "completed": true,
           "accurate": true
         },
         {
-          "id": "status_2plus",
-          "usd": 0.0003474,
-          "tokens": 1370,
-          "completed": true,
-          "accurate": true
-        },
-        {
           "id": "ticket_create_edit",
-          "usd": 0.0014064,
-          "tokens": 2462,
+          "usd": 0.0014153999999999998,
+          "tokens": 2464,
           "completed": true,
           "accurate": true
         },
         {
           "id": "ticket_create_no",
-          "usd": 0.0014064,
-          "tokens": 2462,
+          "usd": 0.00140715,
+          "tokens": 2463,
           "completed": true,
           "accurate": true
         },
         {
           "id": "ticket_create_yes",
-          "usd": 0.00334843,
-          "tokens": 4750,
+          "usd": 0.00202528,
+          "tokens": 4764,
           "completed": true,
           "accurate": true
         }
       ],
-      "kb": {
-        "n_questions": 53,
-        "n_answered": 51,
-        "faithfulness": 0.9809847015729369,
-        "hallucination_rate": 0.11764705882352941,
-        "answer_correctness": 0.6156955378398572,
-        "usd": 0.17769825000000006,
-        "usd_per_question": 0.003352797169811322,
-        "judge": "ragas"
-      },
-      "kb_shared": true
+      "kb": null,
+      "kb_shared": false
     }
   ]
 }

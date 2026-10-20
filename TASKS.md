@@ -202,6 +202,7 @@ Exit: `python -m evals.run` produces Ragas + ablation tables; Streamlit chat + M
 |---|---|---|---|---|---|
 | [x] | T8.1 | Long-term per-email store: ticket numbers and last category only | H10 | `smartdesk_ai/memory/long_term.py`, `tests/test_long_term_store.py` | Store holds only numbers and last category; title/status never stored; emails masked in logs |
 | [x] | T8.2 | Cross-session recall on status check (title/status fetched live) | H10, C1 | `smartdesk_ai/tickets/search_fallback.py`, `smartdesk_ai/tools/ticket_tools.py`, `tests/test_cross_session.py`, smoke step 5 | Session 1 creates a ticket; new session/thread with same email recalls it without naming it; no session-1 messages in session 2 context; different email recalls nothing |
+| [x] | T8.3 | Post-Phase-8 final rerun with orchestrator_v9 + ticket_summary_v2 (planning check, compound, gap + KB, drift point, safety, T7.11 scenarios) **[CONFIRM]** | H3, H7, H12, H17, A18 | `evals/post_phase7.py` (`--profile phase8`), `evals/tier_comparison.py` (`--scenarios-only`), PLAN 14.9 | Done 2026-10-20, batch $0.848. Gap + KB run twice: run 1 stopped on the 92% citation rule (90.6%, classified as variance plus one borderline v9 routing flip), run 2 passed (98.1%). Commit gate hardened after a pytest hang (chroma client cache). |
 
 ---
 

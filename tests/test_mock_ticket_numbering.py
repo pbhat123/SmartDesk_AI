@@ -1,5 +1,6 @@
 """Mock tickets live in memory and reset on restart (numbering starts again at #5, after the four seeded demo tickets):
-the sidebar mode line says so, and no mock ticket or map row ever reaches data/app.db. Mock tickets only (FR-B10, C10)."""
+the README says so (the app does not), and no mock ticket or map row ever reaches data/app.db. Mock tickets only (FR-B10, C10)."""
+from pathlib import Path
 import sqlite3
 
 from tests.ui_helpers import app_test, element_text, mock_context
@@ -18,13 +19,13 @@ def new_ticket(ctx, thread):
 
 # --- the caption ---------------------------------------------------------------------------------------------------
 
-def test_the_chat_keeps_only_the_greeting_and_the_sidebar_mode_line_carries_the_reset_note(tmp_path):
+def test_the_chat_keeps_only_the_greeting_and_the_sidebar_has_the_mode_pills_without_the_reset_note(tmp_path):
     page = app_test(mock_context(tmp_path))
     assert not page.exception
     main = element_text(page.main)
     assert GREETING in main and "Mock tickets live in memory" not in main and OLD_CAPTION not in main
-    note = next(c.value for c in page.sidebar.caption if "restart" in c.value)
-    assert "Mock tickets" in note and "#5" in note
+    assert not any("restart" in c.value for c in page.sidebar.caption)  # the reset note lives in the README only
+    assert "restarts at #5" in (Path(__file__).resolve().parent.parent / "README.md").read_text()
     assert any("Tickets mock" in m.value for m in page.sidebar.markdown)  # the mode pill
 
 

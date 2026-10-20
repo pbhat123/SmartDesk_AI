@@ -63,7 +63,6 @@ def _new_conversation() -> None:
     st.session_state["messages"] = []
 
 
-MOCK_TICKETS_NOTE = "Mock tickets live in memory; a restart clears them and numbering restarts at #5."  # under the mode pills
 MOCK_CAPTION = ("Mock mode uses fake embeddings (hashing) and no reranker, so mock retrieval is not meaningful: "
                 "the scores and the order only show that the plumbing works.")
 
@@ -130,10 +129,6 @@ def render_chat(ctx: UiContext) -> None:
             _new_conversation()
             st.rerun()
         _mode_pills(ctx)
-        if ctx.settings.modes.tickets == "mock":
-            st.caption(MOCK_TICKETS_NOTE)
-        for health in ctx.registry.degraded_modes():
-            st.caption(f"Degraded: {health.component.value} → {health.mode}")
         cost_slot = st.empty()
         _show_cost(cost_slot, ctx)
         show_debug = st.toggle(DEBUG_LABEL, value=True)

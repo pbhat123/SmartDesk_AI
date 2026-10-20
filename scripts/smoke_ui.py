@@ -210,6 +210,10 @@ def step_kb_question(b: Browser) -> None:
     reply = b.send(KB_QUESTION)
     check("Sources" in reply and "IT-PWD-01" in reply, f"expected an answer with the source chip IT-PWD-01, got {reply[:200]!r}")
     check(b.page.get_by_text("Retrieval debug").count() >= 1, "the retrieval-debug panel is missing")
+    sidebar = b.page.locator('[data-testid="stSidebar"]').inner_text()
+    check("LLM" in sidebar and "Tickets" in sidebar, f"the sidebar lost the mode pills: {sidebar[:200]!r}")
+    check("Degraded" not in sidebar and "Mock tickets live in memory" not in sidebar,
+          f"the sidebar must not show degraded notices or the mock-tickets note: {sidebar[:300]!r}")
 
 
 def step_repeated_kb_question(b: Browser, work: Path) -> None:

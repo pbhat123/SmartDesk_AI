@@ -7,7 +7,7 @@ guard treats it as "not flagged" and logs a warning (FR-F7).
 import re
 from typing import Any, Protocol
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class ModerationResult(BaseModel):
@@ -33,6 +33,13 @@ class OpenAIModerator:
         categories = result.categories
         names = categories.model_dump() if hasattr(categories, "model_dump") else dict(categories)
         return ModerationResult(flagged=True, categories=sorted(name for name, hit in names.items() if hit))
+
+
+def make_openai_moderator(api_key: SecretStr, model: str) -> OpenAIModerator:
+    """The live moderator. The SDK needs the plain key: a SecretStr would be sent as its masked text and get a 401."""
+    from openai import OpenAI
+
+    return OpenAIModerator(OpenAI(api_key=api_key.get_secret_value()), model)
 
 
 _KEYWORD_RULES = {

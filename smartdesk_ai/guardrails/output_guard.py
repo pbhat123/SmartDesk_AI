@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import Settings
-from smartdesk_ai.guardrails.moderation import MOCK_MODERATION_NOTE, KeywordModerator, Moderator, OpenAIModerator
+from smartdesk_ai.guardrails.moderation import MOCK_MODERATION_NOTE, KeywordModerator, Moderator, make_openai_moderator
 from smartdesk_ai.guardrails.pii import (
     PiiRedactor,
     PresidioEngine,
@@ -137,9 +137,7 @@ def build_output_guard(
     if moderator is None:
         env = load_env(environ=environ, dotenv_path=dotenv_path)
         if settings.modes.llm == "live" and env.openai_api_key is not None:
-            from openai import OpenAI
-
-            moderator = OpenAIModerator(OpenAI(api_key=env.openai_api_key), settings.guardrails.moderation_model)
+            moderator = make_openai_moderator(env.openai_api_key, settings.guardrails.moderation_model)
         else:
             moderator = KeywordModerator()
     return OutputGuard(PiiRedactor(engine, settings.guardrails.pii_min_score), moderator, kb_contact_numbers(kb_dir),

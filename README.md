@@ -7,3 +7,5 @@ The full README (setup, run commands, example conversations, models, hardware) i
 ## Tickets
 
 MCP: not used; direct GitHub REST API (allowed per FAQ Q12)
+
+Mock tickets live in memory; a restart clears them and numbering restarts at #5. (Not shown in the app; the chat sidebar has only the mode pills.)

@@ -1,5 +1,6 @@
 """GitHub tickets and Moderation in the health registry and on the Monitoring page (FR-F7, FR-G10)."""
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 import pytest
@@ -175,3 +176,29 @@ def test_cost_by_agent_says_it_counts_app_sessions_only(tmp_path):
     ctx.service.handle("t", "How do I reset my forgotten password?")
     shown = " ".join(c.value for c in monitoring_app(ctx).main.caption)
     assert "App sessions only; evals are in Spend." in shown
+
+
+# --- the live moderator gets the plain API key (the cause of the "Degraded: moderation" notice) -------------------
+
+@pytest.mark.parametrize("module", ["input_guard", "output_guard"])
+def test_the_live_guards_give_the_openai_client_the_plain_key_not_a_masked_secret(settings, monkeypatch, module):
+    """A SecretStr handed to the SDK is sent as "**********": every moderation call got a 401 and the registry (rightly)
+    showed Moderation degraded. Both live guards must unwrap the key."""
+    import importlib
+
+    import openai
+
+    seen = {}
+
+    class Recorder:
+        def __init__(self, api_key=None, **kwargs):
+            seen["key"] = api_key
+
+    monkeypatch.setattr(openai, "OpenAI", Recorder)
+    guard_module = importlib.import_module(f"smartdesk_ai.guardrails.{module}")
+    monkeypatch.setattr(guard_module, "make_presidio_engine", lambda registry=None: None)
+    live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
+    build = getattr(guard_module, f"build_{module}")
+    args = (live, Path(".")) if module == "output_guard" else (live,)
+    build(*args, environ={"OPENAI_API_KEY": "sk-test-plain-key"}, dotenv_path=None, registry=HealthRegistry())
+    assert seen["key"] == "sk-test-plain-key" and isinstance(seen["key"], str)

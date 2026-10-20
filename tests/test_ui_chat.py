@@ -121,3 +121,18 @@ def test_parts_chip_names_parts_domains_and_cache_state():
     assert parts_chip({"parts": parts}) == "2 parts · IT + HR · cache miss"
     assert parts_chip({"parts": [{**p, "cache": {"status": "hit"}} for p in parts]}) == "2 parts · IT + HR · cache hit"
     assert parts_chip({"cache": {"status": "hit"}}) == "cache hit" and parts_chip({}) is None
+
+
+def test_the_chat_sidebar_has_no_mock_tickets_note_and_no_degraded_notices(tmp_path):
+    """The sidebar keeps the mode pills; degraded modes and the mock-ticket note live elsewhere (Monitoring, README)."""
+    from smartdesk_ai.ops.health import Component
+    from tests.ui_helpers import app_test, mock_context, monitoring_app
+
+    ctx = mock_context(tmp_path)
+    ctx.registry.mark_degraded(Component.MODERATION, "ConnectionError")
+    at = app_test(ctx)
+    side = " ".join(c.value for c in at.sidebar.caption) + " ".join(m.value for m in at.sidebar.markdown)
+    assert "Degraded" not in side and "Mock tickets live in memory" not in side
+    assert ":gray-badge[LLM mock]" in side and ":gray-badge[Tickets mock]" in side
+    page = " ".join(m.value for m in monitoring_app(ctx).main.markdown)
+    assert "**Moderation** :orange-badge[degraded]" in page

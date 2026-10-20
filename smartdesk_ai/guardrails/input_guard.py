@@ -14,7 +14,7 @@ from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.guardrails.injection import REFUSAL as INJECTION_REFUSAL
 from smartdesk_ai.guardrails.injection import InjectionChecker, make_injection_checker
-from smartdesk_ai.guardrails.moderation import MOCK_MODERATION_NOTE, KeywordModerator, Moderator, OpenAIModerator
+from smartdesk_ai.guardrails.moderation import MOCK_MODERATION_NOTE, KeywordModerator, Moderator, make_openai_moderator
 from smartdesk_ai.guardrails.names import NameReducer
 from smartdesk_ai.guardrails.self_harm import SELF_HARM_REPLY, WITHHELD, is_self_harm
 from smartdesk_ai.guardrails.threats import is_violent_threat
@@ -107,9 +107,7 @@ def build_input_guard(
     if moderator is None:
         env = load_env(environ=environ, dotenv_path=dotenv_path)
         if live and env.openai_api_key is not None:
-            from openai import OpenAI
-
-            moderator = OpenAIModerator(OpenAI(api_key=env.openai_api_key), settings.guardrails.moderation_model)
+            moderator = make_openai_moderator(env.openai_api_key, settings.guardrails.moderation_model)
         else:
             moderator = KeywordModerator()
     if injection_builder is None:

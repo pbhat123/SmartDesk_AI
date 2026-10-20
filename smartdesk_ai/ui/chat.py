@@ -11,6 +11,7 @@ from smartdesk_ai.ui.context import UiContext
 from smartdesk_ai.ui.formats import usd
 from smartdesk_ai.ui.monitoring import session_cost
 from smartdesk_ai.ui.theme import MARK
+from smartdesk_ai.ui.ticket_card import parse_draft, parse_receipt, render_draft, render_receipt
 
 DEBUG_LABEL = "Show retrieval debug"
 PANEL_LABEL = "Retrieval debug"
@@ -207,8 +208,12 @@ def parts_chip(message: dict[str, Any]) -> str | None:
 
 def _render_reply(message: dict[str, Any], ctx: UiContext, show_debug: bool) -> None:
     chip = parts_chip(message)
-    segments = split_sources(message["content"])
-    for kind, value in segments:
+    text = message["content"]
+    if draft := parse_draft(text):
+        render_draft(draft)
+    elif receipt := parse_receipt(text):
+        render_receipt(receipt)
+    for kind, value in [] if draft or receipt else split_sources(text):
         if kind == "text":
             st.markdown(value)
         else:

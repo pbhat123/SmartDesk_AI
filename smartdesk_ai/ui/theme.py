@@ -13,8 +13,7 @@ PAGE_TITLE = "SmartDesk AI"
 CARD_CSS = """
 <style>
 [data-testid="stFooter"], footer, #MainMenu, [data-testid="stDecoration"] { display: none !important; }
-[data-testid="stVerticalBlockBorderWrapper"]:has(> div > [data-testid="stVerticalBlock"] > .sd-card-marker),
-[data-testid="stMetric"] {
+[data-testid="stVerticalBlockBorderWrapper"], [data-testid="stMetric"] {
   background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 14px 16px;
 }
 /* chat: the employee's messages are accent bubbles on the right, the assistant's are white cards with the SD avatar */

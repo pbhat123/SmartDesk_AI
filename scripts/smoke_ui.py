@@ -230,9 +230,9 @@ def step_ticket_flow(b: Browser) -> int:
     asks = b.send("yes")
     check("email" in asks.lower(), f"expected a request for the work email, got {asks[:200]!r}")
     draft = b.send(EMAIL)
-    check("ready to create" in draft and "Shall I go ahead" in draft, f"expected a ticket draft, got {draft[:200]!r}")
+    check("ready to create" in draft and "Waiting for your OK" in draft, f"expected a ticket draft, got {draft[:200]!r}")
     edited = b.send(f"change the title to {NEW_TITLE}")
-    check(f"Title: {NEW_TITLE}" in edited and "Shall I go ahead" in edited,
+    check(re.search(rf"Title\s+{NEW_TITLE}", edited) and "Waiting for your OK" in edited,
           f"expected the draft with the new title, got {edited[:200]!r}")
     created = b.send("yes")
     found = re.search(r"Ticket #(\d+) \(mock\)", created)
@@ -332,7 +332,7 @@ def step_partial_answer(b: Browser, work: Path) -> None:
     check("support ticket for that part" in reply and "work email" in reply,
           f"expected a ticket offer for that part with the email request, got {reply[:400]!r}")
     draft = b.send(EMAIL)
-    check("ready to create" in draft and "Shall I go ahead" in draft, f"expected a ticket draft, got {draft[:300]!r}")
+    check("ready to create" in draft and "Waiting for your OK" in draft, f"expected a ticket draft, got {draft[:300]!r}")
     check("park" in draft.lower() and "password" not in draft.lower(),
           f"expected a draft about the parking part only, got {draft[:400]!r}")
     created = b.send("yes")

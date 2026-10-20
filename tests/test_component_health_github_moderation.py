@@ -1,0 +1,139 @@
+"""GitHub tickets and Moderation in the health registry and on the Monitoring page (FR-F7, FR-G10)."""
+from datetime import datetime, timezone
+
+import httpx
+import pytest
+from pydantic import SecretStr
+
+from smartdesk_ai.guardrails.input_guard import InputGuard
+from smartdesk_ai.guardrails.moderation import KeywordModerator, ModerationResult
+from smartdesk_ai.guardrails.names import NameReducer
+from smartdesk_ai.guardrails.output_guard import OutputGuard
+from smartdesk_ai.guardrails.pii import PiiRedactor
+from smartdesk_ai.ops.health import Component, HealthRegistry, Status
+from smartdesk_ai.tickets import GitHubRestClient, MockTicketClient, TicketError, TransientTicketError
+from smartdesk_ai.tickets.health_client import HealthTrackedClient
+from smartdesk_ai.tickets.schemas import TicketCreate
+from smartdesk_ai.ui.monitoring import load_monitoring
+from tests.ui_helpers import element_text, mock_context, monitoring_app
+
+REPO = "octo/tickets"
+DRAFT = TicketCreate(title="VPN down", description="Cannot connect", category="IT",
+                     email="jane.roe@example.com", request_id="req-1")
+
+
+@pytest.fixture()
+def registry():
+    return HealthRegistry(clock=lambda: datetime(2026, 10, 20, 12, 0, tzinfo=timezone.utc))
+
+
+def tracked_rest(handler, settings, registry):
+    client = GitHubRestClient(REPO, SecretStr("ghp_secret"), settings.github, transport=httpx.MockTransport(handler))
+    return HealthTrackedClient(client, registry)
+
+
+# --- GitHub ----------------------------------------------------------------------------------------------------
+
+def test_an_unreachable_github_degrades_with_a_reason_and_recovers(settings, registry):
+    state = {"up": False}
+
+    def handler(request):
+        if not state["up"]:
+            raise httpx.ConnectError("no route", request=request)
+        return httpx.Response(200, json={"number": 7, "html_url": "https://github.com/octo/tickets/issues/7",
+                                         "title": "t", "body": "b", "state": "open", "labels": []})
+
+    client = tracked_rest(handler, settings, registry)
+    with pytest.raises(TransientTicketError):
+        client.get(7)
+    health = registry.get(Component.GITHUB)
+    assert health.status is Status.DEGRADED and health.reason == "could not reach GitHub"
+    assert [h.component for h in registry.degraded_modes()] == [Component.GITHUB]
+    assert "ghp_secret" not in repr(health)
+    state["up"] = True
+    assert client.get(7).number == 7
+    assert registry.get(Component.GITHUB).status is Status.OK
+
+
+def test_a_server_error_or_a_refused_token_degrades_but_not_found_does_not(settings, registry):
+    for code, degraded in ((503, True), (401, True), (404, False)):
+        reg = HealthRegistry()
+        client = tracked_rest(lambda request, code=code: httpx.Response(code, json={}), settings, reg)
+        with pytest.raises((TicketError, TransientTicketError)):
+            client.get(1)
+        assert (reg.get(Component.GITHUB).status is Status.DEGRADED) is degraded, code
+
+
+def test_the_mock_client_can_simulate_an_outage_through_the_tracker(registry):
+    mock = MockTicketClient()
+    client = HealthTrackedClient(mock, registry)
+    assert client.create(DRAFT).number >= 1 and registry.get(Component.GITHUB).status is Status.OK
+    mock.unreachable = True
+    with pytest.raises(TransientTicketError):
+        client.get(1)
+    assert registry.get(Component.GITHUB).status is Status.DEGRADED
+    assert client.add_issue  # attributes the wrapped client has are still reachable
+
+
+def test_mock_tickets_are_listed_as_mock_mode_not_degraded(tmp_path):
+    ctx = mock_context(tmp_path)
+    health = ctx.registry.get(Component.GITHUB)
+    assert health.status is Status.MOCK and Component.GITHUB not in [h.component for h in ctx.registry.degraded_modes()]
+
+
+# --- Moderation ------------------------------------------------------------------------------------------------
+
+class Down:
+    def check(self, text):
+        raise ConnectionError("moderation API down")
+
+
+class Flaky:
+    def __init__(self):
+        self.up = False
+
+    def check(self, text):
+        if not self.up:
+            raise ConnectionError("down")
+        return ModerationResult(flagged=False)
+
+
+def test_an_input_moderation_outage_degrades_and_a_good_check_recovers(registry):
+    moderator = Flaky()
+    guard = InputGuard(pii=PiiRedactor(None, 0.5), names=NameReducer(None, 0.5), moderator=moderator, registry=registry)
+    assert not guard("hello").blocked  # the outage never stops the service
+    health = registry.get(Component.MODERATION)
+    assert health.status is Status.DEGRADED and health.reason == "ConnectionError"
+    moderator.up = True
+    guard("hello again")
+    assert registry.get(Component.MODERATION).status is Status.OK
+
+
+def test_an_output_moderation_outage_degrades_too(registry):
+    guard = OutputGuard(PiiRedactor(None, 0.5), Down(), registry=registry)
+    assert guard.check("A reply.").text == "A reply."
+    assert registry.get(Component.MODERATION).status is Status.DEGRADED
+    OutputGuard(PiiRedactor(None, 0.5), KeywordModerator(), registry=registry).check("A reply.")
+    assert registry.get(Component.MODERATION).status is Status.OK
+
+
+# --- the page --------------------------------------------------------------------------------------------------
+
+def test_the_components_list_names_github_and_moderation_with_their_badges(tmp_path):
+    ctx = mock_context(tmp_path)
+    ctx.service.handle("t", "How do I reset my forgotten password?")  # one guarded turn: moderation was checked
+    rows = {c.component: c for c in load_monitoring(ctx.settings, tmp_path, ctx.kb_dir, ctx.registry,
+                                                    results_dir=ctx.results_dir).components}
+    assert rows["github"].status == "mock" and rows["moderation"].status == "ok"
+    page = monitoring_app(ctx)
+    shown = " ".join(m.value for m in page.main.markdown)
+    assert "**GitHub tickets** :blue-badge[mock mode]" in shown and "**Moderation** :green-badge[ok]" in shown
+    assert not page.exception
+
+
+def test_a_degraded_github_shows_orange_with_its_reason(tmp_path):
+    ctx = mock_context(tmp_path)
+    ctx.registry.mark_degraded(Component.GITHUB, "could not reach GitHub")
+    page = monitoring_app(ctx)
+    shown = " ".join(m.value for m in page.main.markdown) + element_text(page.main)
+    assert "**GitHub tickets** :orange-badge[degraded]" in shown and "could not reach GitHub" in shown

@@ -33,7 +33,7 @@ def test_all_components_listed_and_unchecked_at_start(reg):
 
 
 def test_covers_the_fr_f7_components():
-    assert {c.value for c in Component} == {"reranker", "presidio", "redis", "langsmith", "langfuse"}
+    assert {c.value for c in Component} == {"reranker", "presidio", "redis", "langsmith", "langfuse", "github", "moderation"}
     assert set(SUBSTITUTES) == set(Component)
 
 

@@ -23,7 +23,7 @@ from smartdesk_ai.guardrails.pii import (
     mask_emails_in,
     regex_spans,
 )
-from smartdesk_ai.ops.health import HealthRegistry
+from smartdesk_ai.ops.health import Component, HealthRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -80,7 +80,9 @@ def kb_contact_numbers(kb_dir: Path) -> frozenset[str]:
 
 
 class OutputGuard:
-    def __init__(self, pii: PiiRedactor, moderator: Moderator, keep_numbers: frozenset[str] = frozenset()) -> None:
+    def __init__(self, pii: PiiRedactor, moderator: Moderator, keep_numbers: frozenset[str] = frozenset(),
+                 registry: HealthRegistry | None = None) -> None:
+        self._registry = registry
         self._pii = pii
         self._moderator = moderator
         self._keep = keep_numbers
@@ -99,7 +101,11 @@ class OutputGuard:
         text = redacted.text
         try:
             result = self._moderator.check(mask_emails_in(text))
+            if self._registry is not None:
+                self._registry.mark_ok(Component.MODERATION)
         except Exception as error:  # an outage must not stop the service (FR-F7)
+            if self._registry is not None:
+                self._registry.mark_degraded(Component.MODERATION, type(error).__name__)
             logger.warning("output moderation unavailable (%s); reply allowed", type(error).__name__)
             return OutputDecision(text=text, actions=actions)
         if result.flagged:
@@ -133,4 +139,5 @@ def build_output_guard(
             moderator = OpenAIModerator(OpenAI(api_key=env.openai_api_key), settings.guardrails.moderation_model)
         else:
             moderator = KeywordModerator()
-    return OutputGuard(PiiRedactor(engine, settings.guardrails.pii_min_score), moderator, kb_contact_numbers(kb_dir))
+    return OutputGuard(PiiRedactor(engine, settings.guardrails.pii_min_score), moderator, kb_contact_numbers(kb_dir),
+                       registry)

@@ -21,7 +21,7 @@ from smartdesk_ai.guardrails.threats import is_violent_threat
 from smartdesk_ai.guardrails.pii import PiiRedactor, PresidioEngine, make_presidio_engine, mask_emails_in
 from smartdesk_ai.llm.factory import ModelBuilder, openai_builder
 from smartdesk_ai.llm.mock import MockInjectionModel
-from smartdesk_ai.ops.health import HealthRegistry
+from smartdesk_ai.ops.health import Component, HealthRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,10 @@ THREAT_REFUSAL = (
 
 class InputGuard:
     def __init__(
-        self, pii: PiiRedactor, names: NameReducer, moderator: Moderator, injection: InjectionChecker | None = None
+        self, pii: PiiRedactor, names: NameReducer, moderator: Moderator, injection: InjectionChecker | None = None,
+        registry: HealthRegistry | None = None,
     ) -> None:
+        self._registry = registry
         self._pii = pii
         self._names = names
         self._moderator = moderator
@@ -67,7 +69,11 @@ class InputGuard:
     def _moderation_reason(self, safe_text: str) -> str | None:
         try:
             result = self._moderator.check(mask_emails_in(safe_text))
+            if self._registry is not None:
+                self._registry.mark_ok(Component.MODERATION)
         except Exception as error:  # an outage must not stop the service (FR-F7)
+            if self._registry is not None:
+                self._registry.mark_degraded(Component.MODERATION, type(error).__name__)
             logger.warning("moderation unavailable (%s); message allowed", type(error).__name__)
             return None
         return f"moderation:{','.join(result.categories) or 'flagged'}" if result.flagged else None
@@ -111,4 +117,5 @@ def build_input_guard(
         names=NameReducer(engine, min_score),
         moderator=moderator,
         injection=make_injection_checker(settings, builder=injection_builder),
+        registry=registry,
     )

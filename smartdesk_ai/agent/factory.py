@@ -62,6 +62,7 @@ from smartdesk_ai.rag.index import IndexNotBuilt, open_index
 from smartdesk_ai.rag.ingest import DEFAULT_KB_DIR, ROOT, ingest
 from smartdesk_ai.rag.rerank import load_reranker
 from smartdesk_ai.rag.staleness import read_state
+from smartdesk_ai.tickets.health_client import HealthTrackedClient
 from smartdesk_ai.tickets import TicketClient, TicketConfigError, create_ticket_client
 from smartdesk_ai.tickets.seed import seed
 from smartdesk_ai.tickets.sqlite_map import TicketStore
@@ -218,6 +219,10 @@ def build_stack(
             client = create_ticket_client(settings, env)
         except TicketConfigError as error:
             raise LiveModeUnavailable(f"{error}. Set it in .env (see .env.example).") from error
+    if settings.modes.tickets == "mock":
+        registry.mark_mock(Component.GITHUB, "mock tickets live in memory")
+    else:
+        client = HealthTrackedClient(client, registry)  # checked on the first call, then after every one
 
     Path(data_dir).mkdir(parents=True, exist_ok=True)
     # Mock tickets live in memory, so their numbers never reach the live map in app.db.

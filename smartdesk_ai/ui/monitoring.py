@@ -450,20 +450,24 @@ def _render_tools(data: MonitoringData) -> None:
                    "they appear only under All time.")
 
 
+COMPONENT_NAMES = {"github": "GitHub tickets", "moderation": "Moderation"}  # the others show their registry name
+STATUS_LABELS = {"unknown": "not checked yet", "mock": "mock mode"}
 STATUS_BADGES = {"ok": "green", "degraded": "orange", "skipped": "gray", "unknown": "gray", "mock": "blue"}
 
 
 def _render_components(data: MonitoringData) -> None:
     st.subheader("Components and degraded modes")
     for c in data.components:
-        label = "not checked yet" if c.status == "unknown" else c.status
-        st.markdown(f"**{c.component}** :{STATUS_BADGES.get(c.status, 'gray')}-badge[{label}]")
+        label = STATUS_LABELS.get(c.status, c.status)
+        st.markdown(f"**{COMPONENT_NAMES.get(c.component, c.component)}** :{STATUS_BADGES.get(c.status, 'gray')}-badge[{label}]")
         text = [part for part in (c.detail, f"running instead: {c.running_instead}" if c.running_instead else "",
                                   f"load time {c.load_seconds:.1f} s" if c.load_seconds else "") if part]
         if text:
             st.caption(" · ".join(text))
-    st.caption("Skipped means left out on purpose (the reranker in mock mode); it is not a fault. "
-               "Degraded means a component failed or is not configured, and the substitute shown is running.")
+    st.caption("Skipped means left out on purpose (the reranker in mock mode); it is not a fault. Mock mode means the "
+               "in-memory stand-in is the real thing in this run. Degraded means a component failed or is not "
+               "configured, and the substitute shown is running. GitHub and Moderation show \"not checked yet\" "
+               "until their first call.")
 
 
 def _render_cost(ctx: UiContext, data: MonitoringData) -> None:

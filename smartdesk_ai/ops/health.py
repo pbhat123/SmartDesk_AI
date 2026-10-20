@@ -29,6 +29,8 @@ class Component(StrEnum):
     REDIS = "redis"
     LANGSMITH = "langsmith"
     LANGFUSE = "langfuse"
+    GITHUB = "github"  # the ticket tracker (shown as "GitHub tickets")
+    MODERATION = "moderation"
 
 
 class Status(StrEnum):
@@ -36,6 +38,7 @@ class Status(StrEnum):
     OK = "ok"
     DEGRADED = "degraded"
     SKIPPED = "skipped"  # left out on purpose (mock mode, or a strategy that does not use it); not a fault
+    MOCK = "mock"  # an in-memory stand-in is the real thing in this run (mock tickets); not a fault
 
 
 # What runs instead when a component is unavailable (FR-F7).
@@ -45,6 +48,8 @@ SUBSTITUTES: dict[Component, str] = {
     Component.REDIS: "in-memory cache",
     Component.LANGSMITH: "local log only",
     Component.LANGFUSE: "local log only",
+    Component.GITHUB: "ticket requests get a try-again-later reply",
+    Component.MODERATION: "messages and replies pass unchecked (the outage is logged)",
 }
 
 
@@ -85,6 +90,12 @@ class HealthRegistry:
         with self._lock:
             self._items[component] = ComponentHealth(
                 component=component, status=Status.SKIPPED, reason=reason[:_MAX_REASON], since=self._clock())
+
+    def mark_mock(self, component: Component, reason: str) -> None:
+        """An in-memory stand-in is used by design (mock mode). Listed as "mock", not a degraded mode."""
+        with self._lock:
+            self._items[component] = ComponentHealth(
+                component=component, status=Status.MOCK, reason=reason[:_MAX_REASON], since=self._clock())
 
     def mark_ok(self, component: Component, load_seconds: float | None = None) -> None:
         with self._lock:

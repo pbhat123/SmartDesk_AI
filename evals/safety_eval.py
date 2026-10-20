@@ -7,6 +7,7 @@ rule. Target for both: 0. `python -m evals.safety_eval [--data-dir DIR]` prints 
 Moderation API and models (tickets stay mock).
 """
 import argparse
+from collections import Counter
 import json
 import logging
 import re
@@ -20,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from evals.common import EVALS_DIR, load_jsonl, longest_shared_span
 from evals.harness import RESULTS_DIR, ROOT, link_live_index, live_settings
 from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, keep_trace, run_items, signature
+from evals.moderation_record import ModerationDegraded, RecordingModerator, eval_moderator, row_status
 from evals.schemas import SafetyRow
 from smartdesk_ai.agent.chat_service import ChatReply, ChatService, InputGuard
 from smartdesk_ai.agent.factory import TRACE_LOG, build_responder
@@ -55,6 +57,9 @@ class CaseResult(BaseModel):
     breaches: list[str] = Field(default_factory=list)  # `must_not` rules that were broken
     expectation_failures: list[str] = Field(default_factory=list)  # other mismatches (setup, reduced name)
     cost_usd: float = 0.0  # what this row spent (0 in mock mode)
+    moderation: str = "not_recorded"  # "ok" (the Moderation API ran), "mock" (keyword stand-in), "not_reached" (a local rule blocked first)
+    moderation_calls: int = 0
+    moderation_flagged: int = 0  # moderation checks (input or output) that flagged text on this row
 
 
 class SafetyReport(BaseModel):
@@ -74,6 +79,10 @@ class SafetyReport(BaseModel):
     @property
     def breached_ids(self) -> list[str]:
         return [c.id for c in self.cases if c.breaches]
+
+    @property
+    def moderation_flagged_ids(self) -> list[str]:
+        return [c.id for c in self.cases if c.moderation_flagged]
 
     @property
     def leakage_rate(self) -> float:
@@ -124,7 +133,7 @@ def _prompt_texts() -> list[str]:
 
 def _run_case(
     row: SafetyRow, settings: Settings, engine: PresidioEngine | None, data_dir: Path,
-    input_guard: InputGuard | None,
+    input_guard: InputGuard | None, moderator: RecordingModerator | None = None,
 ) -> CaseResult:
     client = MockTicketClient()  # tickets are never real, even in a live run
     registry = HealthRegistry()
@@ -133,8 +142,10 @@ def _run_case(
         "environ": {}, "dotenv_path": None}
     responder = build_responder(settings, data_dir=data_dir, registry=registry, client=client, tracing=False, use_cache=False, **env)
     spy = _SpyResponder(responder)
-    guard = input_guard or build_input_guard(settings, registry=registry, engine=engine, **env)
-    out_guard = build_output_guard(settings, DEFAULT_KB_DIR, registry=registry, engine=engine, **env)
+    moderator = moderator or eval_moderator(settings, environ=env["environ"], dotenv_path=env["dotenv_path"])
+    guard = input_guard or build_input_guard(settings, registry=registry, engine=engine, moderator=moderator, **env)
+    out_guard = build_output_guard(settings, DEFAULT_KB_DIR, registry=registry, engine=engine, moderator=moderator, **env)
+    moderation_before = moderator.counts()
     service = ChatService(settings, input_guard=guard, responder=spy, output_guard=out_guard,
                           services=getattr(responder, "services", None))  # metered and limited like the app
     session = new_thread_id()
@@ -173,7 +184,9 @@ def _run_case(
     if row.redacted_form and row.redacted_form not in haystacks["llm_input"]:
         failures.append(f"reduced form {row.redacted_form!r} not seen by the LLMs")
     breaches = _breaches(row, reply, tickets_made, graph_calls, leaked_in, haystacks["reply"])
-    return CaseResult(id=row.id, category=row.category, leaked_in=leaked_in, breaches=breaches,
+    status, used = ("not_recorded", moderator.counts()._replace(calls=0, flagged=0)) if input_guard is not None else row_status(
+        row.id, moderation_before, moderator, blocked_reason=reply.debug.get("blocked_reason"))  # a replaced guard has its own moderator
+    return CaseResult(moderation=status, moderation_calls=used.calls, moderation_flagged=used.flagged, id=row.id, category=row.category, leaked_in=leaked_in, breaches=breaches,
                       expectation_failures=failures, cost_usd=_spent(responder))
 
 
@@ -216,6 +229,7 @@ def run_safety(
     input_guard: InputGuard | None = None,
     run: LiveRun | None = None,
     checkpoint: Checkpoint | None = None,
+    moderator: RecordingModerator | None = None,
 ) -> SafetyReport:
     """Every row on its own session. `input_guard` replaces the real guard (to show the metric can fail). With a `LiveRun`
     each row is checked against the ceiling first and saved to the checkpoint, so a stopped run resumes where it stopped."""
@@ -224,10 +238,10 @@ def run_safety(
     if settings.modes.llm == "live":
         link_live_index(data_dir)
     if run is None:
-        return SafetyReport(cases=[_run_case(r, settings, engine, data_dir, input_guard) for r in rows])
+        return SafetyReport(cases=[_run_case(r, settings, engine, data_dir, input_guard, moderator) for r in rows])
     by_id = {r.id: r for r in rows}
     done, stopped = run_items(run, checkpoint if checkpoint is not None else Checkpoint(None, ""), [r.id for r in rows],
-                              lambda i: _run_case(by_id[i], settings, engine, data_dir, input_guard).model_dump())
+                              lambda i: _run_case(by_id[i], settings, engine, data_dir, input_guard, moderator).model_dump())
     return SafetyReport(cases=[CaseResult(**done[r.id]) for r in rows if r.id in done], stopped=stopped)
 
 
@@ -265,7 +279,7 @@ def main(argv: list[str] | None = None) -> int:
     settings = live_settings(settings)
     estimate = estimate_safety(settings, rows)
     print("\n".join(describe(estimate)))
-    checkpoint = Checkpoint(args.checkpoint, signature([[r.id, r.input] for r in rows] + [settings.models.main.id, settings.models.light.id, dict(settings.prompts)]))
+    checkpoint = Checkpoint(args.checkpoint, signature([[r.id, r.input] for r in rows] + [settings.models.main.id, settings.models.light.id, dict(settings.prompts), "moderation-recorded"]))
     with LiveRun(settings, ["python", "-m", "evals.safety_eval", *(sys.argv[1:] if argv is None else argv)],
                  ceiling_usd=estimate.ceiling_usd) as run:
         args.data_dir = args.data_dir or Path(tempfile.mkdtemp(prefix="safety_eval_"))
@@ -285,17 +299,27 @@ def _report(args: argparse.Namespace, settings: Settings, rows: list[SafetyRow],
     engine = make_presidio_engine(HealthRegistry())
     if engine is None:
         print("note: Presidio is unavailable, so name reduction is not exercised", file=sys.stderr)
-    report = run_safety(rows, settings=settings, engine=engine, data_dir=args.data_dir, run=run, checkpoint=checkpoint)
+    try:
+        report = run_safety(rows, settings=settings, engine=engine, data_dir=args.data_dir, run=run, checkpoint=checkpoint)
+    except ModerationDegraded as error:
+        print(f"error: {error}", file=sys.stderr)
+        return 3
     print(f"Cases: {len(report.cases)} ({'live' if args.live else 'mock'})")
     print(f"PII leakage rate: {report.leakage_rate:.2f}  {report.leaked_ids or ''}")
     print(f"Policy breach rate: {report.breach_rate:.2f}  {report.breached_ids or ''}")
+    ran = Counter(c.moderation for c in report.cases)
+    print(f"Moderation: ran on {ran['ok'] + ran['mock']} rows ({'API' if ran['ok'] else 'keyword stand-in' if ran['mock'] else 'none'}), "
+          f"not reached on {ran['not_reached']} (blocked by a local rule first); flagged text on {len(report.moderation_flagged_ids)} rows "
+          f"{report.moderation_flagged_ids or ''}")
     print(f"Spend: ${report.cost_usd:.4f}")
     if report.stopped:
         print(f"STOPPED after {len(report.cases)} of {len(rows)} rows: {report.stopped}")
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
         payload = {"mock": not args.live, "leakage_rate": report.leakage_rate, "breach_rate": report.breach_rate,
-                   "leaked_ids": report.leaked_ids, "breached_ids": report.breached_ids, "cost_usd": report.cost_usd, "stopped": report.stopped,
+                   "leaked_ids": report.leaked_ids, "breached_ids": report.breached_ids,
+                   "moderation_flagged_ids": report.moderation_flagged_ids,
+                   "moderation": dict(Counter(c.moderation for c in report.cases)), "cost_usd": report.cost_usd, "stopped": report.stopped,
                    "cases": [c.model_dump() for c in report.cases]}
         (args.out_dir / "safety_eval.json").write_text(json.dumps(payload, indent=2))
     for case in report.cases:

@@ -201,3 +201,65 @@ def test_the_checkpoint_signature_changes_with_the_prompt_versions(settings):
 
     base = [[r.id, r.input] for r in ROWS] + [settings.models.main.id, settings.models.light.id]
     assert signature(base + [dict(settings.prompts)]) != signature(base + [{**settings.prompts, "orchestrator": 99}])
+
+
+# --- the moderation record (FR-H1): a degraded moderator stops the run -------------------------------------------
+
+from evals.moderation_record import ModerationDegraded, RecordingModerator, row_status  # noqa: E402
+from smartdesk_ai.guardrails.moderation import KeywordModerator, ModerationResult  # noqa: E402
+
+
+class FailingModerator:
+    def check(self, text):
+        raise ConnectionError("moderation API down")
+
+
+class FlagsEverything:
+    def check(self, text):
+        return ModerationResult(flagged=True, categories=["harassment"])
+
+
+def _row(row_id):
+    return next(r for r in ROWS if r.id == row_id)
+
+
+def _plain_rows(count=2):
+    """Rows no local rule blocks first, so the moderator is asked."""
+    return [r for r in ROWS if r.expected_behaviour == "answer_normally"][:count]
+
+
+def test_a_failing_moderator_stops_the_run_with_the_row_and_the_error_type(settings, engine, tmp_path):
+    rows = _plain_rows()
+    with pytest.raises(ModerationDegraded, match=rf"row {rows[0].id}.*ConnectionError.*run stops"):
+        run_safety(rows, settings=settings, engine=engine, data_dir=tmp_path,
+                   moderator=RecordingModerator(FailingModerator(), live=True))
+
+
+def test_main_exits_with_a_clear_error_when_moderation_is_degraded(settings, engine, tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr("evals.safety_eval.eval_moderator",
+                        lambda *a, **k: RecordingModerator(FailingModerator(), live=True))
+    code = main(["--data-dir", str(tmp_path)])
+    assert code == 3 and "moderation was degraded on row" in capsys.readouterr().err
+
+
+def test_every_row_records_whether_moderation_ran(report):
+    assert {c.moderation for c in report.cases} <= {"mock", "not_reached"}
+    assert all(c.moderation == "not_reached" for c in report.cases if c.moderation_calls == 0)
+    assert any(c.moderation == "mock" and c.moderation_calls >= 1 for c in report.cases)
+
+
+def test_the_report_counts_the_rows_moderation_flagged(settings, engine, tmp_path):
+    rows = _plain_rows(2)
+    flagged = run_safety(rows, settings=settings, engine=engine, data_dir=tmp_path,
+                         moderator=RecordingModerator(FlagsEverything(), live=True))
+    assert flagged.moderation_flagged_ids == [r.id for r in rows] and {c.moderation for c in flagged.cases} == {"ok"}
+
+
+def test_row_status_unit_cases():
+    quiet = RecordingModerator(KeywordModerator(), live=True)
+    before = quiet.counts()
+    with pytest.raises(ModerationDegraded, match="did not run on row r1"):
+        row_status("r1", before, quiet, blocked_reason=None)
+    assert row_status("r2", before, quiet, blocked_reason="self_harm")[0] == "not_reached"
+    quiet.check("hello")
+    assert row_status("r3", before, quiet, blocked_reason=None)[0] == "ok"

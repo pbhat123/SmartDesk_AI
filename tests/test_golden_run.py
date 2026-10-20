@@ -52,10 +52,10 @@ def test_a_stopped_run_resumes_and_gives_the_same_numbers(settings, stack, tmp_p
     asked = []
     real = gr.observe
 
-    def counting(stack, row, label, k):
+    def counting(stack, row, label, k, moderator=None):
         asked.append(row.id)
         sl.current_run().add_chat(sl.Usage(1, 100_000, 0, 0, 0), settings.models.main.id)
-        return real(stack, row, label, k)
+        return real(stack, row, label, k, moderator)
 
     monkeypatch.setattr(gr, "observe", counting)
     cp = lg.Checkpoint(tmp_path / "cp.json", "s")
@@ -203,3 +203,26 @@ def test_only_picks_questions_and_refuses_unknown_ones(capsys, no_paid_calls):
 def test_the_saved_file_lists_the_diagnostics_of_questions_without_a_cited_single_part(settings, stack, tmp_path):
     saved = json.loads(gr.save(gr.run_golden(stack, settings, GOLDEN, mock=True), tmp_path).read_text())
     assert "parts" in saved and isinstance(saved["parts"], dict)
+
+
+# --- the moderation record: each row says whether Moderation ran; a degraded moderator stops the run -------------------
+
+def test_each_row_records_the_moderation_status(settings, stack):
+    from evals.moderation_record import RecordingModerator
+    from smartdesk_ai.guardrails.moderation import KeywordModerator
+
+    result = gr.run_golden(stack, settings, GOLDEN, mock=True, moderator=RecordingModerator(KeywordModerator(), live=True))
+    assert [o.moderation for o in result.observations] == ["ok"] * 12
+    assert "moderation: checked 12 of 12 questions (API), none degraded" in gr.render(result, mock=True)
+
+
+def test_a_failing_moderator_stops_the_gap_and_kb_run_before_the_turn_is_paid_for(settings, stack):
+    from evals.moderation_record import ModerationDegraded, RecordingModerator
+
+    class Down:
+        def check(self, text):
+            raise ConnectionError("down")
+
+    with pytest.raises(ModerationDegraded, match=r"row .*ConnectionError"):
+        gr.run_golden(stack, settings, GOLDEN, mock=True, moderator=RecordingModerator(Down(), live=True))
+    assert stack.services.cost.total == 0.0

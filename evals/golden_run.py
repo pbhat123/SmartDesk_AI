@@ -8,6 +8,7 @@ live guard: estimate, `--confirm-spend`, a ceiling of twice the estimate, a watc
     python -m evals.golden_run [--estimate | --mock | --confirm-spend] [--out-dir DIR]
 """
 import argparse
+from collections import Counter
 import json
 import sys
 import tempfile
@@ -20,10 +21,12 @@ from pydantic import BaseModel
 from evals.diagnostics import PartDiag, part_diagnostics
 from evals.gap_eval import Case, GapReport, answered_with_citations, build_live_stack, classify, summarize
 from evals.harness import RESULTS_DIR, ROOT
+from evals.moderation_record import ModerationDegraded, RecordingModerator, eval_moderator, row_status
 from evals.live_guard import Checkpoint, Estimate, LiveRun, describe, keep_trace, run_items, signature
 from smartdesk_ai.agent.factory import AgentStack, build_stack
 from smartdesk_ai.agent.graph import run_turn
 from smartdesk_ai.agent.state import new_thread_id
+from smartdesk_ai.config.env import DEFAULT_DOTENV
 from smartdesk_ai.config.settings import Settings, load_settings
 from smartdesk_ai.ops import drift
 from smartdesk_ai.ops.health import Component
@@ -42,6 +45,7 @@ class Observation(BaseModel):
     split: str
     grey_zone: bool = False
     question: str
+    moderation: str = "not_recorded"  # "ok" (the Moderation API checked the question), "mock" (keyword stand-in)
     outcome: str
     cited: bool = False
     top_score: float | None
@@ -64,8 +68,17 @@ class GoldenResult(BaseModel):
     observations: list[Observation] = []
 
 
-def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
-    """Ask one golden question on its own session, under the cost task "eval"."""
+def observe(stack: AgentStack, row: Any, label: str, k: int, moderator: RecordingModerator | None = None) -> Observation:
+    """Ask one golden question on its own session, under the cost task "eval". With a `moderator`, the question is checked
+    first, as the app's input guard would, and the status is recorded; a failed check raises before the turn is paid for."""
+    moderation = "not_recorded"
+    if moderator is not None:
+        before = moderator.counts()
+        try:
+            moderator.check(row.question)
+        except Exception:  # the recorder has counted it; row_status raises the plain error
+            pass
+        moderation, _ = row_status(row.id, before, moderator, blocked_reason=None)
     trace = stack.services.trace
     before = len(trace.events) if trace is not None else 0
     session = new_thread_id()
@@ -78,7 +91,7 @@ def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
     verdicts = drift.verdicts_from_events(new_events)
     return Observation(
         id=row.id, label=label, split=row.split, grey_zone=getattr(row, "grey_zone", False), question=row.question,
-        outcome=classify(state), cited=label == "kb" and answered_with_citations(state), top_score=chunks[0].score if chunks else None,
+        moderation=moderation, outcome=classify(state), cited=label == "kb" and answered_with_citations(state), top_score=chunks[0].score if chunks else None,
         hit=row.expected_entry_id in {c.entry_id for c in chunks[:k]} if label == "kb" else None,
         grounded=sum(verdicts), verdicts=len(verdicts),
         workers=len({e.get("part_id") for e in new_events if e.get("kind") == "agent_span" and e.get("part_id")}),
@@ -87,16 +100,16 @@ def observe(stack: AgentStack, row: Any, label: str, k: int) -> Observation:
 
 
 def run_golden(stack: AgentStack, settings: Settings, golden: drift.Golden, *, mock: bool, run: LiveRun | None = None,
-               checkpoint: Checkpoint | None = None, partial: bool = False) -> GoldenResult:
+               checkpoint: Checkpoint | None = None, partial: bool = False, moderator: RecordingModerator | None = None) -> GoldenResult:
     k = settings.retrieval.top_n
     items = [(r, "kb") for r in golden.kb] + [(r, "gap") for r in golden.gap]
     by_id = {r.id: (r, label) for r, label in items}
     ids = [r.id for r, _ in items]
     if run is None:
-        done, stopped = {i: observe(stack, *by_id[i], k).model_dump() for i in ids}, None
+        done, stopped = {i: observe(stack, *by_id[i], k, moderator).model_dump() for i in ids}, None
     else:
         done, stopped = run_items(run, checkpoint if checkpoint is not None else Checkpoint(None, ""), ids,
-                                  lambda i: observe(stack, *by_id[i], k).model_dump())
+                                  lambda i: observe(stack, *by_id[i], k, moderator).model_dump())
     seen = [Observation(**done[i]) for i in ids if i in done]
     gap = summarize([Case(id=o.id, label=o.label, split=o.split, grey_zone=o.grey_zone, outcome=o.outcome, cited=o.cited, question=o.question)
                      for o in seen])
@@ -137,6 +150,10 @@ def render(result: GoldenResult, *, mock: bool) -> str:
         shown = lambda v: "n/a" if v is None else f"{v:.3f}"  # noqa: E731
         lines.append(f"  drift point: faithfulness {shown(d.faithfulness)}, recall@{d.k} {shown(d.recall_at_k)}, "
                      f"escalation rate {shown(d.escalation_rate)}, avg rerank score {shown(d.avg_rerank_score)}")
+    recorded = Counter(o.moderation for o in result.observations)
+    if recorded.get("ok") or recorded.get("mock"):
+        lines.append(f"  moderation: checked {recorded['ok'] + recorded['mock']} of {len(result.observations)} questions "
+                     f"({'API' if recorded.get('ok') else 'keyword stand-in'}), none degraded")
     if result.stopped:
         lines.append(f"  STOPPED: {result.stopped}")
     return "\n".join(lines)
@@ -147,6 +164,7 @@ def save(result: GoldenResult, out_dir: Path) -> Path:
     payload = {"mock": result.drift.mode == "mock" if result.drift else False, **result.gap.model_dump(),
                "cases": [c.model_dump() for c in result.gap.cases],
                "drift": result.drift.model_dump() if result.drift else None, "stopped": result.stopped,
+               "moderation": {o.id: o.moderation for o in result.observations},
                "parts": {o.id: [p.model_dump() for p in o.parts] for o in result.observations if not o.cited or len(o.parts) != 1},
                "single_part_clean": result.single_part_clean, "single_part_total": result.single_part_total, "not_clean": result.not_clean}
     path = out_dir / RESULT_FILE
@@ -176,7 +194,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.mock:
         with tempfile.TemporaryDirectory(prefix="golden_run_") as work:
             stack = build_stack(settings, environ={}, dotenv_path=None, data_dir=Path(work), use_cache=False)
-            result = run_golden(stack, settings, golden, mock=True, partial=bool(args.only))
+            result = run_golden(stack, settings, golden, mock=True, partial=bool(args.only),
+                                moderator=eval_moderator(settings, environ={}, dotenv_path=None))
         print(render(result, mock=True))
         print("(MOCK run: it only exercises the code.)")
         return 0
@@ -189,7 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     live = settings.model_copy(update={"modes": settings.modes.model_copy(update={"llm": "live"})})
     sig = signature([[r.id, r.question] for r in [*golden.kb, *golden.gap]] + [live.models.main.id, live.models.light.id,
-                                                                           dict(live.prompts)])
+                                                                           dict(live.prompts), "moderation-recorded"])
     checkpoint = Checkpoint(args.checkpoint, sig)  # the questions are in the signature, so a subset never reuses the full run's
     if checkpoint.resumed:
         print(f"resuming: {checkpoint.resumed} of {golden.size} questions are already answered")
@@ -197,7 +216,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                  ceiling_usd=estimate.ceiling_usd) as run:
         work = Path(tempfile.mkdtemp(prefix="golden_run_"))
         stack = build_live_stack(live, work)
-        result = run_golden(stack, live, golden, mock=False, run=run, checkpoint=checkpoint, partial=bool(args.only))
+        try:
+            result = run_golden(stack, live, golden, mock=False, run=run, checkpoint=checkpoint, partial=bool(args.only),
+                                moderator=eval_moderator(live, environ=None, dotenv_path=DEFAULT_DOTENV))
+        except ModerationDegraded as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 3
         print(render(result, mock=False))
         cost = run.cost()
         print(f"ledger cost of this run: ${cost.usd:.4f} over {cost.calls} calls ({cost.input_tokens:,} input, "

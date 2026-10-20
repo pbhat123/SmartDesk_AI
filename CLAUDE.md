@@ -56,7 +56,11 @@ python -m smartdesk_ai.ops.drift         # drift check on the golden set: shows 
 - Commits go through the pre-commit hook (`scripts/install_hooks.sh`). Never bypass it with `--no-verify`.
 - Every LLM call goes through `FallbackChat` (guarded by `tests/test_llm_observed.py`).
 - Retrieval stays hybrid + rerank (see `evals/README.md`, "Retrieval ablation").
-- Answer prompt v4 and grounding judge v3 are active. Final gap, safety and Ragas reruns happen after Phase 7.
+- Active versions: answer prompt v4 (workers are v4 verbatim), grounding judge v3, orchestrator_v8 plus the `merge_fragments` guard, `semantic_cache_cutoff` 0.97, escalation threshold 0.40. The post-Phase-7 final runs are done (PLAN 14.6). Changing any of these after the final runs needs my approval, because it means rerunning gap, safety and Ragas. Prompts change only by adding a new version file.
 - PII checks in tests use `tests/pii_helpers` (whole-token match only, never a bare substring such as `"98765" in blob`).
 - Never run git checkout/restore/reset on files with uncommitted work. For mutation tests use git stash or a git worktree.
 - Never create or edit files in the repo while a commit hook is running; wait for it to finish. Use the scratchpad for drafts.
+- Paid runs go through `evals/live_guard.py` (`LiveRun`: ledger source `eval`, ceiling = 2x the estimate, watchdog; `Checkpoint` for resume). A multi-step batch lives in a driver with its stop rules in code (`python -m evals.post_phase7`, `--resume` or `--fresh`). Changing a stop rule needs my approval first. Result tables print "not run" for any file older than the batch.
+- Never put golden or eval questions in a prompt (examples are same-shape paraphrases), and eval questions stay out of the KB text (FR-A18).
+- After a failing eval, inspect saved results first (free) and classify each failure before changing code, a prompt or a rule. No spend and no new prompt version until I approve.
+- Commit messages go in a file in the scratchpad (`git commit -F`), never an inline heredoc. The hook takes about 2.5 minutes (pytest, plus smoke for UI changes): run the commit with a long timeout and wait for it. macOS has no `timeout` command.

@@ -962,3 +962,25 @@ One orchestrator call per question, no history, no workers, tools or tickets, ov
 **Addendum 2 (orchestrator_v8 and the fragment guard).** The v7 planning check split 3 of 74 single-topic questions (kb-023, kb-045, kb-053), over the limit of 2: v6's "split for different entries" over-splits an "X, and when/how long Y?" question into a real part and a fragment. `orchestrator_v8` is v7 plus a fragment rule in the parts bullet (a part is a complete standalone question; a clause that only asks about the same thing's timing, count, place or duration stays with it), with two examples of the same shape in other words (so the golden questions are not in the prompt). In code, `merge_fragments` joins a part of fewer than 5 words onto the part before it when both are in the same domain; it never splits, never joins across domains (cmp-011's "How long is probation?" between an IT and a MISC part is a real part), and when it leaves one part the employee's own words are searched as for any single question (golden parity unchanged). Step b checks v8; if it fails again the batch stops and no v9 is made: the report compares v5 and v8.
 
 **Addendum 3 (rule change for step b, approved 2026-10-19 after the v8 planning check).** v8 got the right number of parts for 14 of 14 compound questions but labelled one (cmp-007, "the password for the people portal") HR instead of IT, which the old rule (count and domains in order) counted as a failed split. Step b now stops when fewer than 14 of 14 compound questions get the right **number of parts**; whether the domains are right is reported apart ("right number and domains in order"), and step c stays the outcome gate (a part answered from its expected entry, by routing or by the retry; at least 12 of 14 rows). The single-topic limit stays at most 2 of 74, but is now measured the way the app behaves: the planning check applies the same `plan_parts` fragment guard as the app and reports the raw count (the orchestrator's own split) beside the guarded one. The driver's final table never prints a result file older than the batch: a section whose file is missing or stale says "not run" (the first two attempts had printed v5 files of an earlier batch).
+
+## Handoff (end of Phase 7, 2026-10-19)
+**State.** Phase 7 (multi-agent, T7.1 to T7.11) is complete and ticked in TASKS.md; the post-Phase-7 live batch ran with no stop rule firing (PLAN 14.6 to 14.8). The git tag `phase7-complete` is pending (tag after the last commit, as for `phase6-complete`). Nothing is pushed; push only when asked. Working tree clean at this note.
+
+**Active versions.** orchestrator_v8 plus the `merge_fragments` guard (parts under 5 words merge onto the previous same-domain part); worker_it/worker_hr v1 = answer v4 verbatim; answer v4; grounding judge v3; `semantic_cache_cutoff` 0.97 (was 0.84); escalation threshold 0.40; retrieval hybrid + rerank.
+
+**Final Phase 7 numbers (live, 2026-10-19; ledger cost of the batch $1.802).**
+- Gap pass 100%; KB answer rate 98.1% (52/53), answered with citations 98.1%; escalation precision 95.5%, recall 100%.
+- Safety: PII leakage 0.00, policy breach 0.00 (27 rows).
+- Planning check: intent 98.9%, domain 94.6%; 1 of 74 single-topic questions split after the guard; compound parts right 14 of 14.
+- Live compound set 13 of 14 (cmp-008 recovered variance); 24 of 24 parts routed right.
+- Ragas: grounded 0.981, hallucination 0.118, correctness 0.616, relevancy 0.612, factual precision 0.348, context precision 0.852, context recall 0.965.
+- Tier map $0.00193 per task against $0.00245 all-Main, accuracy 0.917 on both.
+- Cache cut-off: highest different-answer cosine 0.864, cut-off 0.97, 5 of 23 paraphrase pairs hit.
+- Drift baseline stored in `data/drift.jsonl`: faithfulness 0.948, recall@5 0.981, escalation rate 0.297.
+
+**Known limitations for the README (collected in section 18).** A message mixing a KB question with a ticket request stays one intent; the 6 Ragas-flagged answers (0 wrong facts, 2 minor ungrounded sentences, 14.7); Ragas factual precision, correctness and relevancy are lower than the v3 baseline because v4 answers are longer (14.7); mock tickets reset on restart and restart at #5; the 3 reply-less requests in the old local trace predate the thread fix (14.8).
+
+**Deferred.** A second drift point after Phase 8 (the first is the Phase 7 baseline above). The MCP decision (GitHub MCP, stretch) after Phase 8. Optional: Ragas's own statement list for the six flagged answers (about $0.05).
+
+**Next step.** Phase 8: T8.1 (long-term per-email store, numbers and last category only) and T8.2 (cross-session recall on status check), FR-H10 and C1. Test first, one commit per task through the hook, stop at the end of T8.2. Remaining budget about $5.59 (upper bound, from the ledger).
+

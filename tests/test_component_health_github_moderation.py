@@ -113,8 +113,16 @@ def test_an_output_moderation_outage_degrades_too(registry):
     guard = OutputGuard(PiiRedactor(None, 0.5), Down(), registry=registry)
     assert guard.check("A reply.").text == "A reply."
     assert registry.get(Component.MODERATION).status is Status.DEGRADED
-    OutputGuard(PiiRedactor(None, 0.5), KeywordModerator(), registry=registry).check("A reply.")
+    moderator = Flaky()
+    moderator.up = True
+    OutputGuard(PiiRedactor(None, 0.5), moderator, registry=registry).check("A reply.")
     assert registry.get(Component.MODERATION).status is Status.OK
+
+
+def test_the_keyword_stand_in_is_mock_mode_not_ok(registry):
+    OutputGuard(PiiRedactor(None, 0.5), KeywordModerator(), registry=registry).check("A reply.")
+    state = registry.get(Component.MODERATION)
+    assert state.status is Status.MOCK and Component.MODERATION not in [h.component for h in registry.degraded_modes()]
 
 
 # --- the page --------------------------------------------------------------------------------------------------
@@ -124,10 +132,10 @@ def test_the_components_list_names_github_and_moderation_with_their_badges(tmp_p
     ctx.service.handle("t", "How do I reset my forgotten password?")  # one guarded turn: moderation was checked
     rows = {c.component: c for c in load_monitoring(ctx.settings, tmp_path, ctx.kb_dir, ctx.registry,
                                                     results_dir=ctx.results_dir).components}
-    assert rows["github"].status == "mock" and rows["moderation"].status == "ok"
+    assert rows["github"].status == "mock" and rows["moderation"].status == "mock"
     page = monitoring_app(ctx)
     shown = " ".join(m.value for m in page.main.markdown)
-    assert "**GitHub tickets** :blue-badge[mock mode]" in shown and "**Moderation** :green-badge[ok]" in shown
+    assert "**GitHub tickets** :blue-badge[mock mode]" in shown and "**Moderation** :blue-badge[mock mode (keyword stand-in)]" in shown
     assert not page.exception
 
 
@@ -137,3 +145,33 @@ def test_a_degraded_github_shows_orange_with_its_reason(tmp_path):
     page = monitoring_app(ctx)
     shown = " ".join(m.value for m in page.main.markdown) + element_text(page.main)
     assert "**GitHub tickets** :orange-badge[degraded]" in shown and "could not reach GitHub" in shown
+
+
+# --- the live-mode factory and the page captions -----------------------------------------------------------------
+
+def test_the_live_mode_factory_wraps_the_ticket_client_with_the_health_wrapper(settings, tmp_path, monkeypatch):
+    from smartdesk_ai.agent import factory
+
+    wrapped = []
+    real = factory.HealthTrackedClient
+    monkeypatch.setattr(factory, "HealthTrackedClient", lambda inner, reg: wrapped.append((inner, reg)) or real(inner, reg))
+    client = MockTicketClient()  # stands in for the REST client: only the wrapping is under test
+    live_tickets = settings.model_copy(update={"modes": settings.modes.model_copy(update={"tickets": "live"})})
+    registry = HealthRegistry()
+    factory.build_stack(live_tickets, environ={}, dotenv_path=None, data_dir=tmp_path, registry=registry, client=client)
+    assert wrapped == [(client, registry)]
+    assert registry.get(Component.GITHUB).status is Status.UNKNOWN  # not mock: it is checked on the first call
+
+
+def test_mock_tickets_are_not_wrapped(settings, tmp_path, monkeypatch):
+    from smartdesk_ai.agent import factory
+
+    monkeypatch.setattr(factory, "HealthTrackedClient", lambda *a: pytest.fail("mock tickets must not be wrapped"))
+    factory.build_stack(settings, environ={}, dotenv_path=None, data_dir=tmp_path, registry=HealthRegistry())
+
+
+def test_cost_by_agent_says_it_counts_app_sessions_only(tmp_path):
+    ctx = mock_context(tmp_path)
+    ctx.service.handle("t", "How do I reset my forgotten password?")
+    shown = " ".join(c.value for c in monitoring_app(ctx).main.caption)
+    assert "App sessions only; evals are in Spend." in shown

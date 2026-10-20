@@ -1,4 +1,4 @@
-"""Types the ticket client speaks (FR-B11, FR-B12). Nothing here knows about REST or MCP."""
+"""Types the ticket client speaks (FR-B11, FR-B12). Nothing here knows about REST."""
 import re
 from enum import StrEnum
 from typing import Annotated, Literal

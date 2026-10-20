@@ -465,13 +465,14 @@ def _render_tools(data: MonitoringData) -> None:
 
 COMPONENT_NAMES = {"github": "GitHub tickets", "moderation": "Moderation"}  # the others show their registry name
 STATUS_LABELS = {"unknown": "not checked yet", "mock": "mock mode"}
+MOCK_LABELS = {"moderation": "mock mode (keyword stand-in)"}  # a mock label that says what stands in
 STATUS_BADGES = {"ok": "green", "degraded": "orange", "skipped": "gray", "unknown": "gray", "mock": "blue"}
 
 
 def _render_components(data: MonitoringData) -> None:
     st.subheader("Components and degraded modes")
     for c in data.components:
-        label = STATUS_LABELS.get(c.status, c.status)
+        label = MOCK_LABELS.get(c.component) if c.status == "mock" and c.component in MOCK_LABELS else STATUS_LABELS.get(c.status, c.status)
         st.markdown(f"**{COMPONENT_NAMES.get(c.component, c.component)}** :{STATUS_BADGES.get(c.status, 'gray')}-badge[{label}]")
         text = [part for part in (c.detail, f"running instead: {c.running_instead}" if c.running_instead else "",
                                   f"load time {c.load_seconds:.1f} s" if c.load_seconds else "") if part]
@@ -521,7 +522,7 @@ def _render_cost_by_agent(data: MonitoringData) -> None:
             "Spans": a.spans, "Input tokens": a.input_tokens, "Output tokens": a.output_tokens,
             "Cost": round(a.usd, 6)} for a in data.agents]), hide_index=True, width="stretch",
             column_config={"Cost": st.column_config.NumberColumn(format="$%.4f")})
-        st.caption(f"{data.window_label}. From the agent spans in the local trace: one span per agent per request (a worker per part). "
+        st.caption(f"App sessions only; evals are in Spend. {data.window_label}. From the agent spans in the local trace: one span per agent per request (a worker per part). "
                    "The grounding judge's calls count in the worker that asked for them. Mock runs price nothing.")
     else:
         st.caption(f"No agent spans yet in the window ({data.window_label}). Ask a question and they appear here.")

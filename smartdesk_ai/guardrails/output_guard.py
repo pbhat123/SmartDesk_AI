@@ -14,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import Settings
-from smartdesk_ai.guardrails.moderation import KeywordModerator, Moderator, OpenAIModerator
+from smartdesk_ai.guardrails.moderation import MOCK_MODERATION_NOTE, KeywordModerator, Moderator, OpenAIModerator
 from smartdesk_ai.guardrails.pii import (
     PiiRedactor,
     PresidioEngine,
@@ -102,7 +102,10 @@ class OutputGuard:
         try:
             result = self._moderator.check(mask_emails_in(text))
             if self._registry is not None:
-                self._registry.mark_ok(Component.MODERATION)
+                if isinstance(self._moderator, KeywordModerator):
+                    self._registry.mark_mock(Component.MODERATION, MOCK_MODERATION_NOTE)
+                else:
+                    self._registry.mark_ok(Component.MODERATION)
         except Exception as error:  # an outage must not stop the service (FR-F7)
             if self._registry is not None:
                 self._registry.mark_degraded(Component.MODERATION, type(error).__name__)

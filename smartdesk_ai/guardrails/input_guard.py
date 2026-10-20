@@ -14,7 +14,7 @@ from smartdesk_ai.config.settings import Settings
 from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.guardrails.injection import REFUSAL as INJECTION_REFUSAL
 from smartdesk_ai.guardrails.injection import InjectionChecker, make_injection_checker
-from smartdesk_ai.guardrails.moderation import KeywordModerator, Moderator, OpenAIModerator
+from smartdesk_ai.guardrails.moderation import MOCK_MODERATION_NOTE, KeywordModerator, Moderator, OpenAIModerator
 from smartdesk_ai.guardrails.names import NameReducer
 from smartdesk_ai.guardrails.self_harm import SELF_HARM_REPLY, WITHHELD, is_self_harm
 from smartdesk_ai.guardrails.threats import is_violent_threat
@@ -70,7 +70,10 @@ class InputGuard:
         try:
             result = self._moderator.check(mask_emails_in(safe_text))
             if self._registry is not None:
-                self._registry.mark_ok(Component.MODERATION)
+                if isinstance(self._moderator, KeywordModerator):
+                    self._registry.mark_mock(Component.MODERATION, MOCK_MODERATION_NOTE)
+                else:
+                    self._registry.mark_ok(Component.MODERATION)
         except Exception as error:  # an outage must not stop the service (FR-F7)
             if self._registry is not None:
                 self._registry.mark_degraded(Component.MODERATION, type(error).__name__)

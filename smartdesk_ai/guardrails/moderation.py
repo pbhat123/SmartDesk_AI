@@ -42,6 +42,9 @@ _KEYWORD_RULES = {
 }
 
 
+MOCK_MODERATION_NOTE = "offline keyword moderator instead of the OpenAI Moderation API"  # shown on Monitoring in mock mode
+
+
 class KeywordModerator:
     """A few word rules that stand in for the API in mock mode."""
 

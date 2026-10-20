@@ -1,7 +1,7 @@
 """The ticket client: one interface, an in-memory mock, and the GitHub REST implementation (FR-B12).
 
 The agent graph and the tools see `TicketClient` only. Whether tickets live in memory (mock mode,
-FR-B10), behind REST, or one day behind an MCP server is chosen in `create_ticket_client`.
+FR-B10), or behind the GitHub REST API is chosen in `create_ticket_client`.
 Error messages carry a status code and a path template, never response text or the token (FR-G11).
 """
 from collections.abc import Iterator, Sequence

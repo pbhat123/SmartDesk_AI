@@ -43,7 +43,7 @@ Live mode that cannot start (a missing key or token) stops with a clear message;
 
 ```bash
 scripts/install_hooks.sh                # once per clone, before pytest (a test checks it): the pre-commit hook runs pytest and, for UI changes, the smoke test
-pytest                                  # about 2,900 unit tests, mock mode, no network, no spend (about 2.5 minutes)
+pytest                                  # about 2,850 unit tests, mock mode, no network, no spend (about 2.5 minutes)
 python scripts/smoke_ui.py              # a real Streamlit server and browser, mock mode, temp data (about 15 s); needs Playwright and Chrome
 python scripts/load_test.py             # mock-mode throughput and p50/p95 latency
 python -m evals.run --mock              # all eval steps offline and free
@@ -322,7 +322,7 @@ This project went through several corrections; the ones that changed the design:
 
 - **Product managers:** the scope boundary and the autonomy table (section 5) are the product decisions; the measured gap pass rate (100%) and the stop rules show what "good enough to ship" meant before each run, not after. The cost per task ($0.002) and the budget cutoffs make it affordable to run.
 - **Engineering managers:** the process is the signal. Every change cites a requirement ID, every paid run has an estimate, a ceiling, a watchdog and a ledger entry, failures are classified from saved results before any code changes, and a pre-commit hook blocks red commits. Section 12 lists what went wrong and what changed.
-- **Software engineers:** typed Pydantic code in small modules; one factory for models, one registry and executor for tools, swappable retrieval stages, versioned prompts, a checkpointed graph with a human interrupt, graceful degradation of every optional component, and a real-browser smoke test next to about 2,900 unit tests.
+- **Software engineers:** typed Pydantic code in small modules; one factory for models, one registry and executor for tools, swappable retrieval stages, versioned prompts, a checkpointed graph with a human interrupt, graceful degradation of every optional component, and a real-browser smoke test next to about 2,850 unit tests.
 
 ---
 

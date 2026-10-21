@@ -26,7 +26,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 EMAIL = "demo.employee@smartdesk.example"
-MAX_TURNS = 7  # approved with the estimate
+MAX_TURNS = 8  # a 1, b 4 (offer, accept with email, priority edit, confirm), c 1, d 2 (recall, then the email); approved with the estimate
 ESTIMATE_USD = 0.03
 CEILING_USD = 0.06
 DEFAULT_OUT = ROOT / "docs" / "examples.md"
@@ -36,6 +36,7 @@ PROMPTS = {
     "gap": "Several keys on my laptop keyboard stopped responding. Can IT look at it?",
 }
 OFFER_ACCEPT = f"Yes please, my email is {EMAIL}"
+EDIT = "Make the priority high"
 CONFIRM = "Yes, go ahead"
 STATUS = "Any update on my keyboard ticket?"
 RECALL = "Any update on my ticket?"
@@ -127,6 +128,9 @@ def run_examples(service, *, prompts: dict[str, str] | None = None, require_link
             raise _Stop("the gap question got no ticket offer")
         if SUMMARY_MARK not in say(b, OFFER_ACCEPT):
             raise _Stop("no ticket summary after accepting the offer")
+        edited = say(b, EDIT)
+        if SUMMARY_MARK not in edited or "Priority: High" not in edited:
+            raise _Stop("no priority edit in the summary after the edit request; stopped before the confirm")
         created = say(b, CONFIRM)  # the only confirmation; never re-sent
         number = TICKET.search(created)
         if not number:

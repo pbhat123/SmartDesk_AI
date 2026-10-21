@@ -47,8 +47,20 @@ def test_four_conversations_run_end_to_end_and_create_exactly_one_ticket(live_ex
     assert outcome.ticket_number is not None
     sent = [turn.user for c in outcome.conversations for turn in c.turns]
     assert sum(1 for text in sent if text == live_examples.CONFIRM) == 1  # one confirming "yes", so one issue
+    b = outcome.conversations[1]
+    assert [t.user for t in b.turns] == [MOCK_PROMPTS["gap"], live_examples.OFFER_ACCEPT, live_examples.EDIT, live_examples.CONFIRM]
+    assert "Priority: High" in b.turns[2].reply  # the edit is shown at the gate before anything is created
+    assert outcome.turn_count == 8 == live_examples.MAX_TURNS  # a: 1, b: 4, c: 1, d: 2 (recall, then the email)
     assert f"#{outcome.ticket_number}" in outcome.conversations[2].turns[-1].reply  # the status check shows the new ticket
     assert f"#{outcome.ticket_number}" in outcome.conversations[3].turns[-1].reply  # the new session recalls it
+
+
+def test_an_edit_the_gate_does_not_show_stops_the_run_before_the_confirm(live_examples, mock_service, monkeypatch):
+    monkeypatch.setattr(live_examples, "EDIT", "Please call me back tomorrow")
+    outcome = live_examples.run_examples(mock_service, prompts=MOCK_PROMPTS, require_link=False)
+    assert outcome.stopped and "priority edit" in outcome.stopped
+    sent = [turn.user for c in outcome.conversations for turn in c.turns]
+    assert live_examples.CONFIRM not in sent and outcome.ticket_number is None
 
 
 def test_a_gap_question_the_kb_answers_stops_the_run_before_any_ticket_step(live_examples, mock_service):

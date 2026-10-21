@@ -1,0 +1,11 @@
+{
+  "mode": "mock",
+  "requests": 300,
+  "workers": 8,
+  "failed": 0,
+  "wall_seconds": 3.542,
+  "requests_per_second": 84.69,
+  "latency_p50_seconds": 0.0916,
+  "latency_p95_seconds": 0.1342,
+  "latency_mean_seconds": 0.0941
+}

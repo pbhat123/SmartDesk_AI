@@ -210,10 +210,10 @@ Exit: `python -m evals.run` produces Ragas + ablation tables; Streamlit chat + M
 
 | Done | ID | Task | FRs | Files | Acceptance test |
 |---|---|---|---|---|---|
-| [ ] | T9.1 | README: setup, env vars, populate KB, run, approach, chunking rationale + ablation, test results | E | `README.md`, `tests/test_readme.py` | README contains each required section heading; ablation table present |
-| [ ] | T9.2 | README additions: example conversations, models and task-to-tier map, hardware requirements, the MCP note ("MCP: not used; direct GitHub REST API (allowed per FAQ Q12)"), mock mode, seed script, GitHub setup | E | `README.md` | Test greps for each required item; fake emails only |
+| [x] | T9.1 | README: setup, env vars, populate KB, run, approach, chunking rationale + ablation, test results | E | `README.md`, `tests/test_readme.py` | README contains each required section heading; ablation table present |
+| [x] | T9.2 | README additions: example conversations, models and task-to-tier map, hardware requirements, the MCP note ("MCP: not used; direct GitHub REST API (allowed per FAQ Q12)"), mock mode, seed script, GitHub setup | E | `README.md` | Test greps for each required item; fake emails only |
 | [x] | T9.3 | Architecture diagram (single source `docs/architecture.md`, embedded in README, includes all section 3I agents) | E | `docs/architecture.md`, `README.md` | Mermaid block present; names Orchestrator, IT worker, HR worker, Synthesizer, Ticket agent; README embeds it |
-| [ ] | T9.4 | README: GitHub-integration/mock disclosure (B10 note) | B10 | `README.md` | README states clearly whether live GitHub or mock is used and how to enable mock mode |
+| [x] | T9.4 | README: GitHub-integration/mock disclosure (B10 note) | B10 | `README.md` | README states clearly whether live GitHub or mock is used and how to enable mock mode |
 | [x] | T9.5 | `scripts/load_test.py` (throughput, requests per second) | H11 | `scripts/load_test.py`, `tests/test_load_test.py` | Mock-mode run prints requests/sec; result feeds Monitoring tab and README |
 | [x] | T9.6 | Section 8 deliverables check: public repos, `.env.example`, `config.yaml`, no secrets, KB files | F3, F5 | `tests/test_deliverables.py` | Test confirms no keys/`.env` committed, required files present |
 | [ ] | T9.7 | Fresh-clone run with no tracing keys and no Redis | F6, F7 | none (manual) + `tests/test_startup.py` | Fresh clone: `pip install -r requirements.txt` then run succeeds in degraded mode |

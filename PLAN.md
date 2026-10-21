@@ -1044,7 +1044,27 @@ One orchestrator call per question, no history, no workers, tools or tickets, ov
 
 **Deferred.** The post-Phase-8 final rerun with orchestrator_v9 and ticket_summary_v2 is done (14.9, batch $0.848, v9 stays active). MCP is decided: not used, REST only (2026-10-20). Still open: Ragas's own statement list for the six flagged answers (about $0.05, optional), and the `phase8-complete` tag. Open question from 14.9: v9's lower planning-check accuracy and the kb-018 routing flip (a v10 example would need your approval).
 
-**Next steps, in order. Phase 9 (nothing built yet).**
+**Phase 9 decisions already made (2026-10-20).**
+- Architecture diagram in both Mermaid and an image (PNG or SVG).
+- MIT LICENSE.
+- The repos SmartDesk_AI and SmartDesk-Tickets are PUBLIC: every push is public, so scan the full git history for secrets and PII before the first push.
+- Live examples may create 1 to 2 real GitHub issues, with a fake email.
+- A 5-minute video script, mapped to the rubric.
+- ONE README file following the user's 15-section template ("Agentic AI Project - Final Detailed Template", sections 1 to 15; keep the emojis).
+
+**First task next (before Phase 9): moderation "illicit" false positives (decision B, second part).**
+- Today's free check of the 74 golden questions (53 KB, 21 gap; 74 calls) flagged one: kb-006 (the VPN server name, `illicit`). The other known case is safe-020 (a scraping script, `illicit`). The gap+KB evals bypass the input guard, so their saved results are unaffected, but a user typing kb-006 in the app is refused.
+- Plan: block `illicit` only above a confidence-score threshold, or when it is combined with other categories.
+- Steps: (1) read the category scores of kb-006, safe-020 and a few clearly illicit test phrases (free Moderation calls: state the exact number and ask first); (2) propose a threshold; (3) wait for approval; (4) change the guard (SPEC FR-H1 needs approval too); (5) safety rerun (about $0.04, ledger, ceiling 2x, checkpoint moved aside).
+- Also: report the end-to-end KB rate (with the input guard on) next to 98.1%, since the gap+KB evals bypass the input guard.
+- The kb-006 false-positive note in the README, PLAN 14 and 18 is not written yet; it waits for this task.
+
+**Phase 9 open questions (ask the user before starting).**
+1. Keep a keyword moderation backup in live mode, yes or no?
+2. Where do the setup and run instructions, models, hardware, mock mode, seed script and rubric map go: (a) a Quick Start after the title plus an appendix, (b) extra numbered sections after section 15, or (c) other?
+3. Has anything been pushed to the public repo yet?
+
+**Next steps, in order. First the moderation task above, then Phase 9, but only after the user says go (nothing built yet).**
 - **Batch A (mock only, no spend).** T9.3 architecture diagram; T9.1, T9.2 and T9.4 README, including a rubric map table (each rubric item to the FR, file and test that cover it), the MCP line "MCP: not used; direct GitHub REST API (allowed per FAQ Q12)", the known limitations above and the two-stores note; T9.5 load test; T9.6 deliverables check plus the MIT LICENSE; T9.7 fresh-clone run (install, ingest, pytest, smoke_ui in a clean checkout). Then stop for review.
 - **Batch B (after your OK; live parts cost money).** Live example conversations for the README (estimate first), T9.8 demo video, then push (only when you say so).
 - Settled, nothing to build: MCP not used (2026-10-20); UI polish done and matched to `docs/ui_mockups/`.

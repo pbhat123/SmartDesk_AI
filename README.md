@@ -241,14 +241,14 @@ Fixed windows mix two entries in one chunk (2.0 entries per chunk on average), w
 - Escalation fires if any one signal fires (no chunks, top dense cosine below `thresholds.escalation` = 0.40, the model says insufficient, or the grounding judge rejects). Sweep: gap pass 100% at 0.30 to 0.50; KB answer rate 100%, 98.1%, 98.1%, 86.8%, 71.7% at 0.30, 0.35, 0.40, 0.45, 0.50. 0.40 keeps margin without losing answers.
 - Semantic cache cut-off 0.97: the highest cosine between questions that need different answers is 0.864, so a cut-off 0.10 above it never serves the wrong policy; it still catches 5 of 23 paraphrase pairs. The exact-match cache does most of the work.
 
-### Throughput (mock mode, `scripts/load_test.py`, 300 requests, Apple M5, 10 cores, 24 GB, read from `sysctl` on the measuring machine; the 8-worker run is saved in `evals/results/load_test.json`, the 1-worker run was only printed)
+### Throughput (mock mode, `scripts/load_test.py`, 300 requests, Apple M5, 10 cores, 24 GB, read from `sysctl` on the measuring machine; both runs are saved in `evals/results/load_test.json`)
 
 | Workers | Requests per second | p50 latency | p95 latency | Failed |
 |---|---|---|---|---|
-| 1 | 65.9 | 16 ms | 19 ms | 0 |
-| 8 | 84.7 | 92 ms | 134 ms | 0 |
+| 1 | 66.9 | 16 ms | 19 ms | 0 |
+| 8 | 84.9 | 92 ms | 131 ms | 0 |
 
-Mock models answer instantly, so this measures our own code (guards, retrieval, rerank, graph, SQLite), not OpenAI. A live request is bounded by the model calls and takes seconds. Eight workers are only about 1.3 times faster than one, because the work is CPU-bound Python in a single process.
+Mock models answer instantly, so this measures our own code (guards, retrieval, rerank, graph, SQLite), not OpenAI. A live request is bounded by the model calls and will be much slower (live latency is not part of this test). Eight workers are only about 1.3 times faster than one, probably because the work is mostly CPU-bound Python in a single process (not tested).
 
 ## 🔟 Guardrails, trust and safety
 
@@ -283,7 +283,7 @@ Known limitations, none hidden:
 - **Mock tickets reset on restart,** and numbering restarts at #5 after the four seeded demo tickets. No mock ticket reaches the database.
 - **Two ticket stores by design.** The email-to-issue map (needed by the status flow) holds the raw email; the long-term memory store holds only a salted hash. They are separate so memory can be wiped without breaking status lookup.
 - **The semantic cache rarely fires.** Paraphrase and different-question cosines overlap, so a safe cut-off catches 5 of 23 paraphrases. The exact-match cache does the real work.
-- **CPU only.** The reranker runs on CPU; the first request after a start is slower while it loads.
+- **CPU only.** The reranker runs on CPU; the first request after a start is probably slower while the model loads (not measured).
 
 Trade-offs chosen on purpose: refuse to answer rather than guess (100% gap pass at the cost of one answerable question escalated); an approval step on every ticket (one extra turn, so nobody is surprised by a public issue); a public tickets repo (visible demo, so every ticket is fake data).
 
@@ -331,7 +331,7 @@ This project went through several corrections; the ones that changed the design:
 
 ## Appendix: models, hardware, modes and setup
 
-**Models and hardware.** Everything local runs on CPU; no GPU is needed. Disk: the reranker `BAAI/bge-reranker-base` is about 1.1 GB (downloaded by sentence-transformers on first use and cached); the spaCy model `en_core_web_lg` is about 425 MB (installed with `python -m spacy download en_core_web_lg`); the Chroma and BM25 indexes for the 53-entry KB are a few MB. The measured machine is an Apple M5 with 10 cores and 24 GB of memory; the app itself is light. The first request loads the reranker and is slower.
+**Models and hardware.** Everything local runs on CPU; no GPU is needed. Disk: the reranker `BAAI/bge-reranker-base` is about 1.1 GB (downloaded by sentence-transformers on first use and cached); the spaCy model `en_core_web_lg` is about 425 MB (installed with `python -m spacy download en_core_web_lg`); the Chroma and BM25 indexes for the 53-entry KB are a few MB. The measured machine is an Apple M5 with 10 cores and 24 GB of memory; the app itself is light. The first request probably loads the reranker and is slower (not measured).
 
 **Modes.** `config.yaml` has `modes.llm` and `modes.tickets`, each `mock` or `live`.
 - *Mock LLM:* scripted offline models and hashing embeddings: no keys, no network, no cost. The tests and the smoke test always run this way.

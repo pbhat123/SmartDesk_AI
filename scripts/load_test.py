@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Throughput of the whole chat pipeline in mock mode (T9.5, FR-H11): requests per second and p50/p95 latency.
 
-    python scripts/load_test.py [--requests 200] [--workers 8] [--out evals/results/load_test.json]
+    python scripts/load_test.py [--requests 200] [--workers 1 8] [--out evals/results/load_test.json]
 
 The real service (guards, orchestrator, workers, output guard) runs in this process with mock models and mock tickets,
 a temp data folder and a temp spend ledger, so it never touches `data/`, the network or any paid service. Mock models
@@ -87,18 +87,19 @@ def run_load(requests: int, workers: int) -> dict:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Mock-mode throughput of the chat pipeline")
     parser.add_argument("--requests", type=int, default=200)
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, nargs="+", default=[8], help="one run per value, in order")
     parser.add_argument("--out", type=Path, default=None, help="also write the summary here as JSON")
     args = parser.parse_args(argv)
-    summary = run_load(args.requests, args.workers)
-    print(f"{summary['requests']} requests, {summary['workers']} workers (mock models, mock tickets)")
-    print(f"throughput: {summary['requests_per_second']} requests/s over {summary['wall_seconds']} s")
-    print(f"latency: p50 {summary['latency_p50_seconds']} s, p95 {summary['latency_p95_seconds']} s, "
-          f"mean {summary['latency_mean_seconds']} s; failed: {summary['failed']}")
+    summaries = [run_load(args.requests, workers) for workers in args.workers]
+    for summary in summaries:
+        print(f"{summary['requests']} requests, {summary['workers']} workers (mock models, mock tickets)")
+        print(f"throughput: {summary['requests_per_second']} requests/s over {summary['wall_seconds']} s")
+        print(f"latency: p50 {summary['latency_p50_seconds']} s, p95 {summary['latency_p95_seconds']} s, "
+              f"mean {summary['latency_mean_seconds']} s; failed: {summary['failed']}")
     if args.out:
         args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps(summary, indent=2) + "\n")
-    return 1 if summary["failed"] else 0
+        args.out.write_text(json.dumps({"runs": summaries}, indent=2) + "\n")
+    return 1 if any(summary["failed"] for summary in summaries) else 0
 
 
 if __name__ == "__main__":

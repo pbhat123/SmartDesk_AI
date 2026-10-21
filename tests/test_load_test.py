@@ -28,8 +28,15 @@ def test_a_small_run_reports_throughput_and_latency(load_test, tmp_path, monkeyp
     monkeypatch.setenv("SMARTDESK_LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
     out = tmp_path / "result.json"
     assert load_test.main(["--requests", "12", "--workers", "3", "--out", str(out)]) == 0
-    summary = json.loads(out.read_text())
+    [summary] = json.loads(out.read_text())["runs"]
     assert summary["mode"] == "mock" and summary["requests"] == 12 and summary["failed"] == 0
     assert summary["requests_per_second"] > 0
     assert 0 < summary["latency_p50_seconds"] <= summary["latency_p95_seconds"]
     assert "requests/s" in capsys.readouterr().out
+
+
+def test_several_worker_counts_are_all_saved_in_order(load_test, tmp_path, monkeypatch):
+    monkeypatch.setenv("SMARTDESK_LEDGER_PATH", str(tmp_path / "ledger.jsonl"))
+    out = tmp_path / "result.json"
+    assert load_test.main(["--requests", "8", "--workers", "1", "2", "--out", str(out)]) == 0
+    assert [run["workers"] for run in json.loads(out.read_text())["runs"]] == [1, 2]

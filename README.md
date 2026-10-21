@@ -321,7 +321,7 @@ This project went through several corrections; the ones that changed the design:
 - **Tickets repo (public, fake data):** [pbhat123/SmartDesk-Tickets](https://github.com/pbhat123/SmartDesk-Tickets)
 - **Artifacts in this repo:** [`docs/architecture.md`](docs/architecture.md), [`docs/ui_mockups/`](docs/ui_mockups), [`PLAN.md`](PLAN.md) (every run and finding), [`SPEC.md`](SPEC.md) (requirements and acceptance criteria), [`evals/README.md`](evals/README.md), `evals/results/` (saved results).
 
-## 1️⃣5️⃣ Role-Based Signal (Mandatory)
+## 1️⃣5️⃣ Role-Based Signal
 
 - **Product managers:** the scope boundary and the autonomy table (section 5) are the product decisions; the measured gap pass rate (100%) and the stop rules show what "good enough to ship" meant before each run, not after. The cost per task ($0.002) and the budget cutoffs make it affordable to run.
 - **Engineering managers:** the process is the signal. Every change cites a requirement ID, every paid run has an estimate, a ceiling, a watchdog and a ledger entry, failures are classified from saved results before any code changes, and a pre-commit hook blocks red commits. Section 12 lists what went wrong and what changed.

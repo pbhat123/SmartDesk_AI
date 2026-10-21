@@ -21,7 +21,7 @@ SECTIONS = (
     "1️⃣2️⃣ Results, Learnings & Insights",
     "1️⃣3️⃣ Future Improvements & Iteration Plan",
     "1️⃣4️⃣ Demo & Artifacts",
-    "1️⃣5️⃣ Role-Based Signal (Mandatory)",
+    "1️⃣5️⃣ Role-Based Signal",
 )
 
 

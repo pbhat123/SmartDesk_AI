@@ -11,7 +11,7 @@ SmartDesk AI answers employee questions from a company knowledge base (KB) with 
 **Prerequisites**
 - Python 3.12 and [uv](https://docs.astral.sh/uv/) (`uv python install 3.12` if 3.12 is missing)
 - Optional: Redis for the shared answer cache (`brew install redis`); without it the cache is in memory
-- About 1 GB of disk for the reranker model and a few hundred MB for spaCy (see the [Appendix](#appendix-models-hardware-modes-and-setup))
+- About 1.1 GB of disk for the reranker model and about 425 MB for the spaCy model (see the [Appendix](#appendix-models-hardware-modes-and-setup))
 - Optional, for live mode only: an OpenAI API key, and a GitHub fine-grained token plus a public tickets repo
 
 ```bash
@@ -46,9 +46,12 @@ scripts/install_hooks.sh                # once per clone, before pytest (a test 
 pytest                                  # about 2,850 unit tests, mock mode, no network, no spend (about 2.5 minutes)
 python scripts/smoke_ui.py              # a real Streamlit server and browser, mock mode, temp data (about 15 s); needs Playwright and Chrome
 python scripts/load_test.py             # mock-mode throughput and p50/p95 latency
-python -m evals.run --mock              # all eval steps offline and free
-python -m evals.run                     # Ragas and the retrieval ablations (live: costs money, ask first)
-python -m evals.post_phase7 --estimate  # prints the cost table of the live batch and stops
+python -m evals.run --mock              # every eval step offline and free (hashing embeddings, mock models)
+python -m evals.post_phase7 --estimate  # prints the cost table of the live batch and stops without spending
+# paid runs (estimate first, then approve; each needs --confirm-spend):
+#   python -m evals.run --only gap --confirm-spend                                      # live gap + KB run
+#   python -m evals.run --only rag --judge ragas --confirm-spend --out-dir evals/results   # Ragas judge
+#   python -m evals.safety_eval --live --confirm-spend                                  # safety set with real Moderation
 ```
 
 Anything that spends money prints an estimate first and needs `--confirm-spend` (live evals) or `--confirm-live` (public GitHub writes).
@@ -59,7 +62,7 @@ Anything that spends money prints an estimate first and needs `--confirm-spend` 
 
 **SmartDesk AI** is the first line of an IT and HR help desk. Employees get an answer in seconds from the KB, with the policy entry cited, instead of waiting for a person. When the KB has no answer, the agent does not invent one: it offers to open a ticket, drafts it, shows the draft, and files it only after the employee says yes. Employees can ask for the status of their tickets in the same chat.
 
-Value in numbers (live runs, details in section 9): 100% of questions the KB cannot answer end in "I don't know" and a ticket offer, 98.1% of answerable questions are answered with citations, no PII leaked and no policy breach on the 27-case safety set, and a question costs about $0.002.
+Value in numbers (live runs, details in section 9): 100% of questions the KB cannot answer end in "I don't know" and a ticket offer, 98.1% of answerable questions are answered with citations, no PII leaked and no policy breach on the 27-case safety set, and a scripted task costs about $0.002.
 
 ## 2️⃣ Background and problem
 
@@ -140,7 +143,7 @@ Example conversations recorded from the live system are added in section 14.
 | **text-embedding-3-small** | Cheap ($0.02 per 1M tokens) and good enough: dense hit@5 is 1.000 on the paraphrased set |
 | **Reciprocal rank fusion (k=60)** | Combines two rankings without tuning score scales |
 | **bge-reranker-base** (local cross-encoder) | Fixes ordering among the fused candidates for free; falls back to the fused order if it cannot load |
-| **GitHub Issues (REST)** | A real, public, inspectable ticket system. REST rather than MCP: one fewer moving part (allowed by the project FAQ Q12) |
+| **GitHub Issues (REST)** | A real, public, inspectable ticket system. reached directly through its REST API: one fewer moving part |
 | **SQLite** | Checkpointer, email-to-ticket map, long-term memory, rate-limit counters: one file format, no server |
 | **Presidio + spaCy** | PII and person-name detection before any text reaches a model or a log; regex fallback if it cannot load |
 | **OpenAI Moderation** | Free toxicity check on input and output |
@@ -176,7 +179,7 @@ All live numbers below are from runs on 2026-10-19 and 2026-10-20 with answer pr
 | Drift point: faithfulness / recall@5 / escalation rate | 0.948 / 0.981 / 0.297 | 0.879 / 0.962 / 0.351 | 0.966 / 0.981 / 0.297 |
 | Single-topic questions answered by exactly one worker | 71 of 74 | not read | 72 of 74 |
 
-Run 1 breached the stop rule (KB answer below 92%). Reading the saved traces, four of its five newly uncited questions were run-to-run variance (the same route, query and chunks, but the grounding judge or the worker flipped) and one was a borderline v9 routing choice (kb-018); run 2 passed. Both runs are kept and shown rather than only the better one.
+Run 1 breached the stop rule (KB answer below 92%). Reading the saved traces, five questions ended uncited: three were run-to-run variance (kb-010, kb-016, kb-033: the same route, query and chunks, but the grounding judge or the worker flipped), one was a borderline v9 routing choice (kb-018), and one was the known kb-041 miss; run 2 passed. Both runs are kept and shown rather than only the better one.
 
 | Measure | v8 | v9 |
 |---|---|---|
@@ -192,8 +195,8 @@ Run 1 breached the stop rule (KB answer below 92%). Reading the saved traces, fo
 
 | Metric | v3 pass | Final pass (v4 answers) |
 |---|---|---|
-| Faithfulness (grounded-answer rate; target 0.8) | 0.971 | **0.981** |
-| Hallucination rate (any unsupported statement) | 0.078 | 0.118 (6 of 51; reading them, 0 wrong facts, 2 minor ungrounded sentences) |
+| Faithfulness (mean over answers of the share of each answer's statements supported by the retrieved context; also called the grounded-answer score; target 0.8) | 0.971 | **0.981** |
+| Hallucination rate (share of answers with at least one unsupported statement, i.e. faithfulness below 1) | 0.078 | 0.118 (6 of 51 answered; reading them, 0 wrong facts, 2 minor ungrounded sentences) |
 | Answer correctness | 0.695 | 0.616 |
 | Answer relevancy | 0.636 | 0.612 |
 | Factual precision | 0.508 | 0.348 |
@@ -238,7 +241,7 @@ Fixed windows mix two entries in one chunk (2.0 entries per chunk on average), w
 - Escalation fires if any one signal fires (no chunks, top dense cosine below `thresholds.escalation` = 0.40, the model says insufficient, or the grounding judge rejects). Sweep: gap pass 100% at 0.30 to 0.50; KB answer rate 100%, 98.1%, 98.1%, 86.8%, 71.7% at 0.30, 0.35, 0.40, 0.45, 0.50. 0.40 keeps margin without losing answers.
 - Semantic cache cut-off 0.97: the highest cosine between questions that need different answers is 0.864, so a cut-off 0.10 above it never serves the wrong policy; it still catches 5 of 23 paraphrase pairs. The exact-match cache does most of the work.
 
-### Throughput (mock mode, `scripts/load_test.py`, 300 requests, Apple M5 CPU)
+### Throughput (mock mode, `scripts/load_test.py`, 300 requests, Apple M5, 10 cores, 24 GB, read from `sysctl` on the measuring machine; the 8-worker run is saved in `evals/results/load_test.json`, the 1-worker run was only printed)
 
 | Workers | Requests per second | p50 latency | p95 latency | Failed |
 |---|---|---|---|---|
@@ -328,7 +331,7 @@ This project went through several corrections; the ones that changed the design:
 
 ## Appendix: models, hardware, modes and setup
 
-**Models and hardware.** Everything local runs on CPU; no GPU is needed. Disk: the reranker `BAAI/bge-reranker-base` is about 1 GB (downloaded by sentence-transformers on first use and cached); the spaCy model `en_core_web_lg` is about 400 MB (installed with `python -m spacy download en_core_web_lg`); the Chroma and BM25 indexes for the 53-entry KB are a few MB. The measured machine is an Apple M5 with 10 cores and 24 GB of memory; the app itself is light. The first request loads the reranker and is slower.
+**Models and hardware.** Everything local runs on CPU; no GPU is needed. Disk: the reranker `BAAI/bge-reranker-base` is about 1.1 GB (downloaded by sentence-transformers on first use and cached); the spaCy model `en_core_web_lg` is about 425 MB (installed with `python -m spacy download en_core_web_lg`); the Chroma and BM25 indexes for the 53-entry KB are a few MB. The measured machine is an Apple M5 with 10 cores and 24 GB of memory; the app itself is light. The first request loads the reranker and is slower.
 
 **Modes.** `config.yaml` has `modes.llm` and `modes.tickets`, each `mock` or `live`.
 - *Mock LLM:* scripted offline models and hashing embeddings: no keys, no network, no cost. The tests and the smoke test always run this way.

@@ -14,6 +14,7 @@ saved exactly as the service returned them.
 import argparse
 import os
 import re
+import shutil
 import sys
 import tempfile
 from collections.abc import Callable
@@ -197,6 +198,11 @@ def run_mock() -> Outcome:
                             require_link=False)
 
 
+def copy_index(source: Path, target: Path) -> None:
+    """Give the temp data folder the already built index (no re-embedding), and nothing else from the real data folder."""
+    shutil.copytree(source / "index", target / "index")
+
+
 def run_live(out: Path) -> int:
     from evals.live_guard import Estimate, LiveRun, describe
     from smartdesk_ai.config.settings import DEFAULT_CONFIG, load_settings
@@ -207,6 +213,7 @@ def run_live(out: Path) -> int:
     settings = load_settings(DEFAULT_CONFIG, environ=environ)
     with tempfile.TemporaryDirectory(prefix="smartdesk-examples-") as tmp:
         environ["SMARTDESK_DATA_DIR"] = str(Path(tmp) / "data")
+        copy_index(ROOT / "data", Path(tmp) / "data")
         with LiveRun(settings, sys.argv, ceiling_usd=CEILING_USD) as run:
             context = build_ui_context(environ=environ, registry=HealthRegistry())  # .env supplies the keys; the environ above wins
             outcome = run_examples(context.service, stop_check=run.stop_reason, on_turn=run.beat)

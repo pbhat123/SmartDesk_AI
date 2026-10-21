@@ -112,3 +112,15 @@ def test_live_needs_confirm_spend_and_prints_the_estimate_first(live_examples, c
     assert live_examples.main(["--live"]) == 2
     out = capsys.readouterr().out
     assert "$0.03" in out and "$0.06" in out and "--confirm-spend" in out
+
+
+def test_the_live_data_folder_gets_only_a_copy_of_the_built_index(live_examples, tmp_path):
+    source = tmp_path / "data"
+    (source / "index" / "chroma").mkdir(parents=True)
+    (source / "index" / "state.json").write_text("{}")
+    for name in ("app.db", "checkpoints.db", "cache.jsonl", "hitl.jsonl"):
+        (source / name).write_text("old")
+    target = tmp_path / "fresh"
+    live_examples.copy_index(source, target)
+    assert (target / "index" / "state.json").is_file() and (target / "index" / "chroma").is_dir()
+    assert sorted(p.name for p in target.iterdir()) == ["index"]  # no tickets map, memory, checkpoints or cache from real use

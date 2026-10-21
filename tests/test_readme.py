@@ -40,7 +40,7 @@ def test_the_disclosures_are_stated():
     assert "MCP: not used; direct GitHub REST API (allowed per FAQ Q12)" in README
     assert "default run uses **mock tickets**" in README
     assert "SMARTDESK_TICKETS_MODE=mock" in README and "fine-grained personal access token" in README
-    assert "[REPO_URL]" in README  # replaced when the public URL is known
+    assert "git clone https://github.com/pbhat123/SmartDesk_AI.git" in README and "[REPO_URL]" not in README
     assert "![SmartDesk AI architecture](docs/architecture.svg)" in README
 
 

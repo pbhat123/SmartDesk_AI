@@ -2,7 +2,6 @@
 variable the code reads, the KB and config files are there, the LICENSE is MIT, and no `.DS_Store` is in git."""
 import re
 import subprocess
-import warnings
 from pathlib import Path
 
 import pytest
@@ -80,8 +79,7 @@ def test_the_license_is_mit():
     text = (ROOT / "LICENSE").read_text()
     assert text.startswith("MIT License") and "Permission is hereby granted, free of charge" in text
     assert re.search(r"^Copyright \(c\) 20\d\d \S", text, re.M)
-    if "[YOUR NAME]" in text:
-        warnings.warn("LICENSE still has the [YOUR NAME] placeholder: replace it before the first push", stacklevel=1)
+    assert "[YOUR NAME]" not in text and "Copyright (c) 2026 pbhat123_AI" in text
 
 
 def test_ds_store_is_ignored_and_not_tracked():

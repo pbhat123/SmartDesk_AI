@@ -15,7 +15,7 @@ SmartDesk AI answers employee questions from a company knowledge base (KB) with 
 - Optional, for live mode only: an OpenAI API key, and a GitHub fine-grained token plus a public tickets repo
 
 ```bash
-git clone [REPO_URL] smartdesk-ai && cd smartdesk-ai
+git clone https://github.com/pbhat123/SmartDesk_AI.git && cd SmartDesk_AI
 
 uv venv --python 3.12 .venv
 source .venv/bin/activate
@@ -381,4 +381,4 @@ This project went through several corrections; the ones that changed the design:
 
 ---
 
-**License:** MIT (see `LICENSE`). **Spec:** [SPEC.md](SPEC.md) is the source of truth for requirements; [PLAN.md](PLAN.md) holds the design and every measured run.
+**Repository:** [github.com/pbhat123/SmartDesk_AI](https://github.com/pbhat123/SmartDesk_AI). **License:** MIT (see `LICENSE`). **Spec:** [SPEC.md](SPEC.md) is the source of truth for requirements; [PLAN.md](PLAN.md) holds the design and every measured run.

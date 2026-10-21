@@ -318,7 +318,7 @@ This project went through several corrections; the ones that changed the design:
   2. Gap question, ticket draft, approval, real GitHub issue
   3. Status check with one ticket
   4. Cross-session recall
-- **Tickets repo (public, fake data):** [TICKETS_REPO_URL placeholder]
+- **Tickets repo (public, fake data):** [pbhat123/SmartDesk-Tickets](https://github.com/pbhat123/SmartDesk-Tickets)
 - **Artifacts in this repo:** [`docs/architecture.md`](docs/architecture.md), [`docs/ui_mockups/`](docs/ui_mockups), [`PLAN.md`](PLAN.md) (every run and finding), [`SPEC.md`](SPEC.md) (requirements and acceptance criteria), [`evals/README.md`](evals/README.md), `evals/results/` (saved results).
 
 ## 1️⃣5️⃣ Role-based signal

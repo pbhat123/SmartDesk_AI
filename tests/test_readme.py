@@ -41,6 +41,7 @@ def test_the_disclosures_are_stated():
     assert "default run uses **mock tickets**" in README
     assert "SMARTDESK_TICKETS_MODE=mock" in README and "fine-grained personal access token" in README
     assert "git clone https://github.com/pbhat123/SmartDesk_AI.git" in README and "[REPO_URL]" not in README
+    assert "https://github.com/pbhat123/SmartDesk-Tickets" in README and "TICKETS_REPO_URL" not in README
     assert "![SmartDesk AI architecture](docs/architecture.svg)" in README
 
 

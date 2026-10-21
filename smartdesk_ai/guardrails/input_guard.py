@@ -38,8 +38,9 @@ THREAT_REFUSAL = (
 class InputGuard:
     def __init__(
         self, pii: PiiRedactor, names: NameReducer, moderator: Moderator, injection: InjectionChecker | None = None,
-        registry: HealthRegistry | None = None,
+        registry: HealthRegistry | None = None, illicit_block_score: float | None = None,
     ) -> None:
+        self._illicit_block_score = illicit_block_score
         self._registry = registry
         self._pii = pii
         self._names = names
@@ -87,6 +88,9 @@ class InputGuard:
         if result.harassment_only:
             logger.info("input flagged: reason=moderation:harassment (only); allowed, reply kept calm")
             return None, True
+        if result.illicit_below(self._illicit_block_score):
+            logger.info("input flagged: reason=moderation:illicit (only, score below the block score); allowed")
+            return None, False
         return (f"moderation:{','.join(result.categories) or 'flagged'}" if result.flagged else None), False
 
     @staticmethod
@@ -127,4 +131,5 @@ def build_input_guard(
         moderator=moderator,
         injection=make_injection_checker(settings, builder=injection_builder),
         registry=registry,
+        illicit_block_score=settings.guardrails.illicit_block_score,
     )

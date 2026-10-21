@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 PLAIN_HARASSMENT = "harassment"  # the one category that is answered calmly instead of refused (FR-H1)
+ILLICIT = "illicit"  # refused only at or above `guardrails.illicit_block_score`, when it is the sole category (FR-H1)
 
 
 class ModerationResult(BaseModel):
@@ -23,11 +24,20 @@ class ModerationResult(BaseModel):
 
     flagged: bool
     categories: list[str] = Field(default_factory=list)
+    illicit_score: float | None = None  # the API's `illicit` category score; None when it was not reported
 
     @property
     def harassment_only(self) -> bool:
         """Flagged for plain "harassment" and nothing else: no threatening, hate, sexual, violence, self-harm or illicit category."""
         return self.flagged and self.categories == [PLAIN_HARASSMENT]
+
+    def illicit_below(self, threshold: float | None) -> bool:
+        """Flagged for `illicit` and nothing else (so never illicit/violent), with a reported score under the threshold.
+        A missing score or threshold is never relaxed."""
+        return (
+            self.flagged and self.categories == [ILLICIT] and threshold is not None
+            and self.illicit_score is not None and self.illicit_score < threshold
+        )
 
 
 class Moderator(Protocol):
@@ -45,7 +55,12 @@ class OpenAIModerator:
             return ModerationResult(flagged=False)
         categories = result.categories
         names = categories.model_dump() if hasattr(categories, "model_dump") else dict(categories)
-        return ModerationResult(flagged=True, categories=sorted(name for name, hit in names.items() if hit))
+        scores = getattr(result, "category_scores", None)  # absent scores leave illicit_score None: never relaxed
+        score_map = {} if scores is None else scores.model_dump() if hasattr(scores, "model_dump") else dict(scores)
+        return ModerationResult(
+            flagged=True, categories=sorted(name for name, hit in names.items() if hit),
+            illicit_score=score_map.get(ILLICIT),
+        )
 
 
 def make_openai_moderator(api_key: SecretStr, model: str) -> OpenAIModerator:

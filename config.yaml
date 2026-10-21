@@ -110,6 +110,7 @@ thresholds:
 guardrails:
   pii_min_score: 0.5         # Presidio hits below this confidence are ignored
   moderation_model: omni-moderation-latest   # OpenAI Moderation API (free); check the ID before live use
+  illicit_block_score: 0.50  # FR-H1: "illicit" alone below this score is let through; measured 2026-10-21: benign 0.28-0.34, illicit 0.75-0.95
 
 # Hybrid retrieval (SPEC section 2, FR-A6): top-k from each retriever, RRF constant,
 # entries kept after rerank and collapse by entry_id.

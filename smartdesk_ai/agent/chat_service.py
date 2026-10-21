@@ -17,6 +17,7 @@ from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
 from smartdesk_ai.guardrails.decision import GuardDecision
 from smartdesk_ai.guardrails.input_guard import build_input_guard
+from smartdesk_ai.guardrails.moderation import probe_moderation
 from smartdesk_ai.guardrails.output_guard import build_output_guard
 from smartdesk_ai.llm.fallback import SERVICE_UNAVAILABLE_MESSAGE
 from smartdesk_ai.ops.health import HealthRegistry, get_registry
@@ -171,6 +172,7 @@ def build_service(
     if input_guard is None:  # every message passes the guard before the graph (FR-H1)
         input_guard = build_input_guard(
             settings, environ=environ, dotenv_path=dotenv_path, registry=registry)
+        probe_moderation(input_guard.moderator, registry)  # one free call in live mode: ok or degraded from the first screen
     if output_guard is None:  # every reply passes the guard before it is shown (FR-H2)
         output_guard = build_output_guard(
             settings, kb_dir, environ=environ, dotenv_path=dotenv_path, registry=registry)

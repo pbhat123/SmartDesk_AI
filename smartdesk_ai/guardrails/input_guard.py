@@ -46,6 +46,10 @@ class InputGuard:
         self._moderator = moderator
         self._injection = injection
 
+    @property
+    def moderator(self) -> Moderator:
+        return self._moderator
+
     def __call__(self, text: str) -> GuardDecision:
         redacted = self._pii.redact(text)
         reduced = self._names.reduce(redacted.text)

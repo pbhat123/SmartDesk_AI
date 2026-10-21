@@ -202,3 +202,64 @@ def test_the_live_guards_give_the_openai_client_the_plain_key_not_a_masked_secre
     args = (live, Path(".")) if module == "output_guard" else (live,)
     build(*args, environ={"OPENAI_API_KEY": "sk-test-plain-key"}, dotenv_path=None, registry=HealthRegistry())
     assert seen["key"] == "sk-test-plain-key" and isinstance(seen["key"], str)
+
+
+# --- the startup probe: one free call in live mode, so the first screen already says ok or degraded ----------------
+
+class _Client:
+    """A stand-in for the OpenAI client: records the calls and either answers or raises."""
+
+    def __init__(self, error=None):
+        self.error, self.calls = error, []
+        self.moderations = self
+
+    def create(self, model, input):
+        self.calls.append(input)
+        if self.error:
+            raise self.error
+        from types import SimpleNamespace
+
+        return SimpleNamespace(results=[SimpleNamespace(flagged=False)])
+
+
+def test_the_probe_marks_ok_after_one_call_and_degraded_with_the_error_type_on_failure(registry):
+    from smartdesk_ai.guardrails.moderation import OpenAIModerator, probe_moderation
+
+    good = _Client()
+    probe_moderation(OpenAIModerator(good, "m"), registry)
+    assert len(good.calls) == 1 and registry.get(Component.MODERATION).status is Status.OK
+    bad = _Client(error=PermissionError("401"))
+    probe_moderation(OpenAIModerator(bad, "m"), registry)  # never raises
+    state = registry.get(Component.MODERATION)
+    assert len(bad.calls) == 1 and state.status is Status.DEGRADED and state.reason == "PermissionError"
+
+
+def test_the_keyword_stand_in_is_marked_mock_at_startup_without_a_call(registry):
+    from smartdesk_ai.guardrails.moderation import probe_moderation
+
+    probe_moderation(KeywordModerator(), registry)
+    assert registry.get(Component.MODERATION).status is Status.MOCK
+
+
+@pytest.mark.parametrize("error, expected", [(None, Status.OK), (ConnectionError("down"), Status.DEGRADED)])
+def test_build_service_in_live_mode_probes_moderation_once_before_the_first_message(settings, tmp_path, monkeypatch, error, expected):
+    from smartdesk_ai.agent import chat_service
+    from smartdesk_ai.config.settings import DEFAULT_CONFIG
+    from smartdesk_ai.guardrails import input_guard, output_guard
+    from smartdesk_ai.guardrails.moderation import OpenAIModerator
+
+    client = _Client(error)
+    for module in (input_guard, output_guard):
+        monkeypatch.setattr(module, "make_openai_moderator", lambda key, model: OpenAIModerator(client, model))
+        monkeypatch.setattr(module, "make_presidio_engine", lambda registry=None: None)
+    config = tmp_path / "config.yaml"
+    config.write_text(DEFAULT_CONFIG.read_text().replace("  llm: mock", "  llm: live"))
+    registry = HealthRegistry()
+    chat_service.build_service(environ={"OPENAI_API_KEY": "sk-test"}, dotenv_path=None, registry=registry, config_path=config)
+    assert len(client.calls) == 1 and registry.get(Component.MODERATION).status is expected  # before any message
+
+
+def test_mock_mode_shows_moderation_as_mock_from_the_first_screen(tmp_path):
+    ctx = mock_context(tmp_path)
+    assert ctx.registry.get(Component.MODERATION).status is Status.MOCK
+    assert "**Moderation** :blue-badge[mock mode (keyword stand-in)]" in " ".join(m.value for m in monitoring_app(ctx).main.markdown)

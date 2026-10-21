@@ -4,10 +4,15 @@
 mock, so the CLI and the tests make no network call. A moderation outage never stops the service: the
 guard treats it as "not flagged" and logs a warning (FR-F7).
 """
+import logging
 import re
 from typing import Any, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
+
+from smartdesk_ai.ops.health import Component, HealthRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class ModerationResult(BaseModel):
@@ -47,6 +52,24 @@ _KEYWORD_RULES = {
         r"\b(worthless|disgusting|scum|pathetic loser|go to hell|hope you die)\b", re.I),
     "violence": re.compile(r"\b(hurt|kill|punch|attack) (?:someone|somebody|him|her|them|you)\b", re.I),
 }
+
+
+PROBE_TEXT = "Health check: how do I reset my password?"  # harmless; the probe only needs the call to succeed
+
+
+def probe_moderation(moderator: Moderator, registry: HealthRegistry) -> None:
+    """At startup: one free Moderation call in live mode, so the status reads ok or degraded from the first screen. The
+    keyword stand-in makes no call and is marked mock at once. A failure never raises (FR-F7); it is recorded by error type."""
+    if not isinstance(moderator, OpenAIModerator):
+        registry.mark_mock(Component.MODERATION, MOCK_MODERATION_NOTE)
+        return
+    try:
+        moderator.check(PROBE_TEXT)
+    except Exception as error:
+        registry.mark_degraded(Component.MODERATION, type(error).__name__)
+        logger.warning("moderation probe failed (%s); messages and replies will pass unchecked", type(error).__name__)
+    else:
+        registry.mark_ok(Component.MODERATION)
 
 
 MOCK_MODERATION_NOTE = "offline keyword moderator instead of the OpenAI Moderation API"  # shown on Monitoring in mock mode

@@ -480,8 +480,8 @@ def _render_components(data: MonitoringData) -> None:
             st.caption(" · ".join(text))
     st.caption("Skipped means left out on purpose (the reranker in mock mode); it is not a fault. Mock mode means the "
                "in-memory stand-in is the real thing in this run. Degraded means a component failed or is not "
-               "configured, and the substitute shown is running. GitHub and Moderation show \"not checked yet\" "
-               "until their first call. Not affected by the Time window.")
+               "configured, and the substitute shown is running. Moderation is probed once at startup in live mode; GitHub shows \"not checked yet\" "
+               "until its first call. Not affected by the Time window.")
 
 
 def _render_cost(ctx: UiContext, data: MonitoringData) -> None:

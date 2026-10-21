@@ -216,7 +216,7 @@ Exit: `python -m evals.run` produces Ragas + ablation tables; Streamlit chat + M
 | [x] | T9.4 | README: GitHub-integration/mock disclosure (B10 note) | B10 | `README.md` | README states clearly whether live GitHub or mock is used and how to enable mock mode |
 | [x] | T9.5 | `scripts/load_test.py` (throughput, requests per second) | H11 | `scripts/load_test.py`, `tests/test_load_test.py` | Mock-mode run prints requests/sec; result feeds Monitoring tab and README |
 | [x] | T9.6 | Section 8 deliverables check: public repos, `.env.example`, `config.yaml`, no secrets, KB files | F3, F5 | `tests/test_deliverables.py` | Test confirms no keys/`.env` committed, required files present |
-| [ ] | T9.7 | Fresh-clone run with no tracing keys and no Redis | F6, F7 | none (manual) + `tests/test_startup.py` | Fresh clone: `pip install -r requirements.txt` then run succeeds in degraded mode |
+| [x] | T9.7 | Fresh-clone run with no tracing keys and no Redis | F6, F7 | none (manual) + `tests/test_startup.py` | Fresh clone: `pip install -r requirements.txt` then run succeeds in degraded mode |
 | [ ] | T9.8 | Demo video (5 min: KB answer, ticket creation, status, cross-session memory clip) | SPEC section 8, H10 | none (manual) | Recorded; uses fake emails; includes memory clip |
 
 ---

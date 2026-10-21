@@ -42,10 +42,10 @@ Live mode that cannot start (a missing key or token) stops with a clear message;
 **Tests, smoke test and evals**
 
 ```bash
-pytest                                  # about 2,900 unit tests, mock mode, no network, no spend
+scripts/install_hooks.sh                # once per clone, before pytest (a test checks it): the pre-commit hook runs pytest and, for UI changes, the smoke test
+pytest                                  # about 2,900 unit tests, mock mode, no network, no spend (about 2.5 minutes)
 python scripts/smoke_ui.py              # a real Streamlit server and browser, mock mode, temp data (about 15 s); needs Playwright and Chrome
 python scripts/load_test.py             # mock-mode throughput and p50/p95 latency
-scripts/install_hooks.sh                # once per clone: the pre-commit hook runs pytest (and the smoke test for UI changes)
 python -m evals.run --mock              # all eval steps offline and free
 python -m evals.run                     # Ragas and the retrieval ablations (live: costs money, ask first)
 python -m evals.post_phase7 --estimate  # prints the cost table of the live batch and stops

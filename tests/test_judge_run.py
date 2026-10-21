@@ -288,7 +288,8 @@ def test_a_stall_saves_the_checkpoint_logs_it_and_aborts(settings, tmp_path):
 
 # --- judge-only mode --------------------------------------------------------------------------------------------
 
-def test_judge_only_needs_the_saved_outputs(capsys, tmp_path):
+def test_judge_only_needs_the_saved_outputs(capsys, tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "not-a-real-key")  # a fresh clone has no key; the run stops on the missing outputs first
     assert main(["--only", "rag", "--judge", "ragas", "--judge-only", "--confirm-spend", "--out-dir", str(tmp_path)]) == 1
     assert "rag_outputs.json" in capsys.readouterr().err
 

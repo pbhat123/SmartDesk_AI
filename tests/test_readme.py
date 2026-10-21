@@ -7,10 +7,21 @@ ROOT = Path(__file__).resolve().parent.parent
 README = (ROOT / "README.md").read_text()
 
 SECTIONS = (
-    "1️⃣ Title and value proposition", "2️⃣ Background", "3️⃣ Target user", "4️⃣ Why agentic", "5️⃣ Role, scope and autonomy",
-    "6️⃣ Architecture", "7️⃣ End-to-end workflow", "8️⃣ Tools, models and stack", "9️⃣ Evaluation and metrics",
-    "🔟 Guardrails", "1️⃣1️⃣ Failure modes", "1️⃣2️⃣ Results and learnings", "1️⃣3️⃣ Future improvements",
-    "1️⃣4️⃣ Demo and artifacts", "1️⃣5️⃣ Role-based signal",
+    "1️⃣ Project Title & Value Proposition",
+    "2️⃣ Background & Problem Context",
+    "3️⃣ Target User & Job To Be Done (JTBD)",
+    "4️⃣ Why an Agentic Approach (Very Important)",
+    "5️⃣ Agent Role, Scope & Autonomy Level",
+    "6️⃣ Agent Architecture & Components",
+    "7️⃣ End-to-End Agent Workflow",
+    "8️⃣ Tools, Models & Stack (With Rationale)",
+    "9️⃣ Evaluation Strategy & Metrics",
+    "🔟 Guardrails, Trust & Safety",
+    "1️⃣1️⃣ Failure Modes & Tradeoffs",
+    "1️⃣2️⃣ Results, Learnings & Insights",
+    "1️⃣3️⃣ Future Improvements & Iteration Plan",
+    "1️⃣4️⃣ Demo & Artifacts",
+    "1️⃣5️⃣ Role-Based Signal (Mandatory)",
 )
 
 
@@ -19,12 +30,12 @@ def test_the_title_quick_start_and_all_fifteen_sections_are_present():
     assert "## 🚀 Quick Start" in README
     headings = re.findall(r"^## (.+)$", README, re.M)
     for section in SECTIONS:
-        assert any(h.startswith(section) for h in headings), section
+        assert section in headings, section
     assert any(h.startswith("Appendix") for h in headings)
 
 
 def test_sections_come_in_order():
-    positions = [README.index(f"## {section}") for section in SECTIONS]
+    positions = [README.index(f"\n## {section}\n") for section in SECTIONS]
     assert positions == sorted(positions)
     assert README.index("## 🚀 Quick Start") < positions[0] < README.index("## Appendix")
 

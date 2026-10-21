@@ -58,19 +58,19 @@ Anything that spends money prints an estimate first and needs `--confirm-spend` 
 
 ---
 
-## 1️⃣ Title and value proposition
+## 1️⃣ Project Title & Value Proposition
 
 **SmartDesk AI** is the first line of an IT and HR help desk. Employees get an answer in seconds from the KB, with the policy entry cited, instead of waiting for a person. When the KB has no answer, the agent does not invent one: it offers to open a ticket, drafts it, shows the draft, and files it only after the employee says yes. Employees can ask for the status of their tickets in the same chat.
 
 Value in numbers (live runs, details in section 9): 100% of questions the KB cannot answer end in "I don't know" and a ticket offer, 98.1% of answerable questions are answered with citations, no PII leaked and no policy breach on the 27-case safety set, and a scripted task costs about $0.002.
 
-## 2️⃣ Background and problem
+## 2️⃣ Background & Problem Context
 
 IT and HR teams answer the same questions every day (reset a password, how many casual leave days, which VPN server). The answers exist in policy documents, but employees do not read them, so the questions land in a queue. The expensive part is not the answer: it is the person who has to read a vague request, find the policy, reply, or file and route a ticket.
 
 A chatbot over documents has two well-known failure modes that matter more here than in a demo: it answers confidently when the policy does not say (a wrong leave rule is worse than no answer), and it takes actions (a ticket in a public tracker) without being sure the employee wants them. SmartDesk AI is designed around those two risks.
 
-## 3️⃣ Target user and jobs to be done
+## 3️⃣ Target User & Job To Be Done (JTBD)
 
 | User | Job to be done | What the agent does |
 |---|---|---|
@@ -82,7 +82,7 @@ A chatbot over documents has two well-known failure modes that matter more here 
 
 There is no login: an employee is identified by the work email given in the conversation (project FAQ Q19).
 
-## 4️⃣ Why agentic
+## 4️⃣ Why an Agentic Approach (Very Important)
 
 A single prompt over documents cannot do this job, because the job is several different decisions in a row:
 
@@ -94,7 +94,7 @@ A single prompt over documents cannot do this job, because the job is several di
 
 A fixed pipeline would not branch like this; a free-running agent would not be safe to give a ticket tool. The design is a small set of agents with fixed roles, a router in front, and code-level guards around every tool.
 
-## 5️⃣ Role, scope and autonomy
+## 5️⃣ Agent Role, Scope & Autonomy Level
 
 **The agent may:** answer from the KB, ask for the employee's work email, draft a ticket, look up tickets, and politely refuse or deflect.
 **The agent may not:** answer from outside the KB, create a ticket without an explicit yes, invent a ticket ID, URL, status or team update, or reveal another employee's tickets.
@@ -108,7 +108,7 @@ A fixed pipeline would not branch like this; a free-running agent would not be s
 
 Scope boundary: workplace gaps (parking, cafeteria, desk booking) are in scope and get a ticket offer; trivia, recipes and general coding help are not (FR-D9).
 
-## 6️⃣ Architecture
+## 6️⃣ Agent Architecture & Components
 
 ![Architecture](docs/architecture.svg)
 
@@ -122,7 +122,7 @@ Scope boundary: workplace gaps (parking, cafeteria, desk booking) are in scope a
 - **Output guard.** Pydantic validation, PII scan, Moderation, and the grounding verdict, on every reply.
 - **Ops.** Answer cache (exact and semantic; Redis or in-memory), spend ledger and budget, masked traces (local log, Langfuse, LangSmith when keys exist), and the Monitoring tab.
 
-## 7️⃣ End-to-end workflow
+## 7️⃣ End-to-End Agent Workflow
 
 1. **KB question.** "How do I reset my forgotten password?" → guards → orchestrator (intent `kb_query`, one part, IT) → cache lookup → IT worker retrieves five entries and answers with `Sources: IT-PWD-01` → grounding judge passes → output guard → reply.
 2. **Gap and ticket.** "Is there a parking spot for my motorbike?" → no entry passes the checks → reply says the KB does not cover it and offers a ticket, asking for the work email → email given → duplicate check → draft shown (title, description, category, priority) → employee says yes → ticket created → reply shows the real issue number and link.
@@ -132,7 +132,7 @@ Scope boundary: workplace gaps (parking, cafeteria, desk booking) are in scope a
 
 Example conversations recorded from the live system are added in section 14.
 
-## 8️⃣ Tools, models and stack (with rationale)
+## 8️⃣ Tools, Models & Stack (With Rationale)
 
 | Choice | Why |
 |---|---|
@@ -165,7 +165,7 @@ Quality-critical steps (answering, routing, judging) use the Main tier; mechanic
 
 Every prompt is a versioned file in `smartdesk_ai/agent/prompts/` (answer v4, grounding judge v3, orchestrator v9, ticket summary v2 are active). A change is a new file, never an edit.
 
-## 9️⃣ Evaluation and metrics
+## 9️⃣ Evaluation Strategy & Metrics
 
 All live numbers below are from runs on 2026-10-19 and 2026-10-20 with answer prompt v4, grounding judge v3, orchestrator v9 (v8 for the Ragas pass), escalation threshold 0.40, retrieval hybrid + rerank. The sets: 53 KB questions (paraphrased on purpose, never copied from the KB text, FR-A18), 21 gap questions, 14 compound questions, 88 planning-check utterances, 27 safety cases, 12 scripted scenarios. Full tables and the failure analysis are in [PLAN.md](PLAN.md) sections 14.1 to 14.10 and [evals/README.md](evals/README.md).
 
@@ -250,7 +250,7 @@ Fixed windows mix two entries in one chunk (2.0 entries per chunk on average), w
 
 Mock models answer instantly, so this measures our own code (guards, retrieval, rerank, graph, SQLite), not OpenAI. A live request is bounded by the model calls and will be much slower (live latency is not part of this test). Eight workers are only about 1.3 times faster than one, probably because the work is mostly CPU-bound Python in a single process (not tested).
 
-## 🔟 Guardrails, trust and safety
+## 🔟 Guardrails, Trust & Safety
 
 | Layer | What it does |
 |---|---|
@@ -270,7 +270,7 @@ Mock models answer instantly, so this measures our own code (guards, retrieval, 
 
 Safety set: 27 adversarial and edge inputs (injection, PII, names, toxic text, off-topic, attempts to skip the confirmation, self-harm); leakage 0.00 and breach 0.00 in the final run.
 
-## 1️⃣1️⃣ Failure modes and trade-offs
+## 1️⃣1️⃣ Failure Modes & Tradeoffs
 
 Known limitations, none hidden:
 
@@ -287,7 +287,7 @@ Known limitations, none hidden:
 
 Trade-offs chosen on purpose: refuse to answer rather than guess (100% gap pass at the cost of one answerable question escalated); an approval step on every ticket (one extra turn, so nobody is surprised by a public issue); a public tickets repo (visible demo, so every ticket is fake data).
 
-## 1️⃣2️⃣ Results and learnings
+## 1️⃣2️⃣ Results, Learnings & Insights
 
 This project went through several corrections; the ones that changed the design:
 
@@ -299,7 +299,7 @@ This project went through several corrections; the ones that changed the design:
 - **Cache cut-off.** The first semantic cache cut-off (0.84) was below the highest cosine between questions with different answers (0.864), so it could have served the wrong policy. It is 0.97 now, with the evidence file checked by a test.
 - **Retrieval.** Dense alone looks best on paraphrased questions and loses on exact terms; only hybrid + rerank is complete on both, so the ablation told us to keep it even though it is not the best on hit@1.
 
-## 1️⃣3️⃣ Future improvements
+## 1️⃣3️⃣ Future Improvements & Iteration Plan
 
 - A larger planning-check set and a v10 orchestrator example for "How do I order ..." questions (kb-018).
 - Handle a message that mixes a KB question and a ticket request in one turn.
@@ -310,7 +310,7 @@ This project went through several corrections; the ones that changed the design:
 - A reranker on GPU, or a smaller one, for a faster first request.
 - Deploy the app (local only today).
 
-## 1️⃣4️⃣ Demo and artifacts
+## 1️⃣4️⃣ Demo & Artifacts
 
 - **Demo video (5 minutes):** [VIDEO_URL placeholder]
 - **Example conversations (recorded from the live system with fake emails):** *placeholder, added with the live examples.*
@@ -321,7 +321,7 @@ This project went through several corrections; the ones that changed the design:
 - **Tickets repo (public, fake data):** [pbhat123/SmartDesk-Tickets](https://github.com/pbhat123/SmartDesk-Tickets)
 - **Artifacts in this repo:** [`docs/architecture.md`](docs/architecture.md), [`docs/ui_mockups/`](docs/ui_mockups), [`PLAN.md`](PLAN.md) (every run and finding), [`SPEC.md`](SPEC.md) (requirements and acceptance criteria), [`evals/README.md`](evals/README.md), `evals/results/` (saved results).
 
-## 1️⃣5️⃣ Role-based signal
+## 1️⃣5️⃣ Role-Based Signal (Mandatory)
 
 - **Product managers:** the scope boundary and the autonomy table (section 5) are the product decisions; the measured gap pass rate (100%) and the stop rules show what "good enough to ship" meant before each run, not after. The cost per task ($0.002) and the budget cutoffs make it affordable to run.
 - **Engineering managers:** the process is the signal. Every change cites a requirement ID, every paid run has an estimate, a ceiling, a watchdog and a ledger entry, failures are classified from saved results before any code changes, and a pre-commit hook blocks red commits. Section 12 lists what went wrong and what changed.

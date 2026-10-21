@@ -81,3 +81,12 @@ def test_test_files_named_by_bare_name_exist():
 def test_only_fake_emails_appear():
     emails = set(re.findall(r"[\w.*]+@[\w.-]+\.\w+", README))
     assert {e for e in emails if not e.endswith("@smartdesk.example")} == set()
+
+
+def test_the_example_conversations_are_linked_and_recorded_live():
+    examples = (ROOT / "docs" / "examples.md").read_text()
+    assert "[`docs/examples.md`](docs/examples.md)" in README and "placeholder, added with the live examples" not in README
+    assert "LLM live, tickets live" in examples and "Ticket #" in examples
+    assert "https://github.com/pbhat123/SmartDesk-Tickets/issues/" in examples
+    assert "issues/7" in README
+    assert set(re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", examples)) == {"demo.employee@smartdesk.example"}

@@ -11,3 +11,4 @@ class GuardDecision(BaseModel):
     blocked: bool = False
     refusal: str | None = None
     reason: str | None = None
+    calm: bool = False  # allowed through although Moderation flagged plain harassment: the reply must stay calm (FR-H1)

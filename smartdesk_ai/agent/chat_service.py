@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from smartdesk_ai.config.env import DEFAULT_DOTENV, load_env
 from smartdesk_ai.config.settings import DEFAULT_CONFIG, Settings, load_settings
 from smartdesk_ai.guardrails.decision import GuardDecision
+from smartdesk_ai.guardrails.echo import CALM_REPLY, repeats_message
 from smartdesk_ai.guardrails.input_guard import build_input_guard
 from smartdesk_ai.guardrails.moderation import probe_moderation
 from smartdesk_ai.guardrails.output_guard import build_output_guard
@@ -140,6 +141,10 @@ class ChatService:
             debug["responder"] = getattr(self._responder, "__name__", "custom")
             if isinstance(produced, Turn):
                 debug.update(produced.debug)
+        if decision.calm:  # plain harassment was let through: never repeat it back (FR-H1)
+            debug["calm"] = True
+            if repeats_message(reply_text, decision.text):
+                reply_text = CALM_REPLY
         reply_text = self._output_guard(reply_text)
         for index, step in enumerate(debug.get("steps", [])):
             self._log("agent_step", step=step, index=index)

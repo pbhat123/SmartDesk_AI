@@ -31,12 +31,12 @@ def guard(moderator):
 
 
 def test_toxic_message_gets_a_polite_refusal_and_the_reason_is_logged(caplog):
-    moderator = StubModerator(ModerationResult(flagged=True, categories=["harassment"]))
+    moderator = StubModerator(ModerationResult(flagged=True, categories=["harassment", "harassment_threatening"]))
     with caplog.at_level(logging.INFO):
-        decision = guard(moderator)("You are a useless piece of garbage bot")
-    assert decision.blocked and decision.reason == "moderation:harassment"
+        decision = guard(moderator)("You are a useless piece of garbage bot and I hope you die")
+    assert decision.blocked and decision.reason == "moderation:harassment,harassment_threatening"
     assert "can't help" in decision.refusal and "respectful" in decision.refusal
-    assert "moderation:harassment" in caplog.text
+    assert "moderation:harassment,harassment_threatening" in caplog.text
     assert "garbage" not in caplog.text  # the message itself is never logged
 
 

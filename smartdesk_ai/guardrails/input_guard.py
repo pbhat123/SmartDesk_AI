@@ -61,16 +61,17 @@ class InputGuard:
             return GuardDecision(text=WITHHELD, blocked=True, refusal=SELF_HARM_REPLY, reason="self_harm")
         if is_violent_threat(safe):
             return self._block(safe, THREAT_REFUSAL, "threat:violence")
-        reason = self._moderation_reason(safe)
+        reason, calm = self._moderation_reason(safe)
         if reason is not None:
             return self._block(safe, MODERATION_REFUSAL, reason)
         if self._injection is not None:
             verdict = self._injection.check(mask_emails_in(safe))
             if verdict.injected:
                 return self._block(safe, INJECTION_REFUSAL, verdict.reason or "injection")
-        return GuardDecision(text=safe)
+        return GuardDecision(text=safe, calm=calm)
 
-    def _moderation_reason(self, safe_text: str) -> str | None:
+    def _moderation_reason(self, safe_text: str) -> tuple[str | None, bool]:
+        """(block reason, calm). Plain harassment is not blocked: the message goes on and the reply is kept calm (FR-H1)."""
         try:
             result = self._moderator.check(mask_emails_in(safe_text))
             if self._registry is not None:
@@ -82,8 +83,11 @@ class InputGuard:
             if self._registry is not None:
                 self._registry.mark_degraded(Component.MODERATION, type(error).__name__)
             logger.warning("moderation unavailable (%s); message allowed", type(error).__name__)
-            return None
-        return f"moderation:{','.join(result.categories) or 'flagged'}" if result.flagged else None
+            return None, False
+        if result.harassment_only:
+            logger.info("input flagged: reason=moderation:harassment (only); allowed, reply kept calm")
+            return None, True
+        return (f"moderation:{','.join(result.categories) or 'flagged'}" if result.flagged else None), False
 
     @staticmethod
     def _block(safe_text: str, refusal: str, reason: str) -> GuardDecision:

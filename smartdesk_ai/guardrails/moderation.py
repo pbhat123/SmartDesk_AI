@@ -15,11 +15,19 @@ from smartdesk_ai.ops.health import Component, HealthRegistry
 logger = logging.getLogger(__name__)
 
 
+PLAIN_HARASSMENT = "harassment"  # the one category that is answered calmly instead of refused (FR-H1)
+
+
 class ModerationResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     flagged: bool
     categories: list[str] = Field(default_factory=list)
+
+    @property
+    def harassment_only(self) -> bool:
+        """Flagged for plain "harassment" and nothing else: no threatening, hate, sexual, violence, self-harm or illicit category."""
+        return self.flagged and self.categories == [PLAIN_HARASSMENT]
 
 
 class Moderator(Protocol):
@@ -48,8 +56,8 @@ def make_openai_moderator(api_key: SecretStr, model: str) -> OpenAIModerator:
 
 
 _KEYWORD_RULES = {
-    "harassment": re.compile(
-        r"\b(worthless|disgusting|scum|pathetic loser|go to hell|hope you die)\b", re.I),
+    "harassment": re.compile(r"\b(worthless|disgusting|scum|pathetic loser)\b", re.I),
+    "harassment_threatening": re.compile(r"\b(go to hell|hope you die)\b", re.I),
     "violence": re.compile(r"\b(hurt|kill|punch|attack) (?:someone|somebody|him|her|them|you)\b", re.I),
 }
 

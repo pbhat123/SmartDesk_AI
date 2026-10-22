@@ -90,3 +90,7 @@ def test_the_example_conversations_are_linked_and_recorded_live():
     assert "https://github.com/pbhat123/SmartDesk-Tickets/issues/" in examples
     assert "issues/7" in README
     assert set(re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", examples)) == {"demo.employee@smartdesk.example"}
+
+
+def test_the_demo_video_is_linked():
+    assert "https://youtu.be/hrFFMT7gdoI" in README and "VIDEO_URL" not in README

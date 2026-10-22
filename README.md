@@ -312,7 +312,7 @@ This project went through several corrections; the ones that changed the design:
 
 ## 1️⃣4️⃣ Demo & Artifacts
 
-- **Demo video (5 minutes):** [VIDEO_URL placeholder]
+- **Demo video (5 minutes):** [https://youtu.be/hrFFMT7gdoI](https://youtu.be/hrFFMT7gdoI)
 - **Example conversations (recorded from the live system with a fake email, exact replies):** [`docs/examples.md`](docs/examples.md). The ticket it created is [#7 in the tickets repo](https://github.com/pbhat123/SmartDesk-Tickets/issues/7).
   1. KB answer with citations
   2. Gap question, ticket draft, approval, real GitHub issue

@@ -6,7 +6,7 @@ langchain-openai==1.7.2
 langchain-community==0.4.2
 # pinned for ragas 0.4.3 compatibility (instructor/jiter); verify in T0.9
 openai==3.3.0
-
+ 
 # RAG
 chromadb==1.5.9
 rank-bm25==0.2.2
